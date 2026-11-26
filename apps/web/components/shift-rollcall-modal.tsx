@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { authFetch } from "@/lib/api";
-import { Badge } from "@/components/ui";
+import { AlertBanner, Badge, Button, Card, Input, KpiStrip, Modal, Spinner, Tabs } from "@/components/ui";
 
 interface GuardItem {
   shiftId: string;
@@ -133,9 +133,9 @@ export function ShiftRollCallModal({ token, isOpen, onClose }: ShiftRollCallModa
         throw new Error(data.message || data.error || "Failed to dispatch roll-call summary");
       }
       setDispatchSuccess(
-        `✅ Roll-call summary successfully dispatched to ${data.recipientCount} office WhatsApp number${
+        `Roll-call summary dispatched to ${data.recipientCount} office WhatsApp number${
           data.recipientCount === 1 ? "" : "s"
-        }!`
+        }.`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Dispatch failed");
@@ -144,241 +144,186 @@ export function ShiftRollCallModal({ token, isOpen, onClose }: ShiftRollCallModa
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fade-in">
-      <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col rounded-security-xl border border-security-navy-100 bg-white shadow-2xl overflow-hidden">
-        {/* Modal Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-security-navy-100 bg-security-navy-50/70 px-5 py-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xl">📋</span>
-              <h2 className="text-lg font-bold text-security-navy-900">Shift Attendance Roll-Call</h2>
-            </div>
-            <p className="mt-0.5 text-xs text-security-navy-600">
-              Aggregate verified guards on duty and dispatch parade state via WhatsApp
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-security-navy-400 hover:bg-security-navy-100 hover:text-security-navy-700 transition-colors"
-            aria-label="Close modal"
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title="Shift Attendance Roll-Call"
+      description="Aggregate verified guards on duty and dispatch parade state via WhatsApp."
+      size="xl"
+      footer={
+        <div className="flex w-full items-center justify-between gap-2">
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="signal"
+            size="sm"
+            loading={dispatching}
+            disabled={loading || recipients.length === 0}
+            onClick={handleDispatch}
           >
-            ✕
-          </button>
+            Dispatch summary via WhatsApp
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-security-navy-100 pb-3">
+          <span className="text-xs font-semibold text-security-navy-600">Select shift</span>
+          <Tabs
+            ariaLabel="Roll-call shift selection"
+            variant="segmented"
+            value={shiftType}
+            onChange={setShiftType}
+            items={[
+              { value: "day", label: "Day shift" },
+              { value: "night", label: "Night shift" },
+              { value: "all", label: "24h all" },
+            ]}
+          />
         </div>
 
-        {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* Shift Type Filter Tabs */}
-          <div className="flex items-center justify-between gap-3 border-b border-security-navy-100 pb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-security-navy-500">
-              Select Shift
-            </span>
-            <div className="flex rounded-full bg-security-navy-100 p-0.5">
-              {(["day", "night", "all"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setShiftType(t)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold capitalize transition-all ${
-                    shiftType === t
-                      ? "bg-security-navy-800 text-white shadow-sm"
-                      : "text-security-navy-600 hover:text-security-navy-900"
-                  }`}
-                >
-                  {t === "all" ? "24h All" : `${t} Shift`}
-                </button>
-              ))}
-            </div>
+        {error && <AlertBanner variant="error">{error}</AlertBanner>}
+        {dispatchSuccess && <AlertBanner variant="success">{dispatchSuccess}</AlertBanner>}
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-8 text-xs text-security-navy-500">
+            <Spinner />
+            <span>Aggregating guard verification state across sites...</span>
           </div>
+        ) : summary ? (
+          <>
+            <KpiStrip
+              ariaLabel="Parade state metrics"
+              items={[
+                {
+                  label: "Verified on duty",
+                  value: summary.totalVerified,
+                  sublabel: "GPS geofence checked",
+                  tone: "success",
+                },
+                {
+                  label: "Flagged / warn",
+                  value: summary.totalFlagged,
+                  sublabel: "No GPS / radius alert",
+                  tone: summary.totalFlagged > 0 ? "warning" : "default",
+                },
+                {
+                  label: "Absent / unreported",
+                  value: summary.totalAbsent,
+                  sublabel: "No clock-in",
+                  tone: summary.totalAbsent > 0 ? "danger" : "default",
+                },
+                {
+                  label: "Post coverage",
+                  value: `${summary.coveragePercentage}%`,
+                  sublabel: `${summary.totalVerified}/${summary.totalRostered} posts`,
+                },
+              ]}
+            />
 
-          {error && (
-            <div className="rounded-security-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
-              {error}
-            </div>
-          )}
-
-          {dispatchSuccess && (
-            <div className="rounded-security-lg border border-emerald-300 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900 animate-fade-in">
-              {dispatchSuccess}
-            </div>
-          )}
-
-          {loading ? (
-            <div className="space-y-3 py-8 text-center">
-              <div className="h-6 w-6 mx-auto animate-spin rounded-full border-2 border-security-navy-600 border-t-transparent" />
-              <p className="text-xs text-security-navy-500">Aggregating guard verification state across sites...</p>
-            </div>
-          ) : summary ? (
-            <>
-              {/* Parade State High-Level Metrics */}
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <div className="rounded-security border border-emerald-200 bg-emerald-50/60 p-3 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800">Verified On Duty</p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-900">
-                    {summary.totalVerified}
-                  </p>
-                  <p className="text-[10px] text-emerald-700 font-medium">GPS Geofence Checked</p>
-                </div>
-                <div className="rounded-security border border-amber-200 bg-amber-50/60 p-3 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-800">Flagged / Warn</p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums text-amber-900">
-                    {summary.totalFlagged}
-                  </p>
-                  <p className="text-[10px] text-amber-700 font-medium">No GPS / Radius Alert</p>
-                </div>
-                <div className="rounded-security border border-red-200 bg-red-50/60 p-3 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-red-800">Absent / Unreported</p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums text-red-900">
-                    {summary.totalAbsent}
-                  </p>
-                  <p className="text-[10px] text-red-700 font-medium">No clock-in</p>
-                </div>
-                <div className="rounded-security border border-security-navy-200 bg-security-navy-50/80 p-3 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-700">Post Coverage</p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums text-security-navy-900">
-                    {summary.coveragePercentage}%
-                  </p>
-                  <p className="text-[10px] text-security-navy-600 font-medium">
-                    {summary.totalVerified}/{summary.totalRostered} Posts
-                  </p>
-                </div>
-              </div>
-
-              {/* Site Breakdown List */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-security-navy-700">
-                  Site-by-Site Parade State ({summary.sites.length} Active Sites)
-                </h3>
-                {summary.sites.length === 0 ? (
-                  <p className="text-xs text-security-navy-500 py-3">No shifts scheduled in this window.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {summary.sites.map((site) => (
-                      <div
-                        key={site.siteId}
-                        className="rounded-security-lg border border-security-navy-100 bg-white p-3 shadow-xs"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="font-semibold text-sm text-security-navy-900">{site.siteName}</span>
-                            {site.supervisorName && (
-                              <span className="ml-2 text-xs text-security-navy-500">
-                                (Supervisor: {site.supervisorName})
-                              </span>
-                            )}
-                          </div>
-                          <Badge
-                            variant={
-                              site.coveragePercentage === 100
-                                ? "success"
-                                : site.absentCount > 0
+            <div className="space-y-2.5">
+              <h2 className="text-xs font-semibold text-security-navy-700">
+                Site-by-site parade state ({summary.sites.length} active sites)
+              </h2>
+              {summary.sites.length === 0 ? (
+                <p className="py-3 text-xs text-security-navy-500">No shifts scheduled in this window.</p>
+              ) : (
+                <div className="space-y-2">
+                  {summary.sites.map((site) => (
+                    <Card key={site.siteId} variant="wireframe" className="p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-sm font-semibold text-security-navy-900">{site.siteName}</span>
+                          {site.supervisorName && (
+                            <span className="ml-2 text-xs text-security-navy-500">
+                              (Supervisor: {site.supervisorName})
+                            </span>
+                          )}
+                        </div>
+                        <Badge
+                          variant={
+                            site.coveragePercentage === 100
+                              ? "success"
+                              : site.absentCount > 0
                                 ? "error"
                                 : "warning"
-                            }
-                          >
-                            {site.verifiedCount}/{site.rosteredCount} Posts ({site.coveragePercentage}%)
-                          </Badge>
-                        </div>
-
-                        {/* Guard details list */}
-                        <div className="mt-2.5 flex flex-wrap gap-1.5">
-                          {site.guards.map((g) => (
-                            <span
-                              key={g.shiftId}
-                              className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs ${
-                                g.status === "VERIFIED"
-                                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                                  : g.status === "FLAGGED"
-                                  ? "bg-amber-50 text-amber-800 border border-amber-200"
-                                  : "bg-red-50 text-red-800 border border-red-200 font-medium"
-                              }`}
-                            >
-                              <span>{g.status === "VERIFIED" ? "✓" : g.status === "FLAGGED" ? "⚠️" : "✗"}</span>
-                              {g.name}
-                              {g.clockInTime && <span className="opacity-75">({g.clockInTime})</span>}
-                            </span>
-                          ))}
-                        </div>
+                          }
+                        >
+                          {site.verifiedCount}/{site.rosteredCount} posts ({site.coveragePercentage}%)
+                        </Badge>
                       </div>
-                    ))}
-                  </div>
+
+                      <div className="mt-2.5 flex flex-wrap gap-1.5">
+                        {site.guards.map((g) => (
+                          <span
+                            key={g.shiftId}
+                            className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs ${
+                              g.status === "VERIFIED"
+                                ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+                                : g.status === "FLAGGED"
+                                  ? "border border-amber-200 bg-amber-50 text-amber-800"
+                                  : "border border-red-200 bg-red-50 font-medium text-red-800"
+                            }`}
+                          >
+                            <span>{g.status === "VERIFIED" ? "✓" : g.status === "FLAGGED" ? "!" : "✕"}</span>
+                            {g.name}
+                            {g.clockInTime && <span className="opacity-75">({g.clockInTime})</span>}
+                          </span>
+                        ))}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2 rounded-security-lg border border-security-navy-100 bg-security-navy-50/50 p-3">
+              <div className="flex items-center justify-between">
+                <span className="label-text">Designated office WhatsApp numbers</span>
+                <span className="text-xs text-security-navy-500">Recipients who receive this summary</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {recipients.map((phone) => (
+                  <span
+                    key={phone}
+                    className="inline-flex items-center gap-1 rounded-full border border-security-navy-200 bg-white px-2.5 py-0.5 text-xs text-security-navy-800"
+                  >
+                    <span>+{phone}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveRecipient(phone)}
+                      className="ml-1 font-bold text-security-navy-400 hover:text-red-600"
+                      title="Remove number"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {recipients.length === 0 && (
+                  <span className="text-xs font-medium text-security-amber-800">
+                    No office numbers configured. Add at least one number below.
+                  </span>
                 )}
               </div>
-
-              {/* Designated Office Recipients Configuration */}
-              <div className="rounded-security-lg border border-security-navy-100 bg-security-navy-50/50 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold uppercase tracking-wider text-security-navy-700">
-                    Designated Office WhatsApp Numbers
-                  </label>
-                  <span className="text-[10px] text-security-navy-500">
-                    Recipients who receive this summary
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {recipients.map((phone) => (
-                    <span
-                      key={phone}
-                      className="inline-flex items-center gap-1 rounded-full bg-white border border-security-navy-200 px-2.5 py-0.5 text-xs text-security-navy-800 shadow-xs"
-                    >
-                      <span>📱 +{phone}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveRecipient(phone)}
-                        className="text-security-navy-400 hover:text-red-600 font-bold ml-1"
-                        title="Remove number"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                  {recipients.length === 0 && (
-                    <span className="text-xs text-amber-800 font-medium">
-                      ⚠️ No office numbers configured. Add at least one number below.
-                    </span>
-                  )}
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <input
-                    type="text"
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    placeholder="Enter phone (e.g. 27821234567)"
-                    className="input-compact text-xs flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddRecipient}
-                    className="btn-secondary text-xs px-3 py-1"
-                  >
-                    Add Number
-                  </button>
-                </div>
+              <div className="flex gap-2 pt-1">
+                <Input
+                  density="compact"
+                  type="text"
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  placeholder="Enter phone (e.g. 27821234567)"
+                  className="flex-1"
+                />
+                <Button variant="secondary" size="sm" onClick={handleAddRecipient}>
+                  Add number
+                </Button>
               </div>
-            </>
-          ) : null}
-        </div>
-
-        {/* Modal Footer */}
-        <div className="flex shrink-0 items-center justify-between border-t border-security-navy-100 bg-security-navy-50/70 px-5 py-3">
-          <button type="button" onClick={onClose} className="btn-secondary text-xs px-3 py-1.5">
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleDispatch}
-            disabled={dispatching || loading || recipients.length === 0}
-            className="btn-primary flex items-center gap-2 text-xs py-1.5 px-4 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50"
-          >
-            <span>💬</span>
-            {dispatching ? "Dispatching via WhatsApp..." : "Dispatch Summary via WhatsApp"}
-          </button>
-        </div>
+            </div>
+          </>
+        ) : null}
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -6,8 +6,9 @@ import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { hasCapability } from "@/lib/permissions";
 import { createIncident, listIncidents, type Incident } from "@/lib/msr-api";
+import { polishIncidentNotes } from "@/lib/ai-api";
 import { useOperationalEvents } from "@/lib/use-operational-events";
-import { AlertBanner, Badge, EmptyState, PageHeader } from "@/components/ui";
+import { AlertBanner, Badge, EmptyState, PageHeader, PageShell, SkeletonBlock } from "@/components/ui";
 
 const INCIDENT_TYPES = [
   { value: "THEFT", label: "Theft" },
@@ -50,6 +51,7 @@ export default function IncidentsPage() {
   const [formSeverity, setFormSeverity] = useState("MEDIUM");
   const [formTitle, setFormTitle] = useState("");
   const [formDescription, setFormDescription] = useState("");
+  const [polishingNotes, setPolishingNotes] = useState(false);
   const [formDateTime, setFormDateTime] = useState("");
   const [formClientVisible, setFormClientVisible] = useState(false);
   const [liveBanner, setLiveBanner] = useState<string | null>(null);
@@ -147,15 +149,15 @@ export default function IncidentsPage() {
 
   if (loading) {
     return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-8 w-48 bg-security-navy-100 rounded-lg" />
-        <div className="h-32 bg-security-navy-100 rounded-lg" />
-      </div>
+      <PageShell>
+        <SkeletonBlock className="h-8 w-48" />
+        <SkeletonBlock className="h-32" />
+      </PageShell>
     );
   }
 
   return (
-    <div className="animate-fade-in max-w-4xl mx-auto">
+    <PageShell>
       <PageHeader
         title="Incidents"
         description="Report and track security incidents across your sites."
@@ -286,7 +288,30 @@ export default function IncidentsPage() {
               <input id="inc-title" value={formTitle} onChange={(e) => setFormTitle(e.target.value)} className="input-modern w-full" required />
             </div>
             <div>
-              <label htmlFor="inc-desc" className="label-text block mb-1">What happened? *</label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label htmlFor="inc-desc" className="label-text block">What happened? *</label>
+                <button
+                  type="button"
+                  disabled={polishingNotes || formDescription.trim().length < 5}
+                  onClick={async () => {
+                    if (!token || formDescription.trim().length < 5) return;
+                    setPolishingNotes(true);
+                    setError("");
+                    try {
+                      const res = await polishIncidentNotes(token, formDescription);
+                      setFormDescription(res.polished);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "AI polish unavailable");
+                    } finally {
+                      setPolishingNotes(false);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 rounded-full border border-security-amber-300 bg-security-amber-50 px-2.5 py-0.5 text-xs font-semibold text-security-navy-900 transition-colors hover:bg-security-amber-100 disabled:opacity-50"
+                >
+                  <span aria-hidden="true">✦</span>
+                  {polishingNotes ? "Polishing…" : "Polish with Plethora AI"}
+                </button>
+              </div>
               <textarea id="inc-desc" value={formDescription} onChange={(e) => setFormDescription(e.target.value)} className="input-modern w-full" rows={4} required />
             </div>
             <label className="flex items-center gap-2 text-sm text-security-navy-700 cursor-pointer">
@@ -341,6 +366,6 @@ export default function IncidentsPage() {
           ) : undefined}
         />
       )}
-    </div>
+    </PageShell>
   );
 }

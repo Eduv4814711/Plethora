@@ -6,6 +6,7 @@ import {
   chatWithLlm,
   checkLlmHealth,
   isBedrockReasoningModel,
+  normalizeBedrockMessages,
   stripJsonCodeFence,
 } from "../llm-client.js";
 import type { Env } from "../../../lib/env.js";
@@ -134,5 +135,32 @@ describe("Amazon Bedrock Kimi K3.1 LLM client", () => {
     expect(health.availableModels).toContain(
       "arn:aws:bedrock:af-south-1::foundation-model/moonshotai.kimi-k3.1"
     );
+  });
+
+  it("normalizes multi-turn messages so Bedrock Converse always starts with user and strictly alternates roles", async () => {
+    const normalized = normalizeBedrockMessages([
+      { role: "system", content: "System context" },
+      { role: "assistant", content: "Leading assistant message after history slice" },
+      { role: "user", content: "First failed user prompt" },
+      { role: "user", content: "Retry user prompt" },
+      { role: "assistant", content: "Assistant answer" },
+      { role: "user", content: "Follow-up question" },
+    ]);
+
+    expect(normalized.systemBlocks).toEqual([{ text: "System context" }]);
+    expect(normalized.converseMessages).toEqual([
+      {
+        role: "user",
+        content: [{ text: "First failed user prompt\n\nRetry user prompt" }],
+      },
+      {
+        role: "assistant",
+        content: [{ text: "Assistant answer" }],
+      },
+      {
+        role: "user",
+        content: [{ text: "Follow-up question" }],
+      },
+    ]);
   });
 });

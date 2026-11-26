@@ -157,7 +157,7 @@ export function AttendanceNeedsAttentionPanel({
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-8 text-center text-sm text-security-navy-500">
+      <div className="rounded-xl border border-security-navy-200 bg-white p-8 text-center text-sm text-security-navy-500">
         Checking live exceptions and site sign-offs…
       </div>
     );
@@ -173,9 +173,9 @@ export function AttendanceNeedsAttentionPanel({
 
       {/* Summary Banner */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-4">
+        <div className="rounded-xl border border-security-navy-200 bg-white p-4">
           <div className="text-xs text-security-navy-500">Open Live Issues</div>
-          <div className="text-2xl font-bold tabular-nums text-security-navy-900 dark:text-white mt-1">
+          <div className="text-2xl font-bold tabular-nums text-security-navy-900 mt-1">
             {exceptions.length}
           </div>
           <p className="text-xs text-security-navy-500 mt-0.5">
@@ -183,9 +183,9 @@ export function AttendanceNeedsAttentionPanel({
           </p>
         </div>
 
-        <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-4">
+        <div className="rounded-xl border border-security-navy-200 bg-white p-4">
           <div className="text-xs text-security-navy-500">Sites Waiting Sign-Off</div>
-          <div className="text-2xl font-bold tabular-nums text-[var(--accent-signal-deep)] dark:text-amber-300 mt-1">
+          <div className="text-2xl font-bold tabular-nums text-[var(--accent-signal-deep)] mt-1">
             {pendingSites.length}
           </div>
           <p className="text-xs text-security-navy-500 mt-0.5">
@@ -197,7 +197,7 @@ export function AttendanceNeedsAttentionPanel({
       {/* Urgent Live Exceptions */}
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-security-navy-900 dark:text-white">
+          <h2 className="text-base font-semibold text-security-navy-900">
             Urgent Attendance Issues ({exceptions.length})
           </h2>
           <Link
@@ -209,7 +209,7 @@ export function AttendanceNeedsAttentionPanel({
         </div>
 
         {exceptions.length === 0 ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/20 p-5 text-sm text-emerald-900 dark:text-emerald-100">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-5 text-sm text-emerald-900">
             All caught up — zero open clock-in or attendance exceptions.
           </div>
         ) : (
@@ -222,7 +222,7 @@ export function AttendanceNeedsAttentionPanel({
               return (
                 <div
                   key={exc.id}
-                  className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                  className="rounded-xl border border-security-navy-200 bg-white p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                 >
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -235,11 +235,11 @@ export function AttendanceNeedsAttentionPanel({
                       >
                         {exc.severity}
                       </span>
-                      <span className="text-sm font-semibold text-security-navy-900 dark:text-white">
+                      <span className="text-sm font-semibold text-security-navy-900">
                         {copy.title} · {guardName}
                       </span>
                     </div>
-                    <p className="text-xs text-security-navy-600 dark:text-security-navy-300">
+                    <p className="text-xs text-security-navy-600">
                       {exc.site?.name ?? "Site"} · {exc.description || copy.description}
                     </p>
                   </div>
@@ -262,11 +262,11 @@ export function AttendanceNeedsAttentionPanel({
 
       {/* Pending Site Sign-Offs */}
       <section className="space-y-3">
-        <h2 className="text-base font-semibold text-security-navy-900 dark:text-white">
+        <h2 className="text-base font-semibold text-security-navy-900">
           Sites Waiting for Confirmation ({pendingSites.length})
         </h2>
         {pendingSites.length === 0 ? (
-          <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-5 text-sm text-security-navy-600 dark:text-security-navy-300">
+          <div className="rounded-xl border border-security-navy-200 bg-white p-5 text-sm text-security-navy-600">
             All scheduled shifts up to today have been captured.
           </div>
         ) : (
@@ -274,10 +274,10 @@ export function AttendanceNeedsAttentionPanel({
             {pendingSites.map((s) => (
               <div
                 key={s.siteId}
-                className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-4 flex items-center justify-between gap-3"
+                className="rounded-xl border border-security-navy-200 bg-white p-4 flex items-center justify-between gap-3"
               >
                 <div>
-                  <div className="text-sm font-semibold text-security-navy-900 dark:text-white">
+                  <div className="text-sm font-semibold text-security-navy-900">
                     {s.siteName}
                   </div>
                   <div className="text-xs text-security-navy-500 mt-0.5">
@@ -310,11 +310,11 @@ export function AttendanceNeedsAttentionPanel({
         onClick={(e) => {
           if (e.target === dialogRef.current) setActiveExc(null);
         }}
-        className="m-auto w-full max-w-lg rounded-2xl border border-security-navy-200 dark:border-security-navy-700 bg-white dark:bg-security-navy-900 p-0 text-security-navy-900 dark:text-white shadow-2xl"
+        className="m-auto w-full max-w-lg rounded-2xl border border-security-navy-200 bg-white p-0 text-security-navy-900 shadow-2xl"
       >
         {activeExc && (
           <>
-            <div className="flex items-center justify-between border-b border-security-navy-200 dark:border-security-navy-800 px-5 py-4">
+            <div className="flex items-center justify-between border-b border-security-navy-200 px-5 py-4">
               <div>
                 <h3 className="text-base font-semibold">
                   Fix: {attendanceExceptionCopy(activeExc.exceptionType).title}
@@ -392,7 +392,7 @@ export function AttendanceNeedsAttentionPanel({
               </div>
 
               {activeExc.shift?.id && (
-                <div className="border-t border-security-navy-200 dark:border-security-navy-800 pt-4 space-y-2">
+                <div className="border-t border-security-navy-200 pt-4 space-y-2">
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-security-navy-500">
                     Or Assign SA-Compliant Reliever
                   </h4>

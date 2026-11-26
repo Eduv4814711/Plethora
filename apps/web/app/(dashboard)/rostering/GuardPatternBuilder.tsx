@@ -105,7 +105,7 @@ export function GuardPatternBuilder({
   if (siteGuards.length === 0 && guardsNotOnSite.length === 0) {
     return (
       <div
-        className={`rounded-security-lg border border-dashed border-security-navy-200 dark:border-security-navy-600 bg-security-navy-50/80 dark:bg-security-navy-900/40 text-center text-sm text-security-navy-500 ${
+        className={`rounded-security-lg border border-dashed border-security-navy-200 bg-security-navy-50/80 text-center text-sm text-security-navy-500 ${
           compact ? "px-3 py-4" : "px-4 py-6"
         }`}
       >
@@ -116,21 +116,21 @@ export function GuardPatternBuilder({
 
   const rootClass = compact
     ? "min-w-0 w-full max-w-full space-y-3"
-    : "rounded-security-lg border border-security-amber-200/80 dark:border-security-amber-900/50 bg-gradient-to-br from-security-amber-50/60 to-white dark:from-security-amber-950/20 dark:to-security-navy-900/50 p-4 space-y-4";
+    : "rounded-security-lg border border-security-amber-200/80 bg-gradient-to-br from-security-amber-50/60 to-white p-4 space-y-4";
 
   const fieldSelectClass = compact
-    ? "block w-full min-w-0 max-w-full rounded-lg border border-security-navy-200 dark:border-security-navy-600 px-2 py-1.5 text-xs bg-white dark:bg-security-navy-900 overflow-hidden text-ellipsis whitespace-nowrap"
-    : "w-full rounded-lg border border-security-navy-200 dark:border-security-navy-600 px-2.5 py-1.5 text-xs bg-white dark:bg-security-navy-900";
+    ? "block w-full min-w-0 max-w-full rounded-lg border border-security-navy-200 px-2 py-1.5 text-xs bg-white overflow-hidden text-ellipsis whitespace-nowrap"
+    : "w-full rounded-lg border border-security-navy-200 px-2.5 py-1.5 text-xs bg-white";
 
   const addGuardRowClass = compact ? "flex flex-col gap-2 w-full min-w-0" : "flex flex-col gap-2 sm:flex-row";
 
   return (
     <div className={rootClass}>
       <div>
-        <h3 className={`font-semibold text-security-navy-900 dark:text-security-navy-100 ${compact ? "text-xs" : "text-sm"}`}>
+        <h3 className={`font-semibold text-security-navy-900 ${compact ? "text-xs" : "text-sm"}`}>
           Pattern builder
         </h3>
-        <p className={`text-security-navy-500 dark:text-security-navy-400 mt-0.5 ${compact ? "text-[11px] leading-snug" : "text-xs"}`}>
+        <p className={`text-security-navy-500 mt-0.5 ${compact ? "text-[11px] leading-snug" : "text-xs"}`}>
           {compact
             ? "Build a repeating sequence and apply it to a guard's row in the roster grid."
             : "Build a repeating shift sequence and apply it to one guard's row in the pattern grid."}
@@ -139,7 +139,7 @@ export function GuardPatternBuilder({
 
       {showCustom && onCycleLengthChange && (
         <label className="space-y-1 block">
-          <span className="text-[11px] font-medium text-security-navy-600 dark:text-security-navy-400">Cycle length</span>
+          <span className="text-[11px] font-medium text-security-navy-600">Cycle length</span>
           <select
             value={cycleLengthDays}
             onChange={(e) => onCycleLengthChange(Number(e.target.value))}
@@ -156,7 +156,7 @@ export function GuardPatternBuilder({
 
       <div className={`${compact ? "space-y-3 w-full min-w-0" : "grid grid-cols-1 lg:grid-cols-2 gap-4"}`}>
         <label className="space-y-1.5 block min-w-0">
-          <span className="text-[11px] font-medium text-security-navy-600 dark:text-security-navy-400">Guard</span>
+          <span className="text-[11px] font-medium text-security-navy-600">Guard</span>
           <select
             value={selectedGuardId}
             onChange={(e) => setSelectedGuardId(e.target.value)}
@@ -173,7 +173,7 @@ export function GuardPatternBuilder({
 
         {guardsNotOnSite.length > 0 && onAddGuardToSite && (
           <div className="space-y-1.5 min-w-0 w-full">
-            <span className="text-[11px] font-medium text-security-navy-600 dark:text-security-navy-400">
+            <span className="text-[11px] font-medium text-security-navy-600">
               Add guard to site
             </span>
             <div className={addGuardRowClass}>
@@ -198,8 +198,8 @@ export function GuardPatternBuilder({
                 }}
                 className={
                   compact
-                    ? "w-full px-3 py-1.5 text-xs font-medium rounded-lg border border-security-navy-200 dark:border-security-navy-600 hover:bg-security-navy-50 dark:hover:bg-security-navy-800 disabled:opacity-50"
-                    : "shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border border-security-navy-200 dark:border-security-navy-600 hover:bg-security-navy-50 dark:hover:bg-security-navy-800 disabled:opacity-50"
+                    ? "w-full px-3 py-1.5 text-xs font-medium rounded-lg border border-security-navy-200 hover:bg-security-navy-50 disabled:opacity-50"
+                    : "shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border border-security-navy-200 hover:bg-security-navy-50 disabled:opacity-50"
                 }
               >
                 {addingGuard ? "Adding…" : "Add"}
@@ -211,11 +211,11 @@ export function GuardPatternBuilder({
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium text-security-navy-600 dark:text-security-navy-400">Simple patterns</span>
+          <span className="text-[11px] font-medium text-security-navy-600">Simple patterns</span>
           <button
             type="button"
             onClick={() => setShowCustom((value) => !value)}
-            className="text-[11px] font-medium text-security-amber-700 hover:underline dark:text-security-amber-300"
+            className="text-[11px] font-medium text-security-amber-700 hover:underline"
           >
             {showCustom ? "Hide custom" : "Custom"}
           </button>
@@ -227,7 +227,7 @@ export function GuardPatternBuilder({
               type="button"
               title={preset.description}
               onClick={() => applyPreset(preset.sequence)}
-              className="px-2 py-1 text-[10px] font-medium rounded-md border border-security-navy-100 dark:border-security-navy-700 bg-white dark:bg-security-navy-900 hover:border-security-amber-400 hover:text-security-amber-700 dark:hover:text-security-amber-300 transition-colors"
+              className="px-2 py-1 text-[10px] font-medium rounded-md border border-security-navy-100 bg-white hover:border-security-amber-400 hover:text-security-amber-700 transition-colors"
             >
               {preset.label}
             </button>
@@ -238,11 +238,11 @@ export function GuardPatternBuilder({
       {showCustom && (
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium text-security-navy-600 dark:text-security-navy-400">Pattern sequence</span>
+          <span className="text-xs font-medium text-security-navy-600">Pattern sequence</span>
           <button
             type="button"
             onClick={clearSequence}
-            className="text-xs text-security-navy-500 hover:text-security-navy-900 dark:hover:text-security-navy-200 underline"
+            className="text-xs text-security-navy-500 hover:text-security-navy-900 underline"
           >
             Clear
           </button>
@@ -253,7 +253,7 @@ export function GuardPatternBuilder({
               key={o.code}
               type="button"
               onClick={() => appendCode(o.code)}
-              className="px-2 py-1 text-xs font-semibold rounded-md border border-security-navy-100 dark:border-security-navy-700 bg-white dark:bg-security-navy-900 hover:bg-security-amber-50 dark:hover:bg-security-amber-950/40"
+              className="px-2 py-1 text-xs font-semibold rounded-md border border-security-navy-100 bg-white hover:bg-security-amber-50"
               title={`Add ${o.label}`}
             >
               {o.code}
@@ -265,14 +265,14 @@ export function GuardPatternBuilder({
           value={notation}
           onChange={(e) => handleNotationChange(e.target.value)}
           placeholder="D,D,D,O,O,O or D N O"
-          className="w-full rounded-lg border border-security-navy-200 dark:border-security-navy-600 px-2.5 py-1.5 text-xs font-mono bg-white dark:bg-security-navy-900"
+          className="w-full rounded-lg border border-security-navy-200 px-2.5 py-1.5 text-xs font-mono bg-white"
         />
         {sequence.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {sequence.map((code, i) => (
               <span
                 key={`${code}-${i}`}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-security-navy-50 dark:bg-security-navy-800 text-xs font-semibold"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-security-navy-50 text-xs font-semibold"
               >
                 {code === "blank" ? "—" : code}
                 <button
@@ -294,14 +294,14 @@ export function GuardPatternBuilder({
       </div>
       )}
 
-      <div className="rounded-lg bg-security-navy-50 dark:bg-security-navy-900/60 border border-security-navy-100 dark:border-security-navy-700 px-2.5 py-2.5">
+      <div className="rounded-lg bg-security-navy-50 border border-security-navy-100 px-2.5 py-2.5">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="text-[10px] font-semibold text-security-navy-600 uppercase tracking-wide dark:text-security-navy-400">
+          <p className="text-[10px] font-semibold text-security-navy-600 uppercase tracking-wide">
             Edit cycle
           </p>
           <p className="text-[10px] text-security-navy-400 shrink-0">{cycleLengthDays} days</p>
         </div>
-        <p className="text-[11px] text-security-navy-500 dark:text-security-navy-400 mt-0.5 leading-snug">
+        <p className="text-[11px] text-security-navy-500 mt-0.5 leading-snug">
           Tap a day to pick Day, Night, Off, or other shift.
         </p>
         <div className={`mt-2.5 grid gap-1.5 ${compact ? "grid-cols-4" : "grid-cols-7"}`}>
@@ -331,9 +331,9 @@ export function GuardPatternBuilder({
           })}
         </div>
         <p className="mt-2 text-[10px] leading-relaxed text-security-navy-400">
-          <span className="font-medium text-security-amber-800 dark:text-security-amber-200">D</span> Day ·{" "}
-          <span className="font-medium text-indigo-800 dark:text-indigo-200">N</span> Night ·{" "}
-          <span className="font-medium text-security-navy-600 dark:text-security-navy-300">O</span> Off — repeats every{" "}
+          <span className="font-medium text-security-amber-800">D</span> Day ·{" "}
+          <span className="font-medium text-indigo-800">N</span> Night ·{" "}
+          <span className="font-medium text-security-navy-600">O</span> Off — repeats every{" "}
           {cycleLengthDays} days
         </p>
       </div>
@@ -353,7 +353,7 @@ export function GuardPatternBuilder({
           type="button"
           onClick={handleApplyAll}
           disabled={cycleCodes.length === 0 || siteGuards.length === 0}
-          className="w-full rounded-lg border border-security-navy-200 px-3 py-2 text-xs font-semibold text-security-navy-700 hover:bg-security-navy-50 disabled:opacity-50 dark:border-security-navy-600 dark:text-security-navy-200 dark:hover:bg-security-navy-800"
+          className="w-full rounded-lg border border-security-navy-200 px-3 py-2 text-xs font-semibold text-security-navy-700 hover:bg-security-navy-50 disabled:opacity-50"
         >
           Apply pattern to all guards
         </button>

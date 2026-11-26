@@ -4,6 +4,21 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { hasCapability } from "@/lib/permissions";
+import {
+  AlertBanner,
+  Button,
+  Field,
+  Input,
+  PageHeader,
+  PageShell,
+  SearchInput,
+  Select,
+  StatusBadge,
+  TableEmptyRow,
+  TableLoadingRow,
+  TableShell,
+  Toolbar,
+} from "@/components/ui";
 
 interface AuditLogRow {
   id: string;
@@ -33,9 +48,9 @@ const EMPTY_FILTERS: Filters = { action: "", userId: "", outcome: "", from: "", 
 const PAGE_SIZE = 50;
 
 const OUTCOME_STYLES: Record<string, string> = {
-  success: "bg-security-emerald-50 text-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-200",
-  denied: "bg-security-amber-50 text-security-amber-800 dark:bg-security-amber-950/40 dark:text-security-amber-200",
-  failure: "bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200",
+  success: "bg-security-emerald-50 text-security-emerald-700",
+  denied: "bg-security-amber-50 text-security-amber-800",
+  failure: "bg-red-50 text-red-800",
 };
 
 /** Groups the long tail of dotted action names into pickable families. */
@@ -142,26 +157,23 @@ export default function AuditPage() {
   }
 
   return (
-    <div className="animate-fade-in">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="page-title">Audit Logs</h1>
-          <p className="mt-1 text-sm text-security-navy-600">
-            Who did what, when, and from where — including sign-ins and refused access attempts.
-          </p>
-        </div>
-        {canExport && (
-          <button type="button" className="btn-secondary" disabled={exporting} onClick={() => void exportCsv()}>
-            {exporting ? "Preparing…" : "Export CSV"}
-          </button>
-        )}
-      </div>
+    <PageShell width="default" className="animate-fade-in">
+      <PageHeader
+        title="Audit Logs"
+        description="Who did what, when, and from where — including sign-ins and refused access attempts."
+        actions={
+          canExport ? (
+            <Button variant="secondary" loading={exporting} onClick={() => void exportCsv()}>
+              Export CSV
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <div className="card-wireframe mb-4 grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-6">
-        <label className="text-xs font-medium text-security-navy-600 dark:text-security-navy-300">
-          Actor
-          <select
-            className="input-modern mt-1 w-full"
+      <Toolbar className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <Field label="Actor">
+          <Select
+            density="compact"
             value={filters.userId}
             onChange={(event) => updateFilter({ userId: event.target.value })}
           >
@@ -171,12 +183,11 @@ export default function AuditPage() {
                 {actor.name}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="text-xs font-medium text-security-navy-600 dark:text-security-navy-300">
-          Activity
-          <select
-            className="input-modern mt-1 w-full"
+          </Select>
+        </Field>
+        <Field label="Activity">
+          <Select
+            density="compact"
             value={filters.action}
             onChange={(event) => updateFilter({ action: event.target.value })}
           >
@@ -186,12 +197,11 @@ export default function AuditPage() {
                 {family}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="text-xs font-medium text-security-navy-600 dark:text-security-navy-300">
-          Outcome
-          <select
-            className="input-modern mt-1 w-full"
+          </Select>
+        </Field>
+        <Field label="Outcome">
+          <Select
+            density="compact"
             value={filters.outcome}
             onChange={(event) => updateFilter({ outcome: event.target.value })}
           >
@@ -199,166 +209,144 @@ export default function AuditPage() {
             <option value="success">Succeeded</option>
             <option value="denied">Denied</option>
             <option value="failure">Failed</option>
-          </select>
-        </label>
-        <label className="text-xs font-medium text-security-navy-600 dark:text-security-navy-300">
-          From
-          <input
+          </Select>
+        </Field>
+        <Field label="From">
+          <Input
+            density="compact"
             type="date"
-            className="input-modern mt-1 w-full"
             value={filters.from}
             onChange={(event) => updateFilter({ from: event.target.value })}
           />
-        </label>
-        <label className="text-xs font-medium text-security-navy-600 dark:text-security-navy-300">
-          To
-          <input
+        </Field>
+        <Field label="To">
+          <Input
+            density="compact"
             type="date"
-            className="input-modern mt-1 w-full"
             value={filters.to}
             onChange={(event) => updateFilter({ to: event.target.value })}
           />
-        </label>
-        <label className="text-xs font-medium text-security-navy-600 dark:text-security-navy-300">
-          Search
-          <input
-            className="input-modern mt-1 w-full"
+        </Field>
+        <Field label="Search">
+          <SearchInput
+            density="compact"
             placeholder="Action, record or person"
             value={filters.search}
-            onChange={(event) => updateFilter({ search: event.target.value })}
+            onChange={(val) => updateFilter({ search: val })}
           />
-        </label>
-      </div>
+        </Field>
+      </Toolbar>
 
-      {error && (
-        <div role="alert" className="mb-4 rounded-security-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
-      <div className="card-wireframe overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-security-navy-50 dark:bg-security-navy-700">
-              <tr>
-                <th className="px-4 py-2.5 text-left font-semibold">Date &amp; time</th>
-                <th className="px-4 py-2.5 text-left font-semibold">User</th>
-                <th className="px-4 py-2.5 text-left font-semibold">Action</th>
-                <th className="px-4 py-2.5 text-left font-semibold">Outcome</th>
-                <th className="px-4 py-2.5 text-left font-semibold">Record</th>
-                <th className="px-4 py-2.5 text-left font-semibold">From</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading &&
-                [1, 2, 3, 4, 5].map((row) => (
-                  <tr key={row} className="border-t border-security-navy-100 dark:border-security-navy-700">
-                    <td colSpan={6} className="px-4 py-3">
-                      <div className="h-4 animate-pulse rounded bg-security-navy-100 dark:bg-security-navy-700" />
-                    </td>
-                  </tr>
-                ))}
-              {!loading &&
-                logs.map((log) => (
-                  <Fragment key={log.id}>
-                    <tr
-                      className="cursor-pointer border-t border-security-navy-100 hover:bg-security-navy-50 dark:border-security-navy-700 dark:hover:bg-security-navy-800"
-                      onClick={() => setExpanded(expanded === log.id ? null : log.id)}
-                    >
-                      <td className="whitespace-nowrap px-4 py-2.5 text-security-navy-600 dark:text-security-navy-400">
-                        {new Date(log.timestamp).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2.5">{log.user?.name ?? log.actorLabel ?? "—"}</td>
-                      <td className="px-4 py-2.5 font-medium">{log.action}</td>
-                      <td className="px-4 py-2.5">
-                        <span
-                          className={`rounded-md px-2 py-0.5 text-xs font-medium ${
-                            OUTCOME_STYLES[log.outcome] ?? OUTCOME_STYLES.success
-                          }`}
-                        >
-                          {log.outcome}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        {log.entityType}
-                        {log.entityId && (
-                          <span className="font-mono text-xs text-security-navy-500"> #{log.entityId.slice(0, 8)}</span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-security-navy-500">
-                        {log.ipAddress ?? "—"}
-                      </td>
-                    </tr>
-                    {expanded === log.id && (
-                      <tr className="border-t border-security-navy-100 dark:border-security-navy-700">
-                        <td colSpan={6} className="bg-security-navy-50 px-4 py-3 dark:bg-security-navy-800/60">
-                          <dl className="grid gap-2 text-xs sm:grid-cols-3">
-                            <div>
-                              <dt className="font-semibold text-security-navy-500">User agent</dt>
-                              <dd className="break-all text-security-navy-700 dark:text-security-navy-300">
-                                {log.userAgent ?? "—"}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="font-semibold text-security-navy-500">Request id</dt>
-                              <dd className="font-mono text-security-navy-700 dark:text-security-navy-300">
-                                {log.requestId ?? "—"}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="font-semibold text-security-navy-500">Record id</dt>
-                              <dd className="font-mono break-all text-security-navy-700 dark:text-security-navy-300">
-                                {log.entityId ?? "—"}
-                              </dd>
-                            </div>
-                          </dl>
-                          {log.metadata && (
-                            <pre className="mt-3 max-h-64 overflow-auto rounded-lg bg-white p-3 text-xs text-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">
-                              {JSON.stringify(log.metadata, null, 2)}
-                            </pre>
-                          )}
-                        </td>
-                      </tr>
+      <TableShell title="Audit log entries">
+        <thead>
+          <tr>
+            <th className="px-4 py-2.5 text-left">Date &amp; time</th>
+            <th className="px-4 py-2.5 text-left">User</th>
+            <th className="px-4 py-2.5 text-left">Action</th>
+            <th className="px-4 py-2.5 text-left">Outcome</th>
+            <th className="px-4 py-2.5 text-left">Record</th>
+            <th className="px-4 py-2.5 text-left">From</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-security-navy-100">
+          {loading ? (
+            <TableLoadingRow colSpan={6} label="Loading audit logs..." />
+          ) : logs.length === 0 ? (
+            <TableEmptyRow colSpan={6} message="Nothing matches these filters." />
+          ) : (
+            logs.map((log) => (
+              <Fragment key={log.id}>
+                <tr
+                  className="cursor-pointer"
+                  onClick={() => setExpanded(expanded === log.id ? null : log.id)}
+                >
+                  <td className="whitespace-nowrap px-4 py-2.5 text-security-navy-600">
+                    {new Date(log.timestamp).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2.5 text-security-navy-900">
+                    {log.user?.name ?? log.actorLabel ?? "—"}
+                  </td>
+                  <td className="px-4 py-2.5 font-medium text-security-navy-900">{log.action}</td>
+                  <td className="px-4 py-2.5">
+                    <StatusBadge status={log.outcome} />
+                  </td>
+                  <td className="px-4 py-2.5 text-security-navy-700">
+                    {log.entityType}
+                    {log.entityId && (
+                      <span className="font-mono text-xs text-security-navy-500">
+                        {" "}
+                        #{log.entityId.slice(0, 8)}
+                      </span>
                     )}
-                  </Fragment>
-                ))}
-              {!loading && logs.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-security-navy-600">
-                    Nothing matches these filters.
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-security-navy-500">
+                    {log.ipAddress ?? "—"}
                   </td>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                {expanded === log.id && (
+                  <tr>
+                    <td colSpan={6} className="bg-security-navy-50 px-4 py-3">
+                      <dl className="grid gap-2 text-xs sm:grid-cols-3">
+                        <div>
+                          <dt className="font-semibold text-security-navy-500">User agent</dt>
+                          <dd className="break-all text-security-navy-700">
+                            {log.userAgent ?? "—"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="font-semibold text-security-navy-500">Request id</dt>
+                          <dd className="font-mono text-security-navy-700">
+                            {log.requestId ?? "—"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="font-semibold text-security-navy-500">Record id</dt>
+                          <dd className="font-mono break-all text-security-navy-700">
+                            {log.entityId ?? "—"}
+                          </dd>
+                        </div>
+                      </dl>
+                      {log.metadata && (
+                        <pre className="mt-3 max-h-64 overflow-auto rounded-security border border-security-navy-100 bg-white p-3 text-xs text-security-navy-700">
+                          {JSON.stringify(log.metadata, null, 2)}
+                        </pre>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))
+          )}
+        </tbody>
+      </TableShell>
 
-      <div className="mt-4 flex items-center justify-between text-sm text-security-navy-600">
-        <span>
+      <div className="flex items-center justify-between text-sm text-security-navy-600">
+        <span className="tabular-nums">
           {total === 0
             ? "No entries"
             : `${offset + 1}–${Math.min(offset + PAGE_SIZE, total)} of ${total}`}
         </span>
         <div className="flex gap-2">
-          <button
-            type="button"
-            className="btn-secondary"
+          <Button
+            variant="secondary"
+            size="sm"
             disabled={offset === 0}
             onClick={() => setOffset((current) => Math.max(current - PAGE_SIZE, 0))}
           >
             Previous
-          </button>
-          <button
-            type="button"
-            className="btn-secondary"
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             disabled={offset + PAGE_SIZE >= total}
             onClick={() => setOffset((current) => current + PAGE_SIZE)}
           >
             Next
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

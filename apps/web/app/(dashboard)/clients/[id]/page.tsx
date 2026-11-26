@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { AlertBanner } from "@/components/ui";
+import { AlertBanner, Badge, PageShell, SkeletonBlock, StatusBadge, Tabs } from "@/components/ui";
 import { hasCapability } from "@/lib/permissions";
 import {
   getClient,
@@ -127,20 +127,20 @@ export default function ClientWorkspacePage() {
 
   if (loading) {
     return (
-      <main className="animate-fade-in space-y-4 pb-16">
-        <div className="h-44 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-800" />
-      </main>
+      <PageShell>
+        <SkeletonBlock className="h-44" />
+      </PageShell>
     );
   }
 
   if (!client) {
     return (
-      <main className="animate-fade-in space-y-4 pb-16">
+      <PageShell>
         <Link href="/clients" className="text-sm text-security-navy-700 hover:underline">
           ← Back to clients
         </Link>
         <AlertBanner variant="error">{error || "Client record not found"}</AlertBanner>
-      </main>
+      </PageShell>
     );
   }
 
@@ -148,12 +148,12 @@ export default function ClientWorkspacePage() {
   const missingCount = compliance?.summary.missing || 0;
 
   return (
-    <main className="animate-fade-in space-y-5 pb-16">
+    <PageShell>
       {/* Breadcrumb & Master Header */}
       <header className="space-y-2">
         <Link
           href="/clients"
-          className="text-xs font-medium text-security-navy-600 hover:underline dark:text-security-navy-400"
+          className="text-xs font-medium text-security-navy-600 hover:underline"
         >
           ← Back to Clients Directory
         </Link>
@@ -161,24 +161,14 @@ export default function ClientWorkspacePage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold text-security-navy-900 dark:text-security-navy-100">
-                {client.name}
-              </h1>
+              <h1 className="page-title">{client.name}</h1>
               {client.tradingName && client.tradingName !== client.name && (
                 <span className="text-sm text-security-navy-500">t/a {client.tradingName}</span>
               )}
-              <span className="rounded-full bg-security-navy-100 px-2.5 py-0.5 text-xs font-semibold text-security-navy-800 dark:bg-security-navy-800 dark:text-security-navy-200">
+              <Badge variant="neutral">
                 {client.entityType ? client.entityType.replace(/_/g, " ") : "Entity"}
-              </span>
-              <span
-                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                  client.isActive
-                    ? "bg-security-emerald-100 text-security-emerald-800 dark:bg-security-emerald-950/60 dark:text-security-emerald-300"
-                    : "bg-security-navy-100 text-security-navy-600 dark:bg-security-navy-800 dark:text-security-navy-400"
-                }`}
-              >
-                {client.isActive ? "Active" : "Inactive"}
-              </span>
+              </Badge>
+              <StatusBadge status={client.isActive ? "ACTIVE" : "INACTIVE"} />
             </div>
 
             <p className="mt-1 text-xs text-security-navy-500">
@@ -190,9 +180,9 @@ export default function ClientWorkspacePage() {
           {canAccessBilling && (
             <Link
               href={`/billing/clients/${client.id}`}
-              className="btn-secondary flex items-center gap-1.5 text-xs text-security-emerald-800 dark:text-security-emerald-300"
+              className="btn-secondary flex items-center gap-1.5 text-xs text-security-emerald-800"
             >
-              <span>💳</span> Client Billing & Rates
+              Client Billing & Rates
             </Link>
           )}
         </div>
@@ -202,43 +192,23 @@ export default function ClientWorkspacePage() {
       {notice && <AlertBanner variant="success">{notice}</AlertBanner>}
 
       {/* 8-Tab Navigation Bar */}
-      <nav
-        className="flex overflow-x-auto border-b border-security-navy-200 dark:border-security-navy-700"
-        aria-label="Client Workspace Sections"
-      >
-        <div className="flex gap-1 min-w-max">
-          {TABS.map((item) => {
-            const isActiveTab = tab === item.id;
-            const hasAttention =
-              item.id === "documents" && (attentionCount > 0 || missingCount > 0);
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setTab(item.id);
-                  setError("");
-                  setNotice("");
-                }}
-                className={`relative flex items-center gap-1.5 border-b-2 px-4 py-3 text-xs font-semibold transition-colors ${
-                  isActiveTab
-                    ? "border-security-navy-900 text-security-navy-900 dark:border-security-amber-400 dark:text-security-amber-400"
-                    : "border-transparent text-security-navy-500 hover:border-security-navy-300 hover:text-security-navy-800 dark:hover:text-security-navy-200"
-                }`}
-                aria-current={isActiveTab ? "page" : undefined}
-              >
-                {item.label}
-                {hasAttention && (
-                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-security-amber-500 px-1 text-[10px] font-bold text-white">
-                    {attentionCount + missingCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+      <Tabs
+        ariaLabel="Client Workspace Sections"
+        value={tab}
+        onChange={(next) => {
+          setTab(next);
+          setError("");
+          setNotice("");
+        }}
+        items={TABS.map((item) => ({
+          value: item.id,
+          label: item.label,
+          count:
+            item.id === "documents" && attentionCount + missingCount > 0
+              ? attentionCount + missingCount
+              : undefined,
+        }))}
+      />
 
       {/* Tab Panels */}
       {tab === "overview" && (
@@ -345,7 +315,7 @@ export default function ClientWorkspacePage() {
       {tab === "month-end" && (
         <ClientMonthEndTab clientId={client.id} token={token ?? ""} />
       )}
-    </main>
+    </PageShell>
   );
 }
 
@@ -405,9 +375,9 @@ function SitesTab({
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
-        <table className="min-w-full divide-y divide-security-navy-100 text-xs dark:divide-security-navy-700">
-          <thead className="bg-security-navy-50 dark:bg-security-navy-900">
+      <div className="overflow-x-auto rounded-security-lg border border-security-navy-100">
+        <table className="min-w-full divide-y divide-security-navy-100 text-xs">
+          <thead className="bg-security-navy-50">
             <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-security-navy-500">
               <th className="px-4 py-2.5">Site Name</th>
               <th className="px-4 py-2.5">Deployment Address</th>
@@ -417,29 +387,29 @@ function SitesTab({
               {canEdit && <th className="px-4 py-2.5 text-right">Actions</th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
+          <tbody className="divide-y divide-security-navy-100">
             {client.sites.map((site) => (
-              <tr key={site.id} className="hover:bg-security-navy-50/50 dark:hover:bg-security-navy-800/40">
+              <tr key={site.id} className="hover:bg-security-navy-50/50">
                 <td className="px-4 py-3">
                   <Link
                     href={`/sites/${site.id}`}
-                    className="font-medium text-security-navy-900 hover:text-security-amber-600 hover:underline dark:text-security-navy-100"
+                    className="font-medium text-security-navy-900 hover:text-security-amber-600 hover:underline"
                   >
                     {site.name}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-security-navy-600 dark:text-security-navy-400">
+                <td className="px-4 py-3 text-security-navy-600">
                   {site.physicalAddress || "—"}
                 </td>
-                <td className="px-4 py-3 text-security-navy-600 dark:text-security-navy-400">
+                <td className="px-4 py-3 text-security-navy-600">
                   {site.serviceType || "—"}
                 </td>
-                <td className="px-4 py-3 font-mono text-security-navy-600 dark:text-security-navy-400">
+                <td className="px-4 py-3 font-mono text-security-navy-600">
                   {site.contractStartDate ? String(site.contractStartDate).slice(0, 10) : "—"}
                   {site.contractEndDate ? ` → ${String(site.contractEndDate).slice(0, 10)}` : ""}
                 </td>
                 <td className="px-4 py-3">
-                  <span className="rounded-full bg-security-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-security-emerald-800 dark:bg-security-emerald-950/60 dark:text-security-emerald-300">
+                  <span className="rounded-full bg-security-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-security-emerald-800">
                     {site.siteStatus}
                   </span>
                 </td>
@@ -470,7 +440,7 @@ function SitesTab({
 
       {canEdit && (
         <div className="card-dashboard space-y-3 p-4 text-xs">
-          <h2 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">
+          <h2 className="text-sm font-semibold text-security-navy-900">
             Attach Operational Sites
           </h2>
           {unlinked.length === 0 ? (
@@ -491,7 +461,7 @@ function SitesTab({
                         )
                       }
                     />
-                    <span className="font-medium text-security-navy-800 dark:text-security-navy-200">
+                    <span className="font-medium text-security-navy-800">
                       {site.name}
                     </span>
                   </label>

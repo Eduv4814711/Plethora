@@ -17,8 +17,11 @@ import {
   Button,
   EmptyState,
   Input,
+  Modal,
   PageHeader,
+  PageShell,
   Select,
+  SkeletonBlock,
 } from "@/components/ui";
 
 const CATEGORIES = [
@@ -167,7 +170,7 @@ export default function DocumentsPage() {
   };
 
   return (
-    <div className="animate-fade-in max-w-6xl mx-auto space-y-6">
+    <PageShell>
       <PageHeader
         title="Document Management"
         description="Unified document repository and PDF workspace for employee records, client contracts, compliance files, and system-generated financial packs."
@@ -262,23 +265,13 @@ export default function DocumentsPage() {
       )}
 
       {/* Upload Document Modal */}
-      {showUpload && canCreate && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-security-navy-900/50 p-4 backdrop-blur-[3px]">
-          <div className="w-full max-w-lg bg-white rounded-security-lg border border-security-navy-200 p-6 shadow-security-elevated">
-            <div className="flex items-center justify-between border-b border-security-navy-100 pb-3 mb-4">
-              <h2 className="text-base font-bold text-security-navy-900">
-                Upload New Document
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowUpload(false)}
-                className="text-security-navy-400 hover:text-security-navy-700"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleUpload} className="space-y-3 text-xs">
+      <Modal
+        open={Boolean(showUpload && canCreate)}
+        onClose={() => !uploading && setShowUpload(false)}
+        title="Upload New Document"
+        size="md"
+      >
+        <form onSubmit={handleUpload} className="space-y-3 text-xs">
               <div>
                 <label htmlFor="doc-title" className="label-text block mb-1">
                   Document Title *
@@ -401,17 +394,15 @@ export default function DocumentsPage() {
                   Upload File
                 </Button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {/* Documents Grid / Table */}
       {loading ? (
-        <div className="animate-pulse space-y-3">
-          <div className="h-20 bg-security-navy-100 rounded-lg" />
-          <div className="h-20 bg-security-navy-100 rounded-lg" />
-          <div className="h-20 bg-security-navy-100 rounded-lg" />
+        <div className="space-y-3">
+          <SkeletonBlock className="h-20" />
+          <SkeletonBlock className="h-20" />
+          <SkeletonBlock className="h-20" />
         </div>
       ) : (
         <div className="space-y-3">
@@ -569,6 +560,6 @@ export default function DocumentsPage() {
           }
         />
       )}
-    </div>
+    </PageShell>
   );
 }

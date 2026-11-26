@@ -355,13 +355,13 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
-          className="peer h-9 w-[min(17rem,calc(100vw-10rem))] min-w-0 max-w-[calc(100vw-2rem)] rounded-security border border-white/10 bg-white/[0.08] py-1.5 pl-9 pr-9 text-xs sm:text-[13px] text-white outline-none transition-[background-color,border-color,width] duration-200 placeholder:text-white/55 hover:border-white/20 hover:bg-white/[0.12] focus:border-security-amber-500 focus:bg-white focus:text-security-navy-900 focus:placeholder:text-security-navy-400 sm:w-64 sm:max-w-none lg:focus:w-80 [&::-webkit-search-cancel-button]:appearance-none"
+          className="peer h-8 w-[min(16rem,calc(100vw-9rem))] min-w-0 max-w-[calc(100vw-2rem)] rounded-security border border-security-navy-200/80 bg-security-navy-50/50 py-1.5 pl-8 pr-8 text-xs text-security-navy-900 outline-none transition-[background-color,border-color,width] duration-150 placeholder:text-security-navy-400 hover:border-security-navy-300 focus:border-security-amber-500 focus:bg-white sm:w-60 sm:max-w-none lg:focus:w-72 [&::-webkit-search-cancel-button]:appearance-none"
           aria-label="Global search across modules"
           aria-expanded={open}
           aria-autocomplete="list"
         />
         <svg
-          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/55 peer-focus:text-security-navy-500"
+          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-security-navy-400 peer-focus:text-security-navy-600"
           fill="none"
           stroke="currentColor"
           strokeWidth={1.7}

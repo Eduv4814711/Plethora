@@ -5,18 +5,15 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { onboardCompany } from "@/lib/api";
+import { AlertBanner, Button, Field, Input, SkeletonBlock } from "@/components/ui";
 
 function RegisterFallback() {
   return (
-    <div className="w-full animate-fade-in">
-      <div className="animate-fade-in">
-        <div className="h-6 w-48 bg-security-navy-200 rounded-security mb-4 animate-pulse" />
-        <div className="space-y-4">
-          <div className="h-11 bg-security-navy-200 rounded-security animate-pulse" />
-          <div className="h-11 bg-security-navy-200 rounded-security animate-pulse" />
-          <div className="h-11 bg-security-navy-200 rounded-security animate-pulse" />
-        </div>
-      </div>
+    <div className="w-full space-y-4 animate-fade-in">
+      <SkeletonBlock className="h-6 w-48" />
+      <SkeletonBlock className="h-11 w-full" />
+      <SkeletonBlock className="h-11 w-full" />
+      <SkeletonBlock className="h-11 w-full" />
     </div>
   );
 }
@@ -100,154 +97,106 @@ function RegisterFormContent() {
 
   return (
     <div className="w-full animate-fade-in">
-      <div className="animate-fade-in">
-        <div className="text-center mb-8 pb-8 border-b-2 border-security-navy-100">
-          <div className="inline-flex items-center justify-center mb-4">
-            <img src="/plethora-logo.svg" alt="Plethora" className="h-[7.5rem] w-auto object-contain" />
+      <img
+        src="/plethora-logo.svg"
+        alt="Plethora"
+        className="mb-8 h-14 w-auto object-contain object-left lg:hidden"
+      />
+      <h1 className="page-title">Register your company</h1>
+      <p className="mt-1.5 text-sm text-security-navy-500">
+        Create your security operations workspace and administrator account.
+      </p>
+
+      <form onSubmit={handleSubmit} className="mt-7 space-y-4">
+        <Field label="Company name" id="companyName">
+          <Input
+            type="text"
+            value={form.companyName}
+            onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
+            required
+            placeholder="Acme Security"
+          />
+        </Field>
+
+        <Field label="Your name" id="adminName">
+          <Input
+            type="text"
+            value={form.adminName}
+            onChange={(e) => setForm((f) => ({ ...f, adminName: e.target.value }))}
+            required
+            placeholder="Jane Admin"
+          />
+        </Field>
+
+        <Field label="Admin email" id="adminEmail">
+          <Input
+            type="email"
+            value={form.adminEmail}
+            onChange={(e) => setForm((f) => ({ ...f, adminEmail: e.target.value }))}
+            required
+            placeholder="admin@company.com"
+          />
+        </Field>
+
+        <div className="space-y-1.5">
+          <label htmlFor="password" className="label-text block">
+            Password
+          </label>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              required
+              minLength={8}
+              className="pr-12"
+              placeholder="At least 8 characters"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-security text-security-navy-400 transition-colors hover:bg-security-navy-50 hover:text-security-navy-700"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              )}
+            </button>
           </div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-security-navy-500 mt-2">
-            Register your security company
-          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label
-              htmlFor="companyName"
-              className="label-text block mb-2"
-            >
-              Company name
-            </label>
-            <input
-              id="companyName"
-              type="text"
-              value={form.companyName}
-              onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
-              required
-              className="input-modern"
-              placeholder="Acme Security"
-            />
-          </div>
+        <Field label="Confirm password" id="confirmPassword">
+          <Input
+            type="password"
+            value={form.confirmPassword}
+            onChange={(e) => setForm((f) => ({ ...f, confirmPassword: e.target.value }))}
+            required
+            minLength={8}
+            placeholder="Same as above"
+          />
+        </Field>
 
-          <div className="pt-2">
-            <p className="label-text mb-3">
-              Admin user for this company
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label
-                  htmlFor="adminName"
-                  className="label-text block mb-2"
-                >
-                  Your name
-                </label>
-                <input
-                  id="adminName"
-                  type="text"
-                  value={form.adminName}
-                  onChange={(e) => setForm((f) => ({ ...f, adminName: e.target.value }))}
-                  required
-                  className="input-modern"
-                  placeholder="Jane Admin"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="adminEmail"
-                  className="label-text block mb-2"
-                >
-                  Email
-                </label>
-                <input
-                  id="adminEmail"
-                  type="email"
-                  value={form.adminEmail}
-                  onChange={(e) => setForm((f) => ({ ...f, adminEmail: e.target.value }))}
-                  required
-                  className="input-modern"
-                  placeholder="admin@company.com"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="password"
-                  className="label-text block mb-2"
-                >
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={form.password}
-                    onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                    required
-                    minLength={8}
-                    className="input-modern pr-12"
-                    placeholder="At least 8 characters"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-security text-security-navy-600 hover:bg-security-navy-50 border border-transparent hover:border-security-navy-300 transition-colors"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label
-                  htmlFor="confirmPassword"
-                  className="label-text block mb-2"
-                >
-                  Confirm password
-                </label>
-                <input
-                  id="confirmPassword"
-                  type="password"
-                  value={form.confirmPassword}
-                  onChange={(e) => setForm((f) => ({ ...f, confirmPassword: e.target.value }))}
-                  required
-                  minLength={8}
-                  className="input-modern"
-                  placeholder="Same as above"
-                />
-              </div>
-            </div>
-          </div>
+        {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
-          {error && (
-            <div className="p-4 text-sm text-red-800 bg-red-50 border-2 border-red-200 rounded-security" role="alert">
-              {error}
-            </div>
-          )}
+        <Button type="submit" variant="primary" size="lg" loading={submitting} className="min-h-12 w-full">
+          Create company &amp; sign in
+        </Button>
+      </form>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="btn-primary w-full py-3"
-          >
-            {submitting ? "Creating account..." : "Create company & sign in"}
-          </button>
-        </form>
-
-        <p className="text-center text-sm text-security-navy-600 mt-6">
-          Already have an account?{" "}
-          <Link href="/login" className="font-semibold text-security-navy hover:underline">
-            Sign in
-          </Link>
-        </p>
-      </div>
+      <p className="mt-8 border-t border-security-navy-100 pt-6 text-sm text-security-navy-500">
+        Already have an account?{" "}
+        <Link href="/login" className="font-semibold text-security-amber-700 hover:underline">
+          Sign in
+        </Link>
+      </p>
     </div>
   );
 }

@@ -89,15 +89,15 @@ export function AttendanceCaptureDashboard({
 
   if (loading) {
     return (
-      <section className="lg:col-span-2 rounded-security-lg border border-security-navy-100 bg-security-navy-50/60 p-4 dark:border-security-navy-700 dark:bg-security-navy-900/30 sm:p-5">
+      <section className="lg:col-span-2 rounded-security-lg border border-security-navy-100 bg-security-navy-50/60 p-4 sm:p-5">
         <div className="animate-pulse space-y-3">
-          <div className="h-4 w-48 rounded bg-security-navy-100 dark:bg-security-navy-700" />
+          <div className="h-4 w-48 rounded bg-security-navy-100" />
           <div className="grid gap-2 sm:grid-cols-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-16 rounded-lg bg-security-navy-100 dark:bg-security-navy-700" />
+              <div key={i} className="h-16 rounded-lg bg-security-navy-100" />
             ))}
           </div>
-          <div className="h-24 rounded-lg bg-security-navy-100 dark:bg-security-navy-700" />
+          <div className="h-24 rounded-lg bg-security-navy-100" />
         </div>
       </section>
     );
@@ -105,7 +105,7 @@ export function AttendanceCaptureDashboard({
 
   if (error) {
     return (
-      <section className="lg:col-span-2 rounded-security-lg border border-red-200 bg-red-50/70 p-4 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200 sm:p-5">
+      <section className="lg:col-span-2 rounded-security-lg border border-red-200 bg-red-50/70 p-4 text-sm text-red-800 sm:p-5">
         Could not load attendance capture status. {error}
       </section>
     );
@@ -136,7 +136,7 @@ export function AttendanceCaptureDashboard({
 
   return (
     <section
-      className="lg:col-span-2 rounded-security-lg border border-security-navy-100 bg-gradient-to-br from-white to-security-navy-50/80 p-4 dark:border-security-navy-700 dark:from-security-navy-900/80 dark:to-security-navy-900/40 sm:p-5"
+      className="lg:col-span-2 rounded-security-lg border border-security-navy-100 bg-gradient-to-br from-white to-security-navy-50/80 p-4 sm:p-5"
       aria-label="Attendance capture status"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -149,7 +149,7 @@ export function AttendanceCaptureDashboard({
         >
           <svg
             className={clsx(
-              "mt-0.5 h-4 w-4 shrink-0 text-security-navy-500 transition-transform group-hover:text-security-navy-700 dark:text-security-navy-400 dark:group-hover:text-security-navy-200",
+              "mt-0.5 h-4 w-4 shrink-0 text-security-navy-500 transition-transform group-hover:text-security-navy-700",
               expanded && "rotate-180"
             )}
             fill="none"
@@ -160,20 +160,20 @@ export function AttendanceCaptureDashboard({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500 dark:text-security-navy-400">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
               Attendance work queue
             </p>
-            <h4 className="mt-1 text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
+            <h4 className="mt-1 text-base font-semibold text-security-navy-900">
               Attendance should be reviewed through {captureLabel}
             </h4>
             {expanded ? (
-              <p className="mt-1 text-sm text-security-navy-600 dark:text-security-navy-400">
+              <p className="mt-1 text-sm text-security-navy-600">
                 {shiftLabel
                   ? `Sites with scheduled ${shiftLabel} shifts still waiting for review are listed below. Open a site to confirm who worked.`
                   : "Sites with scheduled shifts still waiting for review are listed below. Open a site to confirm who worked."}
               </p>
             ) : (
-              <p className="mt-1 text-sm text-security-navy-600 dark:text-security-navy-400">
+              <p className="mt-1 text-sm text-security-navy-600">
                 {overview.summary.needsCapture > 0
                   ? `${needCapturePhrase}${pendingBreakdown ? ` · ${pendingBreakdown}` : ""} · ${overview.summary.caughtUp} up to date`
                   : overview.captureThrough
@@ -184,8 +184,8 @@ export function AttendanceCaptureDashboard({
           </div>
         </button>
         <div className="flex shrink-0 items-start gap-2 sm:flex-col sm:items-end">
-          <div className="rounded-lg border border-security-navy-100 bg-white px-3 py-2 text-xs text-security-navy-600 shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">
-            <span className="font-medium text-security-navy-900 dark:text-security-navy-100">Today</span>
+          <div className="rounded-lg border border-security-navy-100 bg-white px-3 py-2 text-xs text-security-navy-600 shadow-security-card">
+            <span className="font-medium text-security-navy-900">Today</span>
             <span className="mt-0.5 block">{formatDisplayDate(overview.asOfDate)}</span>
           </div>
           <button
@@ -193,7 +193,7 @@ export function AttendanceCaptureDashboard({
             onClick={() => setExpanded((v) => !v)}
             aria-expanded={expanded}
             aria-controls={panelId}
-            className="text-xs font-medium text-security-navy-700 hover:text-security-navy-900 dark:text-security-navy-300 dark:hover:text-security-navy-100 sm:hidden"
+            className="text-xs font-medium text-security-navy-700 hover:text-security-navy-900 sm:hidden"
           >
             {expanded ? "Collapse" : "Expand"}
           </button>
@@ -203,48 +203,48 @@ export function AttendanceCaptureDashboard({
       {expanded && (
         <div id={panelId} className="mt-4 space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="rounded-lg border border-security-amber-200/80 bg-security-amber-50/80 px-3 py-3 dark:border-security-amber-900/40 dark:bg-security-amber-950/20">
-              <p className="text-2xl font-bold text-security-amber-900 dark:text-security-amber-100">{overview.summary.needsCapture}</p>
-              <p className="text-xs font-medium text-security-amber-800/90 dark:text-security-amber-200/90">
+            <div className="rounded-lg border border-security-amber-200/80 bg-security-amber-50/80 px-3 py-3">
+              <p className="text-2xl font-bold text-security-amber-900">{overview.summary.needsCapture}</p>
+              <p className="text-xs font-medium text-security-amber-800/90">
                 {shiftLabel ? `Sites need ${shiftLabel} review` : "Sites need review"}
               </p>
             </div>
-            <div className="rounded-lg border border-security-amber-200/80 bg-security-amber-50/50 px-3 py-3 dark:border-security-amber-900/40 dark:bg-security-amber-950/10">
-              <p className="text-2xl font-bold text-security-amber-900 dark:text-security-amber-100">{pendingDay}</p>
-              <p className="text-xs font-medium text-security-amber-800/90 dark:text-security-amber-200/90">Day approvals pending</p>
+            <div className="rounded-lg border border-security-amber-200/80 bg-security-amber-50/50 px-3 py-3">
+              <p className="text-2xl font-bold text-security-amber-900">{pendingDay}</p>
+              <p className="text-xs font-medium text-security-amber-800/90">Day approvals pending</p>
             </div>
-            <div className="rounded-lg border border-security-amber-200/80 bg-security-amber-50/50 px-3 py-3 dark:border-security-amber-900/40 dark:bg-security-amber-950/10">
-              <p className="text-2xl font-bold text-security-amber-900 dark:text-security-amber-100">{pendingNight}</p>
-              <p className="text-xs font-medium text-security-amber-800/90 dark:text-security-amber-200/90">Night approvals pending</p>
+            <div className="rounded-lg border border-security-amber-200/80 bg-security-amber-50/50 px-3 py-3">
+              <p className="text-2xl font-bold text-security-amber-900">{pendingNight}</p>
+              <p className="text-xs font-medium text-security-amber-800/90">Night approvals pending</p>
             </div>
-            <div className="rounded-lg border border-security-emerald-200/80 bg-security-emerald-50/80 px-3 py-3 dark:border-security-emerald-700/40 dark:bg-security-emerald-700/20">
-              <p className="text-2xl font-bold text-security-emerald-700 dark:text-security-emerald-100">{overview.summary.caughtUp}</p>
-              <p className="text-xs font-medium text-security-emerald-700/90 dark:text-security-emerald-200/90">Sites up to date</p>
+            <div className="rounded-lg border border-security-emerald-200/80 bg-security-emerald-50/80 px-3 py-3">
+              <p className="text-2xl font-bold text-security-emerald-700">{overview.summary.caughtUp}</p>
+              <p className="text-xs font-medium text-security-emerald-700/90">Sites up to date</p>
             </div>
-            <div className="rounded-lg border border-security-navy-100 bg-white px-3 py-3 dark:border-security-navy-700 dark:bg-security-navy-900/60">
-              <p className="text-2xl font-bold text-security-navy-900 dark:text-security-navy-100">{overview.summary.noShifts}</p>
-              <p className="text-xs font-medium text-security-navy-600 dark:text-security-navy-400">No scheduled shifts</p>
+            <div className="rounded-lg border border-security-navy-100 bg-white px-3 py-3">
+              <p className="text-2xl font-bold text-security-navy-900">{overview.summary.noShifts}</p>
+              <p className="text-xs font-medium text-security-navy-600">No scheduled shifts</p>
             </div>
           </div>
 
           {needsCapture.length > 0 ? (
-            <div className="overflow-hidden rounded-lg border border-security-amber-200/70 dark:border-security-amber-900/40">
-              <div className="border-b border-security-amber-200/70 bg-security-amber-50/70 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-security-amber-900 dark:border-security-amber-900/40 dark:bg-security-amber-950/30 dark:text-security-amber-100">
+            <div className="overflow-hidden rounded-lg border border-security-amber-200/70">
+              <div className="border-b border-security-amber-200/70 bg-security-amber-50/70 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-security-amber-900">
                 Needs attendance review
               </div>
-              <ul className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
+              <ul className="divide-y divide-security-navy-100">
                 {needsCapture.map((site) => (
                   <li key={site.siteId}>
                     <button
                       type="button"
                       onClick={() => onSelectSite(site.siteId)}
-                      className={`flex w-full items-center justify-between gap-3 px-3 py-3 text-left transition-colors hover:bg-security-amber-50/60 dark:hover:bg-security-amber-950/20 ${
-                        selectedSiteId === site.siteId ? "bg-security-amber-50/80 dark:bg-security-amber-950/30" : "bg-white dark:bg-security-navy-900/40"
+                      className={`flex w-full items-center justify-between gap-3 px-3 py-3 text-left transition-colors hover:bg-security-amber-50/60 ${
+                        selectedSiteId === site.siteId ? "bg-security-amber-50/80" : "bg-white"
                       }`}
                     >
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-security-navy-900 dark:text-security-navy-100">{site.siteName}</p>
-                        <p className="mt-0.5 text-xs text-security-navy-600 dark:text-security-navy-400">
+                        <p className="truncate font-medium text-security-navy-900">{site.siteName}</p>
+                        <p className="mt-0.5 text-xs text-security-navy-600">
                           {site.dueDays} day{site.dueDays === 1 ? "" : "s"} · {site.pendingRows} shift
                           {site.pendingRows === 1 ? "" : "s"} pending
                           {(site.pendingDayRows ?? 0) > 0 || (site.pendingNightRows ?? 0) > 0
@@ -259,7 +259,7 @@ export function AttendanceCaptureDashboard({
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <SiteStatusBadge status={site.status} />
-                        <span className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">Review site →</span>
+                        <span className="text-xs font-semibold text-security-navy-700">Review site →</span>
                       </div>
                     </button>
                   </li>
@@ -267,11 +267,11 @@ export function AttendanceCaptureDashboard({
               </ul>
             </div>
           ) : normalizedQuery && visibleSites.length > 0 ? (
-            <div className="rounded-lg border border-security-navy-100 bg-white px-4 py-3 text-sm text-security-navy-700 dark:border-security-navy-700 dark:bg-security-navy-900/50 dark:text-security-navy-300">
+            <div className="rounded-lg border border-security-navy-100 bg-white px-4 py-3 text-sm text-security-navy-700">
               No sites needing attendance review match “{siteQuery.trim()}”.
             </div>
           ) : overview.captureThrough ? (
-            <div className="rounded-lg border border-security-emerald-200/80 bg-security-emerald-50/70 px-4 py-3 text-sm text-security-emerald-700 dark:border-security-emerald-700/40 dark:bg-security-emerald-700/20 dark:text-security-emerald-100">
+            <div className="rounded-lg border border-security-emerald-200/80 bg-security-emerald-50/70 px-4 py-3 text-sm text-security-emerald-700">
               All scheduled sites are reviewed through {captureLabel}.
             </div>
           ) : null}
@@ -281,24 +281,24 @@ export function AttendanceCaptureDashboard({
               <button
                 type="button"
                 onClick={() => setShowCaughtUp((v) => !v)}
-                className="min-h-11 text-sm font-medium text-security-navy-700 hover:text-security-navy-900 dark:text-security-navy-300 dark:hover:text-security-navy-100"
+                className="min-h-11 text-sm font-medium text-security-navy-700 hover:text-security-navy-900"
                 aria-expanded={showCaughtUp}
               >
                 {showCaughtUp ? "Hide" : "Show"} {caughtUp.length} site{caughtUp.length === 1 ? "" : "s"} up to date
               </button>
               {showCaughtUp && (
-                <ul className="mt-2 overflow-hidden rounded-lg border border-security-navy-100 dark:border-security-navy-700">
+                <ul className="mt-2 overflow-hidden rounded-lg border border-security-navy-100">
                   {caughtUp.map((site) => (
-                    <li key={site.siteId} className="border-b border-security-navy-100 last:border-b-0 dark:border-security-navy-800">
+                    <li key={site.siteId} className="border-b border-security-navy-100 last:border-b-0">
                       <button
                         type="button"
                         onClick={() => onSelectSite(site.siteId)}
-                        className="flex w-full items-center justify-between gap-3 bg-white px-3 py-2.5 text-left hover:bg-security-navy-50 dark:bg-security-navy-900/40 dark:hover:bg-security-navy-900/60"
+                        className="flex w-full items-center justify-between gap-3 bg-white px-3 py-2.5 text-left hover:bg-security-navy-50"
                       >
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-security-navy-900 dark:text-security-navy-100">{site.siteName}</p>
+                          <p className="truncate text-sm font-medium text-security-navy-900">{site.siteName}</p>
                           {site.lastCapturedDate && (
-                            <p className="text-xs text-security-navy-500 dark:text-security-navy-400">
+                            <p className="text-xs text-security-navy-500">
                               Last captured {formatDisplayDate(site.lastCapturedDate)}
                             </p>
                           )}
@@ -317,21 +317,21 @@ export function AttendanceCaptureDashboard({
               <button
                 type="button"
                 onClick={() => setShowNoShifts((value) => !value)}
-                className="min-h-11 text-sm font-medium text-security-navy-700 hover:text-security-navy-900 dark:text-security-navy-300 dark:hover:text-security-navy-100"
+                className="min-h-11 text-sm font-medium text-security-navy-700 hover:text-security-navy-900"
                 aria-expanded={showNoShifts}
               >
                 {showNoShifts ? "Hide" : "Show"} {noShifts.length} site{noShifts.length === 1 ? "" : "s"} with no scheduled shifts
               </button>
               {showNoShifts && (
-                <ul className="mt-2 overflow-hidden rounded-lg border border-security-navy-100 dark:border-security-navy-700">
+                <ul className="mt-2 overflow-hidden rounded-lg border border-security-navy-100">
                   {noShifts.map((site) => (
-                    <li key={site.siteId} className="border-b border-security-navy-100 last:border-b-0 dark:border-security-navy-800">
+                    <li key={site.siteId} className="border-b border-security-navy-100 last:border-b-0">
                       <button
                         type="button"
                         onClick={() => onSelectSite(site.siteId)}
-                        className="flex min-h-11 w-full items-center justify-between gap-3 bg-white px-3 py-2.5 text-left hover:bg-security-navy-50 dark:bg-security-navy-900/40 dark:hover:bg-security-navy-900/60"
+                        className="flex min-h-11 w-full items-center justify-between gap-3 bg-white px-3 py-2.5 text-left hover:bg-security-navy-50"
                       >
-                        <span className="truncate text-sm font-medium text-security-navy-900 dark:text-security-navy-100">{site.siteName}</span>
+                        <span className="truncate text-sm font-medium text-security-navy-900">{site.siteName}</span>
                         <SiteStatusBadge status={site.status} />
                       </button>
                     </li>
@@ -342,7 +342,7 @@ export function AttendanceCaptureDashboard({
           )}
 
           {visibleSites.length === 0 && normalizedQuery && (
-            <div className="rounded-lg border border-security-navy-100 bg-white px-4 py-6 text-center text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900/50 dark:text-security-navy-300">
+            <div className="rounded-lg border border-security-navy-100 bg-white px-4 py-6 text-center text-sm text-security-navy-600">
               No sites match “{siteQuery.trim()}”. Try another site name.
             </div>
           )}

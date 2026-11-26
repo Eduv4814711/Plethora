@@ -103,7 +103,7 @@ export function ClientMonthEndTab({ clientId, token }: { clientId: string; token
       {notice && <AlertBanner variant="success">{notice}</AlertBanner>}
 
       {loading ? (
-        <div className="h-40 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" aria-label="Loading summary" />
+        <div className="h-40 animate-pulse rounded-security-lg bg-security-navy-100" aria-label="Loading summary" />
       ) : !summary ? (
         <p className="text-sm text-security-navy-600">No summary available for this month.</p>
       ) : (
@@ -128,16 +128,16 @@ export function ClientMonthEndTab({ clientId, token }: { clientId: string; token
               ["Overtime", summary.totals.overtimeHours],
               ["Incidents", summary.totals.incidents],
             ].map(([label, value]) => (
-              <div key={String(label)} className="rounded-security-lg border border-security-navy-100 p-3 dark:border-security-navy-700">
+              <div key={String(label)} className="rounded-security-lg border border-security-navy-100 p-3">
                 <p className="text-[10px] uppercase tracking-wider text-security-navy-500">{label}</p>
-                <p className="text-lg font-semibold tabular-nums text-security-navy-900 dark:text-security-navy-100">{value}</p>
+                <p className="text-lg font-semibold tabular-nums text-security-navy-900">{value}</p>
               </div>
             ))}
           </div>
 
-          <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
-            <table className="min-w-full divide-y divide-security-navy-100 text-sm dark:divide-security-navy-700">
-              <thead className="bg-security-navy-50 dark:bg-security-navy-900">
+          <div className="overflow-x-auto rounded-security-lg border border-security-navy-100">
+            <table className="min-w-full divide-y divide-security-navy-100 text-sm">
+              <thead className="bg-security-navy-50">
                 <tr className="text-left text-[10px] uppercase tracking-wider text-security-navy-500">
                   <th className="px-3 py-2">Site</th>
                   <th className="px-3 py-2">Timesheet</th>
@@ -149,10 +149,10 @@ export function ClientMonthEndTab({ clientId, token }: { clientId: string; token
                   {canExport && <th className="px-3 py-2" />}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
+              <tbody className="divide-y divide-security-navy-100">
                 {summary.sites.map((site) => (
                   <tr key={site.siteId}>
-                    <td className="px-3 py-2 font-medium text-security-navy-900 dark:text-security-navy-100">{site.siteName}</td>
+                    <td className="px-3 py-2 font-medium text-security-navy-900">{site.siteName}</td>
                     <td className="px-3 py-2">
                       <span
                         className={
@@ -258,7 +258,7 @@ export function ClientMonthEndTab({ clientId, token }: { clientId: string; token
           )}
 
           <div className="card-dashboard space-y-2 p-4">
-            <h2 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Send it</h2>
+            <h2 className="text-sm font-semibold text-security-navy-900">Send it</h2>
             <p className="text-xs text-security-navy-500">
               Nothing is emailed automatically. Download the pack, then send it to:
             </p>
@@ -268,7 +268,7 @@ export function ClientMonthEndTab({ clientId, token }: { clientId: string; token
               </p>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
-                <code className="rounded bg-security-navy-50 px-2 py-1 text-sm dark:bg-security-navy-800">
+                <code className="rounded bg-security-navy-50 px-2 py-1 text-sm">
                   {recipients.join(", ")}
                 </code>
                 <button

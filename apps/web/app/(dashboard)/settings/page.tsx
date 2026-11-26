@@ -31,7 +31,7 @@ import {
 } from "@/lib/api";
 import { canAccessMigrationTools, hasCapability } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
-import { useConfirmDialog } from "@/components/ui";
+import { AlertBanner, PageHeader, PageShell, SkeletonBlock, useConfirmDialog } from "@/components/ui";
 import { ClientsSettingsSection } from "@/components/clients-settings-section";
 import { CapabilityUsersSection } from "@/components/capability-users-section";
 import { clsx } from "clsx";
@@ -72,43 +72,38 @@ export default function SettingsPage() {
 
   if (loading && !settings) {
     return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="w-10 h-10 rounded-sm bg-security-navy-50 dark:bg-security-navy-900/30 animate-pulse" />
-      </div>
+      <PageShell>
+        <SkeletonBlock className="h-24" />
+        <SkeletonBlock className="h-64" />
+      </PageShell>
     );
   }
 
   return (
-    <div className="animate-fade-in">
-      <div className="mb-6">
-        <h1 className="page-title">Settings</h1>
-        <p className="mt-1 text-sm text-security-navy-600">
-          Manage your profile, company details, users, and system options.
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Settings"
+        description="Manage your profile, company details, users, and system options."
+      />
 
-      {error && (
-        <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm border border-red-200 dark:border-red-800/50">
-          {error}
-        </div>
-      )}
+      {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
       {!canEditSettings && activeTab !== "profile" && activeTab !== "users" && (
-        <div className="mb-4 p-3 text-sm text-security-navy-700 dark:text-security-navy-400 bg-security-navy-50 dark:bg-security-navy-900/20 rounded-sm border border-security-navy-100 dark:border-security-navy-600">
+        <AlertBanner variant="info">
           Your current access is read-only for company settings.
-        </div>
+        </AlertBanner>
       )}
 
-      <div className="flex gap-1 mb-6 border-b border-security-navy-100 dark:border-security-navy-700 overflow-x-auto">
+      <div className="flex gap-1 border-b border-security-navy-100 overflow-x-auto">
         {tabs
           .filter((t) => t.visible !== false)
           .map((tab) => {
             const tabProps = {
               className: clsx(
-                "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors",
+                "px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors",
                 activeTab === tab.id
-                  ? "bg-white dark:bg-security-navy-800 text-security-navy-900 dark:text-security-navy-200 border border-security-navy-100 dark:border-security-navy-700 border-b-transparent -mb-px"
-                  : "text-security-navy-600 dark:text-security-navy-400 hover:text-security-navy-900 dark:hover:text-white"
+                  ? "border-security-amber-500 text-security-navy-950 font-semibold"
+                  : "border-transparent text-security-navy-500 hover:text-security-navy-900"
               ),
             };
             return tab.href ? (
@@ -183,26 +178,26 @@ export default function SettingsPage() {
           <FactoryResetSection token={token} refresh={refresh} logout={logout} />
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }
 
 function ProfileSection({ user }: { user: AuthUser | null }) {
   return (
     <div className="text-left">
-      <h3 className="font-semibold text-security-navy-900 dark:text-white mb-4">Profile</h3>
+      <h3 className="font-semibold text-security-navy-900 mb-4">Profile</h3>
       <dl className="space-y-3 text-sm text-left">
         <div>
-          <dt className="text-security-navy-500 dark:text-security-navy-400">Name</dt>
-          <dd className="text-security-navy-900 dark:text-white">{user?.name}</dd>
+          <dt className="text-security-navy-500">Name</dt>
+          <dd className="text-security-navy-900">{user?.name}</dd>
         </div>
         <div>
-          <dt className="text-security-navy-500 dark:text-security-navy-400">Email</dt>
-          <dd className="text-security-navy-900 dark:text-white">{user?.email}</dd>
+          <dt className="text-security-navy-500">Email</dt>
+          <dd className="text-security-navy-900">{user?.email}</dd>
         </div>
         <div>
-          <dt className="text-security-navy-500 dark:text-security-navy-400">Account</dt>
-          <dd className="text-security-navy-900 dark:text-white">
+          <dt className="text-security-navy-500">Account</dt>
+          <dd className="text-security-navy-900">
             {user?.isOwner ? "Company owner" : user?.jobTitle || (user?.accountType === "client" ? "Client" : "Staff")}
           </dd>
         </div>
@@ -267,13 +262,13 @@ function BusinessDetailsSection({
 
   return (
     <div>
-      <h3 className="font-semibold text-security-navy-900 dark:text-white mb-4">Business Details</h3>
-      <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mb-6">
+      <h3 className="font-semibold text-security-navy-900 mb-4">Business Details</h3>
+      <p className="text-sm text-security-navy-500 mb-6">
         Configure your company information. This is used across the system (invoices, reports, etc.).
       </p>
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div>
-          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Company Name</label>
+          <label className="block text-sm font-medium text-security-navy-700 mb-1">Company Name</label>
           <input
             type="text"
             value={form.name}
@@ -284,7 +279,7 @@ function BusinessDetailsSection({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Legal Name</label>
+          <label className="block text-sm font-medium text-security-navy-700 mb-1">Legal Name</label>
           <input
             type="text"
             value={form.legalName}
@@ -294,14 +289,14 @@ function BusinessDetailsSection({
             readOnly={readOnly}
           />
         </div>
-        <div className="border-t border-security-navy-100 dark:border-security-navy-700 pt-6 mt-6">
-          <h4 className="text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-4">Company Statutory &amp; Registration Numbers</h4>
-          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mb-4">
+        <div className="border-t border-security-navy-100 pt-6 mt-6">
+          <h4 className="text-sm font-medium text-security-navy-700 mb-4">Company Statutory &amp; Registration Numbers</h4>
+          <p className="text-xs text-security-navy-500 mb-4">
             Used on client billing documents, tender compliance packs, and external payroll exports (Sage).
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">PSIRA Registration</label>
+              <label className="block text-sm font-medium text-security-navy-700 mb-1">PSIRA Registration</label>
               <input
                 type="text"
                 value={form.psiraRegistration}
@@ -312,7 +307,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Company Registration</label>
+              <label className="block text-sm font-medium text-security-navy-700 mb-1">Company Registration</label>
               <input
                 type="text"
                 value={form.registrationNumber}
@@ -323,7 +318,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Tax Number</label>
+              <label className="block text-sm font-medium text-security-navy-700 mb-1">Tax Number</label>
               <input
                 type="text"
                 value={form.taxNumber}
@@ -333,7 +328,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">UIF Reference</label>
+              <label className="block text-sm font-medium text-security-navy-700 mb-1">UIF Reference</label>
               <input
                 type="text"
                 value={form.uifReference}
@@ -344,7 +339,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">PAYE Reference</label>
+              <label className="block text-sm font-medium text-security-navy-700 mb-1">PAYE Reference</label>
               <input
                 type="text"
                 value={form.payeReference}
@@ -355,7 +350,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">SDL Reference</label>
+              <label className="block text-sm font-medium text-security-navy-700 mb-1">SDL Reference</label>
               <input
                 type="text"
                 value={form.sdlReference}
@@ -366,7 +361,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Telephone</label>
+              <label className="block text-sm font-medium text-security-navy-700 mb-1">Telephone</label>
               <input
                 type="text"
                 value={form.phone}
@@ -376,7 +371,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Fax</label>
+              <label className="block text-sm font-medium text-security-navy-700 mb-1">Fax</label>
               <input
                 type="text"
                 value={form.fax}
@@ -387,7 +382,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Email</label>
+              <label className="block text-sm font-medium text-security-navy-700 mb-1">Email</label>
               <input
                 type="email"
                 value={form.email}
@@ -399,7 +394,7 @@ function BusinessDetailsSection({
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Address</label>
+          <label className="block text-sm font-medium text-security-navy-700 mb-1">Address</label>
           <textarea
             value={form.address}
             onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
@@ -409,7 +404,7 @@ function BusinessDetailsSection({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Website</label>
+          <label className="block text-sm font-medium text-security-navy-700 mb-1">Website</label>
           <input
             type="url"
             value={form.website}
@@ -420,7 +415,7 @@ function BusinessDetailsSection({
           />
         </div>
         {saveError && (
-          <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
+          <p className="text-sm text-red-600">{saveError}</p>
         )}
         {!readOnly && (
           <button type="submit" disabled={saving} className="btn-primary">
@@ -623,13 +618,13 @@ function BusinessSettingsSection({
 
   return (
     <div>
-      <h3 className="font-semibold text-security-navy-900 dark:text-white mb-4">Business Settings</h3>
-      <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mb-6">
+      <h3 className="font-semibold text-security-navy-900 mb-4">Business Settings</h3>
+      <p className="text-sm text-security-navy-500 mb-6">
         Configure defaults used for rostering cycles, attendance, export schedules, and reporting.
       </p>
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div>
-          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Currency</label>
+          <label className="block text-sm font-medium text-security-navy-700 mb-1">Currency</label>
           <select
             value={form.currency}
             onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
@@ -643,7 +638,7 @@ function BusinessSettingsSection({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Date Format</label>
+          <label className="block text-sm font-medium text-security-navy-700 mb-1">Date Format</label>
           <select
             value={form.dateFormat}
             onChange={(e) => setForm((f) => ({ ...f, dateFormat: e.target.value }))}
@@ -656,7 +651,7 @@ function BusinessSettingsSection({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Timezone</label>
+          <label className="block text-sm font-medium text-security-navy-700 mb-1">Timezone</label>
           <input
             type="text"
             value={form.timezone}
@@ -667,7 +662,7 @@ function BusinessSettingsSection({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Payroll export frequency</label>
+          <label className="block text-sm font-medium text-security-navy-700 mb-1">Payroll export frequency</label>
           <select
             value={form.payrollPeriod}
             onChange={(e) => setForm((f) => ({ ...f, payrollPeriod: e.target.value }))}
@@ -678,19 +673,19 @@ function BusinessSettingsSection({
             <option value="biweekly">Bi-weekly</option>
             <option value="monthly">Monthly</option>
           </select>
-          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
+          <p className="text-xs text-security-navy-500 mt-1">
             Labeling cadence for external payroll export cycles. Period date bounds are configured below.
           </p>
         </div>
-        <div className="rounded-security-lg border border-security-amber-200/80 dark:border-security-amber-800/40 bg-security-amber-50/40 dark:bg-security-amber-950/20 p-4 space-y-3">
-          <p className="text-sm font-medium text-security-navy-900 dark:text-security-navy-100">Export &amp; roster period calendar</p>
-          <p className="text-xs text-security-navy-500 dark:text-security-navy-400">
+        <div className="rounded-security-lg border border-security-amber-200/80 bg-security-amber-50/40 p-4 space-y-3">
+          <p className="text-sm font-medium text-security-navy-900">Export &amp; roster period calendar</p>
+          <p className="text-xs text-security-navy-500">
             Example: start 26, end 25 → 26 Jun–25 Jul is labelled <strong>July</strong> pay/roster period.
             Auto-roster maintains shifts through N pay periods ahead.
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+              <label className="block text-sm font-medium text-security-navy-700 mb-1">
                 Period start day (1–31)
               </label>
               <input
@@ -704,7 +699,7 @@ function BusinessSettingsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+              <label className="block text-sm font-medium text-security-navy-700 mb-1">
                 Period end day (1–31)
               </label>
               <input
@@ -719,7 +714,7 @@ function BusinessSettingsSection({
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+            <label className="block text-sm font-medium text-security-navy-700 mb-1">
               Roster horizon (pay periods)
             </label>
             <input
@@ -733,10 +728,10 @@ function BusinessSettingsSection({
             />
           </div>
         </div>
-        <div className="rounded-security-lg border border-security-navy-100 dark:border-security-navy-700 bg-security-navy-50/60 dark:bg-security-navy-900/40 p-4 space-y-3">
+        <div className="rounded-security-lg border border-security-navy-100 bg-security-navy-50/60 p-4 space-y-3">
           <div>
-            <p className="text-sm font-medium text-security-navy-900 dark:text-security-navy-100">Roster period calendars</p>
-            <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
+            <p className="text-sm font-medium text-security-navy-900">Roster period calendars</p>
+            <p className="text-xs text-security-navy-500 mt-1">
               Add different period date ranges for roster planning. Use start ≤ end for one calendar month
               (e.g. 1–31). Use start &gt; end for cross-month periods (e.g. 26–25). Export batches still use
               the main period dates above.
@@ -746,7 +741,7 @@ function BusinessSettingsSection({
             {form.rosterPeriodCalendars.map((calendar, index) => (
               <div
                 key={calendar.id}
-                className="rounded-lg border border-security-navy-100 dark:border-security-navy-700 bg-white dark:bg-security-navy-900 p-3 space-y-2"
+                className="rounded-lg border border-security-navy-100 bg-white p-3 space-y-2"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <input
@@ -764,7 +759,7 @@ function BusinessSettingsSection({
                     placeholder="Calendar name"
                     disabled={readOnly}
                   />
-                  <label className="inline-flex items-center gap-1.5 text-xs text-security-navy-600 dark:text-security-navy-300">
+                  <label className="inline-flex items-center gap-1.5 text-xs text-security-navy-600">
                     <input
                       type="radio"
                       name="defaultRosterCalendar"
@@ -801,7 +796,7 @@ function BusinessSettingsSection({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
+                    <label className="block text-xs font-medium text-security-navy-600 mb-1">
                       Start day
                     </label>
                     <input
@@ -824,7 +819,7 @@ function BusinessSettingsSection({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
+                    <label className="block text-xs font-medium text-security-navy-600 mb-1">
                       End day
                     </label>
                     <input
@@ -879,28 +874,28 @@ function BusinessSettingsSection({
         </div>
 
         {/* Admin & Office Staff Geofence Configuration */}
-        <div className="rounded-security-lg border border-security-navy-100 dark:border-security-navy-700 bg-security-navy-50/60 dark:bg-security-navy-900/40 p-4 space-y-4">
+        <div className="rounded-security-lg border border-security-navy-100 bg-security-navy-50/60 p-4 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <h4 className="text-sm font-medium text-security-navy-900 dark:text-security-navy-100 flex items-center gap-2">
+              <h4 className="text-sm font-medium text-security-navy-900 flex items-center gap-2">
                 <span>📍 Admin &amp; Office Staff Geofence</span>
                 {hasGeoCoords ? (
                   form.adminGeofenceEnabled ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                       Active ({form.adminGeofenceRadiusMeters || 200}m)
                     </span>
                   ) : (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
                       Disabled
                     </span>
                   )
                 ) : (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
                     Not Configured
                   </span>
                 )}
               </h4>
-              <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
+              <p className="text-xs text-security-navy-500 mt-1">
                 Central geolocation coordinates for administrative and head office staff clocking in/out via WhatsApp.
               </p>
             </div>
@@ -910,7 +905,7 @@ function BusinessSettingsSection({
                   type="button"
                   onClick={handleUseCurrentLocation}
                   disabled={geoDetecting || saving}
-                  className="text-xs font-medium px-2.5 py-1.5 rounded border border-security-navy-200 dark:border-security-navy-700 text-security-navy-700 dark:text-security-navy-300 hover:bg-white dark:hover:bg-security-navy-800 transition-colors shadow-sm"
+                  className="text-xs font-medium px-2.5 py-1.5 rounded border border-security-navy-200 text-security-navy-700 hover:bg-white transition-colors shadow-sm"
                 >
                   {geoDetecting ? "Locating…" : "📍 Pin Current Location"}
                 </button>
@@ -919,7 +914,7 @@ function BusinessSettingsSection({
                     type="button"
                     onClick={handleClearGeo}
                     disabled={saving}
-                    className="text-xs font-medium px-2 py-1 text-red-600 dark:text-red-400 hover:underline"
+                    className="text-xs font-medium px-2 py-1 text-red-600 hover:underline"
                   >
                     Clear
                   </button>
@@ -929,7 +924,7 @@ function BusinessSettingsSection({
           </div>
 
           {geoError && (
-            <div className="p-3 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800">
+            <div className="p-3 text-xs text-red-700 bg-red-50 rounded-lg border border-red-200">
               {geoError}
             </div>
           )}
@@ -944,13 +939,13 @@ function BusinessSettingsSection({
                 disabled={readOnly}
                 className="rounded border-security-navy-300 text-security-navy-600 focus:ring-security-navy-500"
               />
-              <label htmlFor="adminGeofenceEnabled" className="text-sm text-security-navy-800 dark:text-security-navy-200 cursor-pointer">
+              <label htmlFor="adminGeofenceEnabled" className="text-sm text-security-navy-800 cursor-pointer">
                 Enforce geofence verification for admin staff clocking via WhatsApp
               </label>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+              <label className="block text-xs font-medium text-security-navy-700 mb-1">
                 Office / HQ Label
               </label>
               <input
@@ -965,7 +960,7 @@ function BusinessSettingsSection({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                <label className="block text-xs font-medium text-security-navy-700 mb-1">
                   Latitude (WGS84)
                 </label>
                 <input
@@ -979,7 +974,7 @@ function BusinessSettingsSection({
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                <label className="block text-xs font-medium text-security-navy-700 mb-1">
                   Longitude (WGS84)
                 </label>
                 <input
@@ -993,7 +988,7 @@ function BusinessSettingsSection({
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                <label className="block text-xs font-medium text-security-navy-700 mb-1">
                   Radius (meters)
                 </label>
                 <input
@@ -1010,7 +1005,7 @@ function BusinessSettingsSection({
             </div>
 
             {hasGeoCoords && (
-              <div className="flex items-center justify-between text-xs text-security-navy-500 dark:text-security-navy-400 pt-1">
+              <div className="flex items-center justify-between text-xs text-security-navy-500 pt-1">
                 <span>
                   Coordinates: {form.adminOfficeLatitude}, {form.adminOfficeLongitude}
                 </span>
@@ -1018,7 +1013,7 @@ function BusinessSettingsSection({
                   href={`https://www.google.com/maps?q=${form.adminOfficeLatitude},${form.adminOfficeLongitude}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-security-navy-600 dark:text-security-navy-300 hover:underline flex items-center gap-1 font-medium"
+                  className="text-security-navy-600 hover:underline flex items-center gap-1 font-medium"
                 >
                   🗺️ View on Google Maps ↗
                 </a>
@@ -1027,19 +1022,19 @@ function BusinessSettingsSection({
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-security-navy-50/70 dark:bg-security-navy-800/30 border border-security-navy-200 dark:border-security-navy-700 space-y-4">
+        <div className="p-4 rounded-xl bg-security-navy-50/70 border border-security-navy-200 space-y-4">
           <div>
-            <h4 className="font-semibold text-sm text-security-navy-900 dark:text-white">
+            <h4 className="font-semibold text-sm text-security-navy-900">
               South African Labour &amp; Operations Rules (NBCPSS / BCEA / PSIRA)
             </h4>
-            <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
+            <p className="text-xs text-security-navy-500 mt-1">
               Applies Sector 6 private security rules (48h/week ordinary cap, 12h daily max, Sunday &amp; Public Holiday rates, night allowance) and default Occurrence Book policy across sites.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+              <label className="block text-xs font-medium text-security-navy-700 mb-1">
                 Default Occurrence Book (OB) Policy
               </label>
               <select
@@ -1060,7 +1055,7 @@ function BusinessSettingsSection({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+              <label className="block text-xs font-medium text-security-navy-700 mb-1">
                 PSIRA Registration &amp; Grade Check
               </label>
               <select
@@ -1083,7 +1078,7 @@ function BusinessSettingsSection({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+              <label className="block text-xs font-medium text-security-navy-700 mb-1">
                 Overnight Shift Date Boundary
               </label>
               <select
@@ -1103,7 +1098,7 @@ function BusinessSettingsSection({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+              <label className="block text-xs font-medium text-security-navy-700 mb-1">
                 BCEA s12 Averaging Cycle (weeks)
               </label>
               <input
@@ -1119,7 +1114,7 @@ function BusinessSettingsSection({
           </div>
 
           <div className="space-y-2 pt-1">
-            <label className="flex items-center gap-2 text-xs text-security-navy-800 dark:text-security-navy-200 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-security-navy-800 cursor-pointer">
               <input
                 type="checkbox"
                 checked={form.averagingEnabled}
@@ -1129,7 +1124,7 @@ function BusinessSettingsSection({
               />
               Enable BCEA s12 hours averaging agreement (up to 4 weeks/cycle for 4-on/4-off shifts)
             </label>
-            <label className="flex items-center gap-2 text-xs text-security-navy-800 dark:text-security-navy-200 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-security-navy-800 cursor-pointer">
               <input
                 type="checkbox"
                 checked={form.sundayDoubleRateSplit}
@@ -1139,7 +1134,7 @@ function BusinessSettingsSection({
               />
               Split Sunday 1.5x (scheduled) vs Sunday 2.0x (unscheduled reliever) on payroll export
             </label>
-            <label className="flex items-center gap-2 text-xs text-security-navy-800 dark:text-security-navy-200 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-security-navy-800 cursor-pointer">
               <input
                 type="checkbox"
                 checked={form.fortnightlyRestEnabled}
@@ -1153,7 +1148,7 @@ function BusinessSettingsSection({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Team Member ID Prefix</label>
+          <label className="block text-sm font-medium text-security-navy-700 mb-1">Team Member ID Prefix</label>
           <input
             type="text"
             value={form.employeeIdPrefix}
@@ -1163,12 +1158,12 @@ function BusinessSettingsSection({
             maxLength={20}
             disabled={readOnly}
           />
-          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
+          <p className="text-xs text-security-navy-500 mt-1">
             Prefix for auto-generated team member IDs (e.g. EMP-0001, STAFF-0001)
           </p>
         </div>
         {saveError && (
-          <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
+          <p className="text-sm text-red-600">{saveError}</p>
         )}
         {!readOnly && (
           <button type="submit" disabled={saving} className="btn-primary">
@@ -1289,13 +1284,13 @@ function FactoryResetSection({
 
   return (
     <div className="text-center">
-      <h3 className="font-semibold text-security-navy-900 dark:text-white mb-4">Factory Reset</h3>
+      <h3 className="font-semibold text-security-navy-900 mb-4">Factory Reset</h3>
       <div className="max-w-3xl mx-auto space-y-5">
-        <div className="p-4 rounded-sm border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20">
-          <p className="text-sm text-red-800 dark:text-red-200 font-medium mb-2">
+        <div className="p-4 rounded-sm border border-red-200 bg-red-50">
+          <p className="text-sm text-red-800 font-medium mb-2">
             This action cannot be undone.
           </p>
-          <p className="text-sm text-red-700 dark:text-red-300">
+          <p className="text-sm text-red-700">
             Select which modules to reset. Module resets clear or restore data only for the selected
             modules. If you choose &quot;Reset all modules&quot;, the system permanently deletes this
             company, all users, and all company data.
@@ -1310,11 +1305,11 @@ function FactoryResetSection({
               checked={resetAll}
               onChange={(e) => setResetAll(e.target.checked)}
               disabled={resetting}
-              className="rounded border-security-navy-200 dark:border-security-navy-600"
+              className="rounded border-security-navy-200"
             />
             <label
               htmlFor="reset-all"
-              className="text-sm font-medium text-security-navy-900 dark:text-security-navy-200 cursor-pointer"
+              className="text-sm font-medium text-security-navy-900 cursor-pointer"
             >
               Reset all modules (full factory reset)
             </label>
@@ -1326,14 +1321,14 @@ function FactoryResetSection({
                 <button
                   type="button"
                   onClick={selectAll}
-                  className="text-xs text-security-navy-600 dark:text-security-navy-400 hover:text-security-navy-900 dark:hover:text-security-navy-200 underline"
+                  className="text-xs text-security-navy-600 hover:text-security-navy-900 underline"
                 >
                   Select all
                 </button>
                 <button
                   type="button"
                   onClick={deselectAll}
-                  className="text-xs text-security-navy-600 dark:text-security-navy-400 hover:text-security-navy-900 dark:hover:text-security-navy-200 underline"
+                  className="text-xs text-security-navy-600 hover:text-security-navy-900 underline"
                 >
                   Deselect all
                 </button>
@@ -1343,7 +1338,7 @@ function FactoryResetSection({
                   <div
                     key={mod.id}
                     className={clsx(
-                      "flex items-start gap-2 p-2 rounded-sm border border-security-navy-100 dark:border-security-navy-700",
+                      "flex items-start gap-2 p-2 rounded-sm border border-security-navy-100",
                       mod.id === "attendance" && "sm:col-span-2"
                     )}
                   >
@@ -1353,24 +1348,24 @@ function FactoryResetSection({
                       checked={selectedModules.has(mod.id)}
                       onChange={() => toggleModule(mod.id)}
                       disabled={resetting}
-                      className="mt-0.5 rounded border-security-navy-200 dark:border-security-navy-600"
+                      className="mt-0.5 rounded border-security-navy-200"
                     />
                     <div className="flex-1 min-w-0">
                       <label
                         htmlFor={`mod-${mod.id}`}
                         className="text-sm cursor-pointer block"
                       >
-                        <span className="font-medium text-security-navy-900 dark:text-security-navy-200">
+                        <span className="font-medium text-security-navy-900">
                           {mod.label}
                         </span>
-                        <span className="block text-xs text-security-navy-500 dark:text-security-navy-400 mt-0.5">
+                        <span className="block text-xs text-security-navy-500 mt-0.5">
                           {mod.description}
                         </span>
                       </label>
                       {mod.id === "attendance" && selectedModules.has("attendance") && (
                         <div className="mt-2 space-y-3">
                           <div>
-                            <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
+                            <label className="block text-xs font-medium text-security-navy-600 mb-1">
                               Reset from date (optional)
                             </label>
                             <DateInput
@@ -1380,12 +1375,12 @@ function FactoryResetSection({
                               showToday
                               disabled={resetting}
                             />
-                            <p className="text-[11px] text-security-navy-500 dark:text-security-navy-400 mt-0.5">
+                            <p className="text-[11px] text-security-navy-500 mt-0.5">
                               Leave empty to reset all attendance. Set a date to reset only from that date onwards.
                             </p>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
+                            <label className="block text-xs font-medium text-security-navy-600 mb-1">
                               Reset for person (optional)
                             </label>
                             <select
@@ -1401,7 +1396,7 @@ function FactoryResetSection({
                                 </option>
                               ))}
                             </select>
-                            <p className="text-[11px] text-security-navy-500 dark:text-security-navy-400 mt-0.5">
+                            <p className="text-[11px] text-security-navy-500 mt-0.5">
                               Leave as &quot;All people&quot; to reset everyone&apos;s attendance.
                             </p>
                           </div>
@@ -1416,7 +1411,7 @@ function FactoryResetSection({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+          <label className="block text-sm font-medium text-security-navy-700 mb-1">
             Type <strong>{CONFIRM_PHRASE}</strong> to confirm
           </label>
           <input
@@ -1430,7 +1425,7 @@ function FactoryResetSection({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+          <label className="block text-sm font-medium text-security-navy-700 mb-1">
             Confirm your current password
           </label>
           <input
@@ -1444,11 +1439,11 @@ function FactoryResetSection({
         </div>
 
         {error && (
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="text-sm text-red-600">{error}</p>
         )}
 
         {success && (
-          <p className="text-sm text-security-navy-600 dark:text-security-navy-400">
+          <p className="text-sm text-security-navy-600">
             Factory reset completed successfully.
           </p>
         )}
@@ -1525,8 +1520,8 @@ function PublicHolidaysSection({ token, readOnly }: { token: string; readOnly: b
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-security-navy-900 dark:text-white">Public Holidays</h3>
-          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-0.5">
+          <h3 className="font-semibold text-security-navy-900">Public Holidays</h3>
+          <p className="text-xs text-security-navy-500 mt-0.5">
             Dates configured here classify worked attendance into Public Holiday hours for client billing and Sage exports.
           </p>
         </div>
@@ -1553,13 +1548,13 @@ function PublicHolidaysSection({ token, readOnly }: { token: string; readOnly: b
       {!readOnly && (
         <form onSubmit={handleAdd} className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl items-end">
           <div>
-            <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+            <label className="block text-xs font-medium text-security-navy-700 mb-1">
               Date
             </label>
             <DateInput value={date} onChange={setDate} className="input-modern" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+            <label className="block text-xs font-medium text-security-navy-700 mb-1">
               Holiday Name
             </label>
             <input
@@ -1584,22 +1579,22 @@ function PublicHolidaysSection({ token, readOnly }: { token: string; readOnly: b
       ) : holidays.length === 0 ? (
         <p className="text-sm text-security-navy-500">No public holidays configured for {year}.</p>
       ) : (
-        <div className="overflow-x-auto border border-security-navy-100 dark:border-security-navy-700 rounded-security">
-          <table className="min-w-full divide-y divide-security-navy-100 dark:divide-security-navy-700 text-sm">
-            <thead className="bg-security-navy-50 dark:bg-security-navy-900/40">
+        <div className="overflow-x-auto border border-security-navy-100 rounded-security">
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm">
+            <thead className="bg-security-navy-50">
               <tr>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-security-navy-600 uppercase">Date</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-security-navy-600 uppercase">Holiday</th>
                 {!readOnly && <th className="px-4 py-2 text-right text-xs font-semibold text-security-navy-600 uppercase">Action</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-700">
+            <tbody className="divide-y divide-security-navy-100">
               {holidays.map((h) => (
                 <tr key={h.id}>
-                  <td className="px-4 py-2 font-mono text-security-navy-900 dark:text-white">
+                  <td className="px-4 py-2 font-mono text-security-navy-900">
                     {String(h.date).slice(0, 10)}
                   </td>
-                  <td className="px-4 py-2 text-security-navy-800 dark:text-security-navy-200">
+                  <td className="px-4 py-2 text-security-navy-800">
                     {h.name || "Public Holiday"}
                   </td>
                   {!readOnly && (

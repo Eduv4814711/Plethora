@@ -28,6 +28,7 @@ import {
   type SiteBillingNumberingConfig,
 } from "@/lib/billing-api";
 import { currencyFromSettings, formatCurrency } from "@/lib/currency";
+import { AlertBanner, Button, Modal, PageShell } from "@/components/ui";
 import { StatusBadge } from "../../_components/status-badge";
 import { ArRiskBadge, computeArRisk } from "../../_components/ar-risk-badge";
 import { BillingAccessRestricted } from "../../_components/billing-access-restricted";
@@ -274,7 +275,7 @@ export default function ClientStatementPage() {
   }
 
   return (
-    <main className="animate-fade-in space-y-5 pb-16">
+    <PageShell width="wide" className="animate-fade-in pb-16">
       {/* Header */}
       <header className="space-y-4">
         <Link href="/billing/clients" className="section-title hover:underline">← Clients & Statements</Link>
@@ -699,75 +700,86 @@ export default function ClientStatementPage() {
       )}
 
       {/* ── Site Rate Modal ── */}
-      {selectedSiteModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-security-navy-900/50 backdrop-blur-sm p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) { setSelectedSiteModal(null); setRateModalSuccess(null); } }}
-          role="dialog" aria-modal="true"
-        >
-          <div className="w-full max-w-lg rounded-security-lg border border-security-navy-100 bg-white shadow-security-elevated">
-            <div className="border-b border-security-navy-100 px-5 py-4">
-              <p className="section-title">{clientName}</p>
-              <h2 className="mt-0.5 text-base font-semibold text-security-navy-900">{selectedSiteModal.site.name}</h2>
+      <Modal
+        open={Boolean(selectedSiteModal)}
+        onClose={() => {
+          if (savingRate) return;
+          setSelectedSiteModal(null);
+          setRateModalSuccess(null);
+        }}
+        title={selectedSiteModal ? selectedSiteModal.site.name : "Site Rate"}
+        description={clientName}
+        size="md"
+      >
+        {selectedSiteModal && (
+          <div className="space-y-4">
+            {rateModalError && <AlertBanner variant="error">{rateModalError}</AlertBanner>}
+            {rateModalSuccess && <AlertBanner variant="success">{rateModalSuccess}</AlertBanner>}
+
+            <div className="rounded-security bg-security-navy-50 px-3 py-2 text-sm text-security-navy-700">
+              Active guards: <strong>{selectedSiteModal.billing.billableGuardCount}</strong>
             </div>
 
-            <div className="p-5 space-y-4">
-              {rateModalError && <p className="rounded-security border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{rateModalError}</p>}
-              {rateModalSuccess && <p className="rounded-security border border-security-emerald-200 bg-security-emerald-50 px-3 py-2 text-sm text-security-emerald-800">{rateModalSuccess}</p>}
-
-              <div className="rounded-security bg-security-navy-50 px-3 py-2 text-sm text-security-navy-700">
-                Active guards: <strong>{selectedSiteModal.billing.billableGuardCount}</strong>
-              </div>
-
-              <label className="block">
-                <span className="label-text mb-1.5 block">Rate per guard (per month)</span>
-                <input type="number" step="0.01" min="0" required value={rateInput} onChange={(e) => setRateInput(e.target.value)} className="input-modern w-full font-mono" placeholder="0.00" autoFocus id="site-rate-per-guard" />
-                {modalParsedRate > 0 && (
-                  <p className="mt-1 text-xs text-security-emerald-700 font-semibold">
-                    {modalGuardsCount} guards × {formatCurrency(modalParsedRate, { currency })} = {formatCurrency(modalLiveTotal, { currency })} / month
-                  </p>
-                )}
-              </label>
-
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="label-text mb-1.5 block">Effective from</span>
-                  <input type="date" required value={effectiveFromInput} onChange={(e) => setEffectiveFromInput(e.target.value)} className="input-modern w-full" id="site-rate-from" />
-                </label>
-                <label className="block">
-                  <span className="label-text mb-1.5 block">Effective to (optional)</span>
-                  <input type="date" value={effectiveToInput} onChange={(e) => setEffectiveToInput(e.target.value)} className="input-modern w-full" id="site-rate-to" />
-                </label>
-              </div>
-
-              <label className="block">
-                <span className="label-text mb-1.5 block">Notes (optional)</span>
-                <input value={notesInput} onChange={(e) => setNotesInput(e.target.value)} placeholder="e.g. 2026 contract renewal" className="input-modern w-full" id="site-rate-notes" />
-              </label>
-
-              {/* Rate history */}
-              {selectedSiteModal.history && selectedSiteModal.history.length > 0 && (
-                <div>
-                  <p className="label-text mb-2">Rate History</p>
-                  <div className="space-y-1 max-h-40 overflow-y-auto">
-                    {selectedSiteModal.history.map((r, i) => (
-                      <div key={i} className="flex justify-between text-xs text-security-navy-600">
-                        <span>{r.effectiveFrom?.slice(0, 10)}{r.effectiveTo ? ` – ${r.effectiveTo.slice(0, 10)}` : " – present"}</span>
-                        <span className="font-mono font-semibold">{formatCurrency(r.ratePerGuard, { currency })} / guard</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+            <label className="block">
+              <span className="label-text mb-1.5 block">Rate per guard (per month)</span>
+              <input type="number" step="0.01" min="0" required value={rateInput} onChange={(e) => setRateInput(e.target.value)} className="input-modern w-full font-mono" placeholder="0.00" autoFocus id="site-rate-per-guard" />
+              {modalParsedRate > 0 && (
+                <p className="mt-1 text-xs text-security-emerald-700 font-semibold">
+                  {modalGuardsCount} guards × {formatCurrency(modalParsedRate, { currency })} = {formatCurrency(modalLiveTotal, { currency })} / month
+                </p>
               )}
+            </label>
 
-              <div className="flex gap-2">
-                <button type="button" onClick={handleSaveRate} disabled={savingRate || !canEdit} className="btn-primary flex-1">{savingRate ? "Saving…" : "Save Rate"}</button>
-                <button type="button" onClick={() => { setSelectedSiteModal(null); setRateModalSuccess(null); }} disabled={savingRate} className="btn-secondary">Close</button>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="label-text mb-1.5 block">Effective from</span>
+                <input type="date" required value={effectiveFromInput} onChange={(e) => setEffectiveFromInput(e.target.value)} className="input-modern w-full" id="site-rate-from" />
+              </label>
+              <label className="block">
+                <span className="label-text mb-1.5 block">Effective to (optional)</span>
+                <input type="date" value={effectiveToInput} onChange={(e) => setEffectiveToInput(e.target.value)} className="input-modern w-full" id="site-rate-to" />
+              </label>
+            </div>
+
+            <label className="block">
+              <span className="label-text mb-1.5 block">Notes (optional)</span>
+              <input value={notesInput} onChange={(e) => setNotesInput(e.target.value)} placeholder="e.g. 2026 contract renewal" className="input-modern w-full" id="site-rate-notes" />
+            </label>
+
+            {/* Rate history */}
+            {selectedSiteModal.history && selectedSiteModal.history.length > 0 && (
+              <div>
+                <p className="label-text mb-2">Rate History</p>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {selectedSiteModal.history.map((r, i) => (
+                    <div key={i} className="flex justify-between text-xs text-security-navy-600">
+                      <span>{r.effectiveFrom?.slice(0, 10)}{r.effectiveTo ? ` – ${r.effectiveTo.slice(0, 10)}` : " – present"}</span>
+                      <span className="font-mono font-semibold">{formatCurrency(r.ratePerGuard, { currency })} / guard</span>
+                    </div>
+                  ))}
+                </div>
               </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button type="button" onClick={handleSaveRate} disabled={savingRate || !canEdit} loading={savingRate} className="flex-1">
+                {savingRate ? "Saving…" : "Save Rate"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setSelectedSiteModal(null);
+                  setRateModalSuccess(null);
+                }}
+                disabled={savingRate}
+              >
+                Close
+              </Button>
             </div>
           </div>
-        </div>
-      )}
-    </main>
+        )}
+      </Modal>
+    </PageShell>
   );
 }

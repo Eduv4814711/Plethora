@@ -19,6 +19,7 @@ import {
   Button,
   Card,
   EmptyState,
+  Modal,
   PageHeader,
   SkeletonBlock,
 } from "@/components/ui";
@@ -346,11 +347,13 @@ export default function ObligationsRegisterPage() {
       )}
 
       {/* Create Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-security-navy-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg p-6 space-y-4 border border-security-navy-200 shadow-xl bg-white">
-            <h2 className="text-lg font-bold text-security-navy-900">Add Compliance Obligation</h2>
-            <form onSubmit={handleCreate} className="space-y-3 text-sm">
+      <Modal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Add Compliance Obligation"
+        size="md"
+      >
+        <form onSubmit={handleCreate} className="space-y-3 text-sm">
               <div>
                 <label className="label-text mb-1 block">Obligation Type *</label>
                 <select
@@ -446,62 +449,58 @@ export default function ObligationsRegisterPage() {
                   Save Obligation
                 </Button>
               </div>
-            </form>
-          </Card>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {/* Override Modal */}
-      {overrideModalId && (
-        <div className="fixed inset-0 bg-security-navy-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md p-6 space-y-4 border border-security-navy-200 shadow-xl bg-white">
-            <h2 className="text-lg font-bold text-security-navy-900">Management Compliance Override</h2>
-            <p className="text-xs text-security-navy-500">
-              Manually setting an obligation status requires an audited management explanation.
-            </p>
-            <div className="space-y-3 text-sm">
-              <div>
-                <label className="label-text mb-1 block">Target Status</label>
-                <select
-                  value={overrideStatus}
-                  onChange={(e) => setOverrideStatus(e.target.value)}
-                  className="input-modern w-full"
-                >
-                  <option value="COMPLIANT">Compliant</option>
-                  <option value="ATTENTION_REQUIRED">Attention Required</option>
-                  <option value="NON_COMPLIANT">Non-Compliant</option>
-                  <option value="NOT_APPLICABLE">Not Applicable</option>
-                </select>
-              </div>
+      <Modal
+        open={Boolean(overrideModalId)}
+        onClose={() => setOverrideModalId(null)}
+        title="Management Compliance Override"
+        description="Manually setting an obligation status requires an audited management explanation."
+        size="md"
+      >
+        <div className="space-y-3 text-sm">
+          <div>
+            <label className="label-text mb-1 block">Target Status</label>
+            <select
+              value={overrideStatus}
+              onChange={(e) => setOverrideStatus(e.target.value)}
+              className="input-modern w-full"
+            >
+              <option value="COMPLIANT">Compliant</option>
+              <option value="ATTENTION_REQUIRED">Attention Required</option>
+              <option value="NON_COMPLIANT">Non-Compliant</option>
+              <option value="NOT_APPLICABLE">Not Applicable</option>
+            </select>
+          </div>
 
-              <div>
-                <label className="label-text mb-1 block">Audited Reason *</label>
-                <textarea
-                  rows={3}
-                  required
-                  placeholder="State the formal governance reason and authority reference..."
-                  value={overrideReason}
-                  onChange={(e) => setOverrideReason(e.target.value)}
-                  className="input-modern w-full"
-                />
-              </div>
+          <div>
+            <label className="label-text mb-1 block">Audited Reason *</label>
+            <textarea
+              rows={3}
+              required
+              placeholder="State the formal governance reason and authority reference..."
+              value={overrideReason}
+              onChange={(e) => setOverrideReason(e.target.value)}
+              className="input-modern w-full"
+            />
+          </div>
 
-              <div className="flex justify-end space-x-2 pt-2">
-                <Button variant="secondary" size="sm" onClick={() => setOverrideModalId(null)}>
-                  Cancel
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={overrideReason.trim().length < 5}
-                  onClick={handleOverride}
-                >
-                  Apply Override
-                </Button>
-              </div>
-            </div>
-          </Card>
+          <div className="flex justify-end space-x-2 pt-2">
+            <Button variant="secondary" size="sm" onClick={() => setOverrideModalId(null)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={overrideReason.trim().length < 5}
+              onClick={handleOverride}
+            >
+              Apply Override
+            </Button>
+          </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

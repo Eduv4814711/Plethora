@@ -31,6 +31,7 @@ import { PaymentTimeline } from "../../_components/payment-timeline";
 import { BillingAccessRestricted } from "../../_components/billing-access-restricted";
 import { computeTotalsPreview, DocumentTotals } from "../../_components/document-totals";
 import { emptyLine, LineItemsEditor, type EditableLine } from "../../_components/line-items-editor";
+import { AlertBanner, Button, Modal, PageShell } from "@/components/ui";
 import { clsx } from "clsx";
 
 const METHODS = [
@@ -360,14 +361,14 @@ export default function InvoiceDetailPage() {
 
   if (!invoice) {
     return (
-      <main className="space-y-4">
+      <PageShell width="wide">
         <Link href="/billing/invoices" className="text-sm font-semibold text-security-navy-700 hover:underline">
           ← Back to invoices
         </Link>
-        <p className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <AlertBanner variant="error">
           {error ?? "Invoice not found"}
-        </p>
-      </main>
+        </AlertBanner>
+      </PageShell>
     );
   }
 
@@ -381,7 +382,7 @@ export default function InvoiceDetailPage() {
     ((invoice.status === "issued" || invoice.status === "partially_paid") && new Date(invoice.dueDate) < new Date());
 
   return (
-    <main className="animate-fade-in space-y-5 pb-16">
+    <PageShell width="wide" className="animate-fade-in pb-16">
       {/* Breadcrumb + header */}
       <header className="space-y-4">
         <Link href="/billing/invoices" className="section-title hover:underline">
@@ -754,242 +755,217 @@ export default function InvoiceDetailPage() {
       </section>
 
       {/* Edit Invoice Modal */}
-      {showEditModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-fade-in overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="edit-invoice-modal-title"
-        >
-          <div className="w-full max-w-3xl rounded-security-lg border border-security-navy-200 bg-white p-6 shadow-xl space-y-5 animate-scale-in my-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 id="edit-invoice-modal-title" className="text-lg font-bold text-security-navy-900">
-                  Edit Invoice {invoice.invoiceNumber}
-                </h2>
-                <p className="text-xs text-security-navy-500 mt-0.5">
-                  Update line items, pricing, billing dates, and notes for this draft invoice.
-                </p>
-              </div>
-              <button
+      <Modal
+        open={showEditModal}
+        onClose={() => !busy && setShowEditModal(false)}
+        title={`Edit Invoice ${invoice.invoiceNumber}`}
+        description="Update line items, pricing, billing dates, and notes for this draft invoice."
+        size="xl"
+      >
+        <div className="space-y-4">
+          {editError && <AlertBanner variant="error">{editError}</AlertBanner>}
+
+          <form onSubmit={executeSaveEdit} className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="block">
+                <span className="label-text mb-1 block">Invoice Date</span>
+                <input
+                  type="date"
+                  value={editInvoiceDate}
+                  onChange={(e) => setEditInvoiceDate(e.target.value)}
+                  required
+                  className="input-modern w-full"
+                />
+              </label>
+              <label className="block">
+                <span className="label-text mb-1 block">Due Date</span>
+                <input
+                  type="date"
+                  value={editDueDate}
+                  onChange={(e) => setEditDueDate(e.target.value)}
+                  required
+                  className="input-modern w-full"
+                />
+              </label>
+              {clientSites.length > 0 && (
+                <label className="block">
+                  <span className="label-text mb-1 block">Target Site (optional)</span>
+                  <select
+                    value={editSiteId}
+                    onChange={(e) => setEditSiteId(e.target.value)}
+                    className="input-modern w-full"
+                  >
+                    <option value="">All Sites / Client-wide</option>
+                    {clientSites.map((s) => (
+                      <option key={s.siteId} value={s.siteId}>
+                        {s.siteName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="label-text mb-1 block">Reference / PO #</span>
+                <input
+                  type="text"
+                  value={editReference}
+                  onChange={(e) => setEditReference(e.target.value)}
+                  placeholder="e.g. PO-2026-081"
+                  className="input-modern w-full"
+                />
+              </label>
+              <label className="block">
+                <span className="label-text mb-1 block">Payment Terms & Notes</span>
+                <input
+                  type="text"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="Payment terms, bank details reference"
+                  className="input-modern w-full"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="label-text mb-1 block">Discount Amount</span>
+                <input
+                  type="text"
+                  value={editDiscount}
+                  onChange={(e) => setEditDiscount(e.target.value)}
+                  placeholder="0.00"
+                  className="input-modern w-full font-mono"
+                />
+              </label>
+              <label className="block">
+                <span className="label-text mb-1 block">VAT Rate (%)</span>
+                <input
+                  type="text"
+                  value={editVatRate}
+                  onChange={(e) => setEditVatRate(e.target.value)}
+                  placeholder="15"
+                  className="input-modern w-full font-mono"
+                />
+              </label>
+            </div>
+
+            <LineItemsEditor
+              token={token!}
+              clientId={invoice.clientId}
+              siteId={editSiteId || null}
+              lines={editLines}
+              onChange={setEditLines}
+              currency={currency}
+            />
+
+            <DocumentTotals
+              totals={editTotals}
+              vatRate={editVatRate}
+              currency={currency}
+            />
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-security-navy-100">
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={() => setShowEditModal(false)}
-                className="text-security-navy-400 hover:text-security-navy-600 font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            {editError && (
-              <div className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                {editError}
-              </div>
-            )}
-
-            <form onSubmit={executeSaveEdit} className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <label className="block">
-                  <span className="label-text mb-1 block">Invoice Date</span>
-                  <input
-                    type="date"
-                    value={editInvoiceDate}
-                    onChange={(e) => setEditInvoiceDate(e.target.value)}
-                    required
-                    className="input-modern w-full"
-                  />
-                </label>
-                <label className="block">
-                  <span className="label-text mb-1 block">Due Date</span>
-                  <input
-                    type="date"
-                    value={editDueDate}
-                    onChange={(e) => setEditDueDate(e.target.value)}
-                    required
-                    className="input-modern w-full"
-                  />
-                </label>
-                {clientSites.length > 0 && (
-                  <label className="block">
-                    <span className="label-text mb-1 block">Target Site (optional)</span>
-                    <select
-                      value={editSiteId}
-                      onChange={(e) => setEditSiteId(e.target.value)}
-                      className="input-modern w-full"
-                    >
-                      <option value="">All Sites / Client-wide</option>
-                      {clientSites.map((s) => (
-                        <option key={s.siteId} value={s.siteId}>
-                          {s.siteName}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="label-text mb-1 block">Reference / PO #</span>
-                  <input
-                    type="text"
-                    value={editReference}
-                    onChange={(e) => setEditReference(e.target.value)}
-                    placeholder="e.g. PO-2026-081"
-                    className="input-modern w-full"
-                  />
-                </label>
-                <label className="block">
-                  <span className="label-text mb-1 block">Payment Terms & Notes</span>
-                  <input
-                    type="text"
-                    value={editNotes}
-                    onChange={(e) => setEditNotes(e.target.value)}
-                    placeholder="Payment terms, bank details reference"
-                    className="input-modern w-full"
-                  />
-                </label>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="label-text mb-1 block">Discount Amount</span>
-                  <input
-                    type="text"
-                    value={editDiscount}
-                    onChange={(e) => setEditDiscount(e.target.value)}
-                    placeholder="0.00"
-                    className="input-modern w-full font-mono"
-                  />
-                </label>
-                <label className="block">
-                  <span className="label-text mb-1 block">VAT Rate (%)</span>
-                  <input
-                    type="text"
-                    value={editVatRate}
-                    onChange={(e) => setEditVatRate(e.target.value)}
-                    placeholder="15"
-                    className="input-modern w-full font-mono"
-                  />
-                </label>
-              </div>
-
-              <LineItemsEditor
-                token={token!}
-                clientId={invoice.clientId}
-                siteId={editSiteId || null}
-                lines={editLines}
-                onChange={setEditLines}
-                currency={currency}
-              />
-
-              <DocumentTotals
-                totals={editTotals}
-                vatRate={editVatRate}
-                currency={currency}
-              />
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-security-navy-100">
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  disabled={busy}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="btn-primary"
-                  id="save-invoice-edit-btn"
-                >
-                  {busy ? "Saving…" : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Invoice Confirmation Modal */}
-      {showDeleteModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-fade-in"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-md rounded-security-lg border border-red-200 bg-white p-6 shadow-xl space-y-4 animate-scale-in">
-            <h2 className="text-lg font-bold text-red-700">Delete Draft Invoice?</h2>
-            <p className="text-sm text-security-navy-600">
-              Are you sure you want to permanently delete draft invoice <strong>{invoice.invoiceNumber}</strong>?
-              This action cannot be undone.
-            </p>
-            <div className="rounded-security border border-security-navy-100 bg-security-navy-50/60 p-3 text-xs space-y-1">
-              <div>Client: <strong>{invoice.client?.name}</strong></div>
-              <div>Total: <strong>{formatCurrency(invoice.totalAmount, { currency })}</strong></div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDeleteModal(false)}
                 disabled={busy}
-                className="btn-secondary"
               >
                 Cancel
-              </button>
-              <button
-                type="button"
-                onClick={executeDelete}
+              </Button>
+              <Button
+                type="submit"
                 disabled={busy}
-                className="btn-primary bg-red-600 hover:bg-red-700"
-                id="confirm-delete-invoice-btn"
+                loading={busy}
+                id="save-invoice-edit-btn"
               >
-                {busy ? "Deleting…" : "Confirm Delete"}
-              </button>
+                {busy ? "Saving…" : "Save Changes"}
+              </Button>
             </div>
+          </form>
+        </div>
+      </Modal>
+
+      {/* Delete Invoice Confirmation Modal */}
+      <Modal
+        open={showDeleteModal}
+        onClose={() => !busy && setShowDeleteModal(false)}
+        title="Delete Draft Invoice?"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-security-navy-600">
+            Are you sure you want to permanently delete draft invoice <strong>{invoice.invoiceNumber}</strong>?
+            This action cannot be undone.
+          </p>
+          <div className="rounded-security border border-security-navy-100 bg-security-navy-50/60 p-3 text-xs space-y-1">
+            <div>Client: <strong>{invoice.client?.name}</strong></div>
+            <div>Total: <strong>{formatCurrency(invoice.totalAmount, { currency })}</strong></div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={executeDelete}
+              disabled={busy}
+              loading={busy}
+              id="confirm-delete-invoice-btn"
+            >
+              {busy ? "Deleting…" : "Confirm Delete"}
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Cancel Invoice Confirmation Modal */}
-      {showCancelModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-fade-in"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-md rounded-security-lg border border-red-200 bg-white p-6 shadow-xl space-y-4 animate-scale-in">
-            <h2 className="text-lg font-bold text-red-700">Cancel Issued Invoice?</h2>
-            <p className="text-sm text-security-navy-600">
-              Are you sure you want to cancel invoice <strong>{invoice.invoiceNumber}</strong>?
-              The invoice status will be changed to Cancelled, preserving it for accounting and audit records.
-            </p>
-            {payments.length > 0 && (
-              <div className="rounded-security border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-                ⚠ This invoice has recorded payments. You must reverse all payments before cancelling.
-              </div>
-            )}
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowCancelModal(false)}
-                disabled={busy}
-                className="btn-secondary"
-              >
-                Keep Active
-              </button>
-              <button
-                type="button"
-                onClick={executeCancel}
-                disabled={busy || payments.length > 0}
-                className="btn-primary bg-red-600 hover:bg-red-700 disabled:opacity-50"
-              >
-                {busy ? "Cancelling…" : "Confirm Cancellation"}
-              </button>
-            </div>
+      <Modal
+        open={showCancelModal}
+        onClose={() => !busy && setShowCancelModal(false)}
+        title="Cancel Issued Invoice?"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-security-navy-600">
+            Are you sure you want to cancel invoice <strong>{invoice.invoiceNumber}</strong>?
+            The invoice status will be changed to Cancelled, preserving it for accounting and audit records.
+          </p>
+          {payments.length > 0 && (
+            <AlertBanner variant="error">
+              This invoice has recorded payments. You must reverse all payments before cancelling.
+            </AlertBanner>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowCancelModal(false)}
+              disabled={busy}
+            >
+              Keep Active
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={executeCancel}
+              disabled={busy || payments.length > 0}
+              loading={busy}
+            >
+              {busy ? "Cancelling…" : "Confirm Cancellation"}
+            </Button>
           </div>
         </div>
-      )}
-    </main>
+      </Modal>
+    </PageShell>
   );
 }

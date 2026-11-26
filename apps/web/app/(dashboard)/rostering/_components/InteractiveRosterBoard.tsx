@@ -34,11 +34,11 @@ export function InteractiveRosterBoard({
 
   if (grid.rows.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-security-navy-300 dark:border-security-navy-700 p-8 text-center">
-        <p className="text-sm font-medium text-security-navy-900 dark:text-white">
+      <div className="rounded-xl border border-dashed border-security-navy-300 p-8 text-center">
+        <p className="text-sm font-medium text-security-navy-900">
           No shifts scheduled yet for this pay period.
         </p>
-        <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
+        <p className="text-xs text-security-navy-500 mt-1">
           Switch to the <strong>Smart Builder</strong> tab above to generate a compliant schedule in under a minute.
         </p>
       </div>
@@ -47,7 +47,7 @@ export function InteractiveRosterBoard({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-security-navy-500 dark:text-security-navy-400">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-security-navy-500">
         <span>
           {canEdit
             ? "Click or tap any cell to assign Day, Night, Off, or swap with a ranked reliever."
@@ -73,14 +73,14 @@ export function InteractiveRosterBoard({
         role="region"
         tabIndex={0}
         aria-label={`${grid.siteName} interactive roster schedule`}
-        className="relative overflow-x-auto rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 focus-visible:outline-2"
+        className="relative overflow-x-auto rounded-xl border border-security-navy-200 bg-white focus-visible:outline-2"
       >
         <table className="min-w-full border-collapse text-xs">
-          <thead className="sticky top-0 z-20 bg-security-navy-50 dark:bg-security-navy-950 border-b border-security-navy-200 dark:border-security-navy-800">
+          <thead className="sticky top-0 z-20 bg-security-navy-50 border-b border-security-navy-200">
             <tr>
               <th
                 scope="col"
-                className="sticky left-0 z-30 min-w-[180px] bg-security-navy-50 dark:bg-security-navy-950 px-3 py-2.5 text-left font-semibold text-security-navy-900 dark:text-white border-r border-security-navy-200 dark:border-security-navy-800"
+                className="sticky left-0 z-30 min-w-[180px] bg-security-navy-50 px-3 py-2.5 text-left font-semibold text-security-navy-900 border-r border-security-navy-200"
               >
                 Guard
               </th>
@@ -93,8 +93,8 @@ export function InteractiveRosterBoard({
                     scope="col"
                     className={`min-w-[44px] px-1 py-2 text-center font-medium ${
                       isWeekend
-                        ? "text-[var(--accent-signal-deep)] dark:text-amber-300"
-                        : "text-security-navy-600 dark:text-security-navy-300"
+                        ? "text-[var(--accent-signal-deep)]"
+                        : "text-security-navy-600"
                     }`}
                   >
                     <div className="text-[10px] uppercase leading-tight">{chip.dayName}</div>
@@ -104,21 +104,21 @@ export function InteractiveRosterBoard({
               })}
               <th
                 scope="col"
-                className="min-w-[70px] px-2.5 py-2 text-right font-semibold text-security-navy-700 dark:text-security-navy-300"
+                className="min-w-[70px] px-2.5 py-2 text-right font-semibold text-security-navy-700"
               >
                 Shifts
               </th>
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
+          <tbody className="divide-y divide-security-navy-100">
             {grid.rows.map((row) => {
               const workingCount = row.cells.filter((c) => c.shiftCode === "D" || c.shiftCode === "N" || c.shiftCode === "R").length;
               return (
-                <tr key={row.guardId} className="hover:bg-security-navy-50/50 dark:hover:bg-security-navy-800/30">
+                <tr key={row.guardId} className="hover:bg-security-navy-50/50">
                   <th
                     scope="row"
-                    className="sticky left-0 z-10 bg-white dark:bg-security-navy-900 px-3 py-2 text-left font-medium text-security-navy-900 dark:text-white border-r border-security-navy-200 dark:border-security-navy-800"
+                    className="sticky left-0 z-10 bg-white px-3 py-2 text-left font-medium text-security-navy-900 border-r border-security-navy-200"
                   >
                     <div className="truncate max-w-[165px]">{row.guardName}</div>
                     <div className="text-[10px] text-security-navy-500 font-normal">
@@ -159,7 +159,7 @@ export function InteractiveRosterBoard({
                     );
                   })}
 
-                  <td className="px-2.5 py-2 text-right font-semibold tabular-nums text-security-navy-700 dark:text-security-navy-200">
+                  <td className="px-2.5 py-2 text-right font-semibold tabular-nums text-security-navy-700">
                     {workingCount}
                   </td>
                 </tr>

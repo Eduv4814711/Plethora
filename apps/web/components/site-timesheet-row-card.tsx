@@ -120,39 +120,39 @@ export function SiteTimesheetRowCard({
       className={`scroll-mt-32 rounded-security-lg border p-4 space-y-3 ${
         pendingReview
           ? row.discrepancyCodes.length
-            ? "border-security-amber-200 bg-security-amber-50/50 dark:border-security-amber-900 dark:bg-security-amber-950/20"
+            ? "border-security-amber-200 bg-security-amber-50/50"
             : partiallyReviewed
-              ? "border-security-amber-200 bg-security-amber-50/40 dark:border-security-amber-900 dark:bg-security-amber-950/15"
-              : "border-security-navy-100 bg-white dark:border-security-navy-700 dark:bg-security-navy-900"
-          : "border-security-emerald-200 bg-security-emerald-50/40 dark:border-security-emerald-700 dark:bg-security-emerald-700/15"
-      } ${focused ? "ring-2 ring-security-amber-500 ring-offset-2 dark:ring-offset-security-navy-900" : ""}`}
+              ? "border-security-amber-200 bg-security-amber-50/40"
+              : "border-security-navy-100 bg-white"
+          : "border-security-emerald-200 bg-security-emerald-50/40"
+      } ${focused ? "ring-2 ring-security-amber-500 ring-offset-2" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">{row.workDate}</p>
+          <p className="text-sm font-semibold text-security-navy-900">{row.workDate}</p>
           <p className="text-xs text-security-navy-500">{row.dayOfWeek}</p>
         </div>
         {reviewed ? (
-          <span className="shrink-0 rounded-full border border-security-emerald-200 bg-security-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-300">
+          <span className="shrink-0 rounded-full border border-security-emerald-200 bg-security-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-security-emerald-700">
             {locked ? "Approved" : "Confirmed"}
           </span>
         ) : partiallyReviewed ? (
-          <span className="shrink-0 rounded-full border border-security-amber-200 bg-security-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-security-amber-800 dark:border-security-amber-900 dark:bg-security-amber-950/40 dark:text-security-amber-300">
+          <span className="shrink-0 rounded-full border border-security-amber-200 bg-security-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-security-amber-800">
             Duty ON saved
           </span>
         ) : (
-          <span className="shrink-0 rounded-full border border-security-amber-200 bg-security-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-security-amber-800 dark:border-security-amber-900 dark:bg-security-amber-950/40 dark:text-security-amber-300">
+          <span className="shrink-0 rounded-full border border-security-amber-200 bg-security-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-security-amber-800">
             Needs confirmation
           </span>
         )}
       </div>
 
-      <div className="flex items-start justify-between gap-3 rounded-lg border border-security-navy-100 bg-white/70 px-3 py-2 dark:border-security-navy-700 dark:bg-security-navy-900/40">
+      <div className="flex items-start justify-between gap-3 rounded-lg border border-security-navy-100 bg-white/70 px-3 py-2">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
             Who worked
           </p>
-          <p className="mt-0.5 truncate text-sm text-security-navy-900 dark:text-security-navy-200">{summary}</p>
+          <p className="mt-0.5 truncate text-sm text-security-navy-900">{summary}</p>
           {(row.employeeNumber || row.psiraRegistrationNumber) && (
             <p className="text-xs text-security-navy-500">
               {row.employeeNumber ?? row.psiraRegistrationNumber}
@@ -173,7 +173,7 @@ export function SiteTimesheetRowCard({
       </div>
 
       {showDetails && (
-        <div className="space-y-3 rounded-lg border border-security-navy-100 bg-white/70 p-3 dark:border-security-navy-700 dark:bg-security-navy-900/40">
+        <div className="space-y-3 rounded-lg border border-security-navy-100 bg-white/70 p-3">
           <div className="grid gap-2">
             <button
               type="button"
@@ -266,7 +266,7 @@ export function SiteTimesheetRowCard({
                 Status
               </label>
               <p
-                className="mt-1 text-sm font-medium text-security-navy-900 dark:text-security-navy-200"
+                className="mt-1 text-sm font-medium text-security-navy-900"
                 title="Set automatically when you confirm this attendance entry"
               >
                 {formatAttendanceStatus(row.attendanceStatus)}
@@ -341,8 +341,8 @@ export function SiteTimesheetRowCard({
         which made every row a three-step round trip.
       */}
       {!needsOb && obBookMode !== "REQUIRED" ? (
-        <details className="rounded-lg border border-security-navy-100 bg-security-navy-50/40 px-3 py-2 text-xs dark:border-security-navy-800">
-          <summary className="cursor-pointer font-medium text-security-navy-700 dark:text-security-navy-300">
+        <details className="rounded-lg border border-security-navy-100 bg-security-navy-50/40 px-3 py-2 text-xs">
+          <summary className="cursor-pointer font-medium text-security-navy-700">
             {obBookMode === "OPTIONAL_WHEN_DIGITAL" && row.clockIn && row.clockOut
               ? "Verified digitally · OB note optional"
               : "Add OB reference (optional)"}
@@ -385,7 +385,7 @@ export function SiteTimesheetRowCard({
           </label>
           {locked || row.approvalStatus === "approved" || dutyOnLocked ? (
             <div className="mt-1">
-              <p className="text-sm font-medium text-security-navy-900 dark:text-security-navy-200">
+              <p className="text-sm font-medium text-security-navy-900">
                 {savedDutyOn || "—"}
               </p>
               {dutyOnLocked && !locked && row.approvalStatus !== "approved" && (
@@ -419,7 +419,7 @@ export function SiteTimesheetRowCard({
           </label>
           {locked || row.approvalStatus === "approved" || dutyOffLocked ? (
             <div className="mt-1">
-              <p className="text-sm font-medium text-security-navy-900 dark:text-security-navy-200">
+              <p className="text-sm font-medium text-security-navy-900">
                 {savedDutyOff || "—"}
               </p>
               {dutyOffLocked && !locked && row.approvalStatus !== "approved" && (

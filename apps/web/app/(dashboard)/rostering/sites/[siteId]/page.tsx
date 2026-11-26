@@ -28,6 +28,7 @@ import {
 } from "@/lib/roster-api";
 import { InteractiveRosterBoard } from "../../_components/InteractiveRosterBoard";
 import { SaComplianceBanner } from "../../_components/SaComplianceBanner";
+import { AlertBanner, Button, PageHeader, PageShell, SkeletonBlock, Tabs } from "@/components/ui";
 import { SiteQuickSetupDrawer } from "../../_components/SiteQuickSetupDrawer";
 import { SmartRosterWizard } from "../../_components/SmartRosterWizard";
 
@@ -236,129 +237,80 @@ function SiteWorkspaceInner() {
   const issuesList = continuity?.issues ?? [];
 
   return (
-    <div className="space-y-5">
-      {/* Header & Breadcrumb */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <Link
-            href="/rostering"
-            className="inline-flex items-center text-xs font-semibold text-security-navy-600 dark:text-security-navy-300 hover:underline min-h-[32px]"
-          >
-            ← All Sites
-          </Link>
-          <div className="flex flex-wrap items-center gap-3 mt-1">
-            <h1 className="text-2xl font-bold text-security-navy-900 dark:text-white">
-              {config?.name ?? "Site Roster"}
-            </h1>
-            {config?.operatingFramework && (
-              <span className="rounded-full bg-security-navy-100 dark:bg-security-navy-800 px-2.5 py-0.5 text-xs font-medium text-security-navy-700 dark:text-security-navy-200">
-                {config.operatingFramework.replace(/_/g, " ")}
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-0.5">
-            {startDate && endDate ? `Cycle: ${startDate} to ${endDate}` : "Loading pay cycle…"}
-            {config ? ` · ${config.rosterDayShiftGuardsRequired} Day / ${config.rosterNightShiftGuardsRequired} Night per day` : ""}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {token && (
-            <div className="w-56">
-              <PayPeriodSelect
-                token={token}
-                variant="roster"
-                value={period?.periodKey ?? ""}
-                onChange={(nextPeriod) => {
-                  setPeriod(nextPeriod);
-                  const next = new URLSearchParams(searchParams.toString());
-                  next.set("start", nextPeriod.periodStart);
-                  next.set("end", nextPeriod.periodEnd);
-                  router.replace(`/rostering/sites/${encodeURIComponent(siteId)}?${next}`, {
-                    scroll: false,
-                  });
-                }}
-              />
-            </div>
-          )}
-
-          {canEdit && config && (
-            <button
-              type="button"
-              onClick={() => setSetupOpen(true)}
-              className="rounded-lg border border-security-navy-300 dark:border-security-navy-700 px-3.5 py-2 text-xs font-semibold text-security-navy-800 dark:text-white hover:bg-security-navy-50 dark:hover:bg-security-navy-800 min-h-[42px]"
-            >
-              Site Setup
-            </button>
-          )}
-
-          {grid && grid.rows.length > 0 && (
-            <button
-              type="button"
-              onClick={handlePrintPdf}
-              className="rounded-lg border border-security-navy-300 dark:border-security-navy-700 px-3.5 py-2 text-xs font-semibold text-security-navy-800 dark:text-white hover:bg-security-navy-50 dark:hover:bg-security-navy-800 min-h-[42px]"
-            >
-              Download PDF
-            </button>
-          )}
-
-          <Link
-            href={`/rostering/sites/${encodeURIComponent(siteId)}/advanced`}
-            className="rounded-lg px-3 py-2 text-xs font-medium text-security-navy-600 dark:text-security-navy-300 hover:bg-security-navy-100 dark:hover:bg-security-navy-800 min-h-[42px] inline-flex items-center"
-          >
-            More tools · Pattern Editor →
-          </Link>
-        </div>
-      </div>
-
-      {/* Single-row Horizontal Accessible Tabs */}
-      <div
-        role="tablist"
-        aria-label="Site roster workspace views"
-        className="flex flex-nowrap overflow-x-auto border-b border-security-navy-200 dark:border-security-navy-800 gap-1"
-      >
-        {(
-          [
-            { id: "schedule" as const, label: "Schedule", count: null },
-            { id: "builder" as const, label: "Smart Builder", count: null },
-            { id: "issues" as const, label: "Issues & Relievers", count: issuesList.length || null },
-          ] as const
-        ).map((t) => {
-          const selected = activeTab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => setTab(t.id)}
-              className={`shrink-0 relative px-4 py-3 text-sm font-semibold transition-colors min-h-[44px] inline-flex items-center gap-2 border-b-2 ${
-                selected
-                  ? "border-[var(--accent-primary)] text-security-navy-900 dark:text-white"
-                  : "border-transparent text-security-navy-500 dark:text-security-navy-400 hover:text-security-navy-800 dark:hover:text-white"
-              }`}
-            >
-              <span>{t.label}</span>
-              {t.count != null && t.count > 0 && (
-                <span className="rounded-full bg-amber-100 text-amber-900 px-2 py-0.5 text-[11px] font-bold">
-                  {t.count}
-                </span>
+    <PageShell width="wide" className="animate-fade-in">
+      <div className="space-y-3">
+        <Link
+          href="/rostering"
+          className="inline-flex items-center text-xs font-medium text-security-navy-600 hover:text-security-navy-900"
+        >
+          ← All sites
+        </Link>
+        <PageHeader
+          title={config?.name ?? "Site Roster"}
+          description={
+            `${startDate && endDate ? `Cycle: ${startDate} to ${endDate}` : "Loading pay cycle…"}` +
+            `${config ? ` · ${config.rosterDayShiftGuardsRequired} Day / ${config.rosterNightShiftGuardsRequired} Night per day` : ""}` +
+            `${config?.operatingFramework ? ` · ${config.operatingFramework.replace(/_/g, " ")}` : ""}`
+          }
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              {token && (
+                <div className="w-56">
+                  <PayPeriodSelect
+                    token={token}
+                    variant="roster"
+                    value={period?.periodKey ?? ""}
+                    onChange={(nextPeriod) => {
+                      setPeriod(nextPeriod);
+                      const next = new URLSearchParams(searchParams.toString());
+                      next.set("start", nextPeriod.periodStart);
+                      next.set("end", nextPeriod.periodEnd);
+                      router.replace(`/rostering/sites/${encodeURIComponent(siteId)}?${next}`, {
+                        scroll: false,
+                      });
+                    }}
+                  />
+                </div>
               )}
-            </button>
-          );
-        })}
+
+              {canEdit && config && (
+                <Button variant="secondary" size="sm" onClick={() => setSetupOpen(true)}>
+                  Site setup
+                </Button>
+              )}
+
+              {grid && grid.rows.length > 0 && (
+                <Button variant="secondary" size="sm" onClick={handlePrintPdf}>
+                  Download PDF
+                </Button>
+              )}
+
+              <Link
+                href={`/rostering/sites/${encodeURIComponent(siteId)}/advanced`}
+                className="btn-ghost px-3 py-2 text-xs no-underline"
+              >
+                Pattern Editor →
+              </Link>
+            </div>
+          }
+        />
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
-          {error}
-        </div>
-      )}
+      <Tabs
+        ariaLabel="Site roster workspace views"
+        value={activeTab}
+        onChange={setTab}
+        items={[
+          { value: "schedule", label: "Schedule" },
+          { value: "builder", label: "Smart Builder" },
+          { value: "issues", label: "Issues & Relievers", count: issuesList.length || undefined },
+        ]}
+      />
+
+      {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
       {loading ? (
-        <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-8 text-center text-sm text-security-navy-500">
-          Loading schedule…
-        </div>
+        <SkeletonBlock className="h-64 w-full" />
       ) : (
         <>
           {activeTab === "schedule" && grid && (
@@ -419,11 +371,11 @@ function SiteWorkspaceInner() {
           {activeTab === "issues" && (
             <div className="space-y-4">
               {issuesList.length === 0 ? (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/20 p-8 text-center">
-                  <h3 className="text-base font-semibold text-emerald-900 dark:text-emerald-100">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-8 text-center">
+                  <h3 className="text-base font-semibold text-emerald-900">
                     No Open Roster Gaps or Alerts
                   </h3>
-                  <p className="text-xs text-emerald-800 dark:text-emerald-200 mt-1">
+                  <p className="text-xs text-emerald-800 mt-1">
                     Every shift slot on {config?.name ?? "this site"} has an assigned guard. You can still click any cell in Schedule to make swaps.
                   </p>
                 </div>
@@ -433,14 +385,14 @@ function SiteWorkspaceInner() {
                     {issuesList.map((issue) => (
                       <div
                         key={issue.id}
-                        className="rounded-xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-security-navy-900 p-4 space-y-2"
+                        className="rounded-xl border border-amber-200 bg-white p-4 space-y-2"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <h3 className="text-sm font-semibold text-security-navy-900 dark:text-white">
+                            <h3 className="text-sm font-semibold text-security-navy-900">
                               {issue.title}
                             </h3>
-                            <p className="text-xs text-security-navy-600 dark:text-security-navy-300 mt-0.5">
+                            <p className="text-xs text-security-navy-600 mt-0.5">
                               {issue.message}
                             </p>
                           </div>
@@ -462,7 +414,7 @@ function SiteWorkspaceInner() {
                   </div>
 
                   {selectedIssue && (
-                    <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-4 space-y-3">
+                    <div className="rounded-xl border border-security-navy-200 bg-white p-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold">
                           Recommended Relievers for {selectedIssue.title}
@@ -485,7 +437,7 @@ function SiteWorkspaceInner() {
                           {rankedSuggestions.slice(0, 15).map((c) => (
                             <div
                               key={c.employeeId}
-                              className="flex items-center justify-between gap-3 rounded-lg border border-security-navy-200 dark:border-security-navy-700 p-2.5 text-xs"
+                              className="flex items-center justify-between gap-3 rounded-lg border border-security-navy-200 p-2.5 text-xs"
                             >
                               <div>
                                 <div className="font-semibold">
@@ -502,7 +454,7 @@ function SiteWorkspaceInner() {
                                         className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
                                           b === "Zero OT"
                                             ? "bg-emerald-100 text-emerald-900"
-                                            : "bg-security-navy-100 dark:bg-security-navy-800"
+                                            : "bg-security-navy-100"
                                         }`}
                                       >
                                         {b}
@@ -565,7 +517,7 @@ function SiteWorkspaceInner() {
           onSaved={loadWorkspace}
         />
       )}
-    </div>
+    </PageShell>
   );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Input, Select, Textarea, AlertBanner } from "@/components/ui";
+import { Button, Input, Modal, Select, Textarea, AlertBanner } from "@/components/ui";
 import type { ManagedDocument } from "@/lib/msr-api";
 import {
   rotateDocumentPages,
@@ -220,37 +220,14 @@ export function DocumentEditModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[90] flex animate-fade-in items-center justify-center bg-security-navy-900/50 p-4 backdrop-blur-[3px]"
-      role="presentation"
+    <Modal
+      open={open}
+      onClose={() => !loading && onClose()}
+      title="PDF Workspace Tools"
+      description="Modify uploaded PDF documents safely. All actions generate an immutable version."
+      size="lg"
     >
-      <div
-        className="w-full max-w-xl animate-slide-up rounded-security-lg border border-security-navy-200 bg-white p-6 shadow-security-elevated motion-reduce:animate-none flex flex-col max-h-[90vh]"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="pdf-tools-modal-title"
-      >
-        {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-security-navy-100 pb-3">
-          <div>
-            <h2 id="pdf-tools-modal-title" className="text-lg font-bold text-security-navy-900">
-              PDF Workspace Tools
-            </h2>
-            <p className="text-xs text-security-navy-500 mt-0.5">
-              Modify uploaded PDF documents safely. All actions generate an immutable version.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-            className="text-security-navy-400 hover:text-security-navy-700 p-1 rounded text-base leading-none"
-            aria-label="Close modal"
-          >
-            ✕
-          </button>
-        </div>
-
+      <div className="flex flex-col">
         {/* Tab Strip */}
         <div className="flex border-b border-security-navy-200 mt-3 gap-1 overflow-x-auto text-xs font-medium">
           <button
@@ -589,6 +566,6 @@ export function DocumentEditModal({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

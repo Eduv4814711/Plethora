@@ -213,6 +213,62 @@ export async function checkLlmHealth(overrides?: LlmClientOverrides): Promise<Ll
   }
 }
 
+export function normalizeBedrockMessages(rawMessages: LlmMessage[]): {
+  systemBlocks: SystemContentBlock[];
+  converseMessages: Message[];
+} {
+  const systemBlocks: SystemContentBlock[] = [];
+  const filtered: Array<{ role: "user" | "assistant"; text: string }> = [];
+
+  for (const msg of rawMessages) {
+    const trimmed = msg.content.trim();
+    if (!trimmed) continue;
+    if (msg.role === "system") {
+      systemBlocks.push({ text: trimmed });
+    } else {
+      filtered.push({ role: msg.role, text: trimmed });
+    }
+  }
+
+  // Bedrock Converse requires the conversation to begin with a "user" turn
+  // and strictly alternate user/assistant turns.
+  while (filtered.length > 0 && filtered[0]!.role === "assistant") {
+    filtered.shift();
+  }
+
+  const converseMessages: Message[] = [];
+  for (const turn of filtered) {
+    const prev = converseMessages[converseMessages.length - 1];
+    if (prev && prev.role === turn.role) {
+      const prevText =
+        prev.content
+          ?.map((b) => ("text" in b && b.text ? b.text : ""))
+          .filter(Boolean)
+          .join("\n") ?? "";
+      prev.content = [{ text: prevText ? `${prevText}\n\n${turn.text}` : turn.text }];
+    } else {
+      converseMessages.push({
+        role: turn.role,
+        content: [{ text: turn.text }],
+      });
+    }
+  }
+
+  if (converseMessages.length === 0 && systemBlocks.length > 0) {
+    const combinedSystem = systemBlocks
+      .map((b) => ("text" in b && b.text ? b.text : ""))
+      .filter(Boolean)
+      .join("\n");
+    converseMessages.push({
+      role: "user",
+      content: [{ text: combinedSystem }],
+    });
+    systemBlocks.length = 0;
+  }
+
+  return { systemBlocks, converseMessages };
+}
+
 async function chatWithBedrock(
   options: LlmChatOptions,
   aiConfig: Env["ai"],
@@ -221,33 +277,7 @@ async function chatWithBedrock(
   overrides?: LlmClientOverrides
 ): Promise<LlmChatResult | null> {
   try {
-    const systemBlocks: SystemContentBlock[] = [];
-    const converseMessages: Message[] = [];
-
-    for (const msg of options.messages) {
-      if (msg.role === "system") {
-        if (msg.content.trim()) {
-          systemBlocks.push({ text: msg.content });
-        }
-      } else {
-        converseMessages.push({
-          role: msg.role,
-          content: [{ text: msg.content }],
-        });
-      }
-    }
-
-    if (converseMessages.length === 0 && systemBlocks.length > 0) {
-      const combinedSystem = systemBlocks
-        .map((b) => ("text" in b && b.text ? b.text : ""))
-        .filter(Boolean)
-        .join("\n");
-      converseMessages.push({
-        role: "user",
-        content: [{ text: combinedSystem }],
-      });
-      systemBlocks.length = 0;
-    }
+    const { systemBlocks, converseMessages } = normalizeBedrockMessages(options.messages);
 
     if (converseMessages.length === 0) return null;
 

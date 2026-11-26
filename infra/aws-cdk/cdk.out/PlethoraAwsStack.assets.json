@@ -1,18 +1,18 @@
 {
   "version": "55.0.0",
   "files": {
-    "7356a13425d28a42db73e10a4de9cc67a353df9da7f3807af68062c311d7550e": {
+    "14e08fbf11a10288804b2134fcc1b9b4684d385b1a268f506efac53b5ad59db1": {
       "displayName": "PlethoraAwsStack Template",
       "source": {
         "path": "PlethoraAwsStack.template.json",
         "packaging": "file"
       },
       "destinations": {
-        "779391599178-af-south-1-39f4f4bb": {
-          "bucketName": "cdk-hnb659fds-assets-779391599178-af-south-1",
-          "objectKey": "7356a13425d28a42db73e10a4de9cc67a353df9da7f3807af68062c311d7550e.json",
-          "region": "af-south-1",
-          "assumeRoleArn": "arn:${AWS::Partition}:iam::779391599178:role/cdk-hnb659fds-file-publishing-role-779391599178-af-south-1"
+        "current_account-us-east-1-eadeb3bb": {
+          "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-us-east-1",
+          "objectKey": "14e08fbf11a10288804b2134fcc1b9b4684d385b1a268f506efac53b5ad59db1.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-us-east-1"
         }
       }
     }

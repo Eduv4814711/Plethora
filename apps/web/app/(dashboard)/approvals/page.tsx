@@ -5,7 +5,19 @@ import { useAuth } from "@/lib/auth-context";
 import { hasCapability } from "@/lib/permissions";
 import { listApprovals, reviewApproval, approvalEntityHref, type ApprovalRequest } from "@/lib/msr-api";
 import Link from "next/link";
-import { AlertBanner, Badge, EmptyState, PageHeader } from "@/components/ui";
+import {
+  AlertBanner,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  PageHeader,
+  PageShell,
+  SkeletonBlock,
+  StatusBadge,
+  Tabs,
+  Textarea,
+} from "@/components/ui";
 
 const TYPE_LABELS: Record<string, string> = {
   ATTENDANCE_EXCEPTION: "Attendance exception",
@@ -18,14 +30,6 @@ const TYPE_LABELS: Record<string, string> = {
   INCIDENT: "Incident",
   DOCUMENT_REVIEW: "Document review",
 };
-
-function statusBadge(status: string) {
-  if (status === "PENDING") return <Badge variant="warning">Pending</Badge>;
-  if (status === "APPROVED") return <Badge variant="success">Approved</Badge>;
-  if (status === "REJECTED") return <Badge variant="error">Rejected</Badge>;
-  if (status === "QUERY_RAISED") return <Badge variant="neutral">Query raised</Badge>;
-  return <Badge variant="neutral">{status}</Badge>;
-}
 
 export default function ApprovalsPage() {
   const { token, user } = useAuth();
@@ -52,7 +56,7 @@ export default function ApprovalsPage() {
       setError(err instanceof Error ? err.message : "Unable to load approvals");
       setItems([]);
     }
-  }, [token, statusFilter]);
+  }, [token, canApprove, statusFilter]);
 
   useEffect(() => {
     if (!token) return;
@@ -78,42 +82,40 @@ export default function ApprovalsPage() {
 
   if (loading) {
     return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-8 w-48 bg-security-navy-100 rounded-lg" />
-        <div className="h-24 bg-security-navy-100 rounded-lg" />
-        <div className="h-24 bg-security-navy-100 rounded-lg" />
-      </div>
+      <PageShell width="narrow" className="animate-fade-in">
+        <SkeletonBlock className="h-9 w-48" />
+        <SkeletonBlock className="h-24 w-full" />
+        <SkeletonBlock className="h-24 w-full" />
+      </PageShell>
     );
   }
 
   return (
-    <div className="animate-fade-in max-w-4xl mx-auto">
+    <PageShell width="narrow" className="animate-fade-in">
       <PageHeader
         title="Approvals"
         description="Review and respond to pending approval requests from your team."
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <label htmlFor="approval-status" className="sr-only">Filter by status</label>
-        <select
-          id="approval-status"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="input-compact w-auto"
-        >
-          <option value="PENDING">Pending ({pendingCount})</option>
-          <option value="all">All</option>
-          <option value="APPROVED">Approved</option>
-          <option value="REJECTED">Rejected</option>
-          <option value="QUERY_RAISED">Query raised</option>
-        </select>
-      </div>
+      <Tabs
+        ariaLabel="Filter approvals by status"
+        variant="segmented"
+        value={statusFilter}
+        onChange={setStatusFilter}
+        items={[
+          { value: "PENDING", label: "Pending", count: pendingCount },
+          { value: "all", label: "All" },
+          { value: "APPROVED", label: "Approved" },
+          { value: "REJECTED", label: "Rejected" },
+          { value: "QUERY_RAISED", label: "Query raised" },
+        ]}
+      />
 
-      {error && <AlertBanner variant="error" className="mb-4">{error}</AlertBanner>}
+      {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
       <div className="space-y-3">
         {items.map((item) => (
-          <article key={item.id} className="card-dashboard p-4">
+          <Card key={item.id} variant="dashboard" className="p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <h2 className="font-semibold text-security-navy-900">
@@ -126,75 +128,73 @@ export default function ApprovalsPage() {
                 {item.comment && (
                   <p className="mt-2 text-sm text-security-navy-700">{item.comment}</p>
                 )}
-                <p className="mt-1 text-xs text-security-navy-500">
+                <p className="mt-1 text-xs tabular-nums text-security-navy-500">
                   {new Date(item.requestedAt).toLocaleString()}
                 </p>
               </div>
-              {statusBadge(item.status)}
+              <StatusBadge status={item.status} />
             </div>
 
             {canApprove && item.status === "PENDING" && (
               <div className="mt-4 flex flex-wrap gap-2 border-t border-security-navy-100 pt-3">
                 {approvalEntityHref(item) && (
-                  <Link href={approvalEntityHref(item)!} className="btn-secondary text-sm py-1.5">
+                  <Link href={approvalEntityHref(item)!} className="btn-secondary py-1.5 text-sm no-underline">
                     View record
                   </Link>
                 )}
-                <button
-                  type="button"
-                  className="btn-primary text-sm py-1.5"
-                  disabled={actingId === item.id}
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={actingId === item.id}
                   onClick={() => handleReview(item.id, "approve")}
                 >
                   Approve
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary text-sm py-1.5"
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   disabled={actingId === item.id}
                   onClick={() => setQueryId(queryId === item.id ? null : item.id)}
                 >
                   Raise query
-                </button>
-                <button
-                  type="button"
-                  className="btn-destructive text-sm py-1.5"
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
                   disabled={actingId === item.id}
                   onClick={() => handleReview(item.id, "reject")}
                 >
                   Reject
-                </button>
+                </Button>
               </div>
             )}
 
             {queryId === item.id && (
-              <div className="mt-3 space-y-2">
-                <label htmlFor={`query-${item.id}`} className="label-text block">Your question</label>
-                <textarea
-                  id={`query-${item.id}`}
-                  value={queryComment}
-                  onChange={(e) => setQueryComment(e.target.value)}
-                  className="input-modern w-full"
-                  rows={2}
-                  placeholder="What do you need clarified?"
-                />
-                <button
-                  type="button"
-                  className="btn-primary text-sm py-1.5"
+              <div className="mt-3 space-y-2 border-t border-security-navy-100 pt-3">
+                <Field label="Your question" id={`query-${item.id}`}>
+                  <Textarea
+                    value={queryComment}
+                    onChange={(e) => setQueryComment(e.target.value)}
+                    rows={2}
+                    placeholder="What do you need clarified?"
+                  />
+                </Field>
+                <Button
+                  variant="primary"
+                  size="sm"
                   disabled={actingId === item.id || !queryComment.trim()}
                   onClick={() => handleReview(item.id, "query", queryComment.trim())}
                 >
                   Send query
-                </button>
+                </Button>
               </div>
             )}
-          </article>
+          </Card>
         ))}
       </div>
 
       {items.length === 0 && (
         <EmptyState
-          className="mt-6"
           title={statusFilter === "PENDING" ? "No pending approvals" : "No approvals found"}
           description={
             statusFilter === "PENDING"
@@ -203,6 +203,6 @@ export default function ApprovalsPage() {
           }
         />
       )}
-    </div>
+    </PageShell>
   );
 }

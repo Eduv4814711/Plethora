@@ -29,8 +29,8 @@ export function SaComplianceBanner({
   const hasOvertime = totalOvertimeHours > 0;
 
   const toneClass = hasIssues
-    ? "border-amber-200 bg-amber-50/80 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
-    : "border-emerald-200 bg-emerald-50/80 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100";
+    ? "border-amber-200 bg-amber-50/80 text-amber-950"
+    : "border-emerald-200 bg-emerald-50/80 text-emerald-950";
 
   return (
     <div className={`rounded-xl border px-4 py-3 ${toneClass}`}>
@@ -46,17 +46,17 @@ export function SaComplianceBanner({
             {coveragePercent >= 100 ? "100% Covered" : `${Math.round(coveragePercent)}% Covered (${filledSlots}/${requiredSlots})`}
           </span>
 
-          <span className="inline-flex items-center rounded-full bg-white/80 dark:bg-security-navy-900/70 border border-current/15 px-2.5 py-0.5 text-xs font-medium">
+          <span className="inline-flex items-center rounded-full bg-white/80 border border-current/15 px-2.5 py-0.5 text-xs font-medium">
             {hasOvertime ? `${totalOvertimeHours}h Planned Overtime (1.5x)` : "0h Overtime (<=48h/wk)"}
           </span>
 
-          <span className="inline-flex items-center rounded-full bg-white/80 dark:bg-security-navy-900/70 border border-current/15 px-2.5 py-0.5 text-xs font-medium">
+          <span className="inline-flex items-center rounded-full bg-white/80 border border-current/15 px-2.5 py-0.5 text-xs font-medium">
             {restViolationsCount === 0
               ? "Rest & Fatigue OK (12h/36h)"
               : `${restViolationsCount} Rest Alert${restViolationsCount === 1 ? "" : "s"}`}
           </span>
 
-          <span className="inline-flex items-center rounded-full bg-white/80 dark:bg-security-navy-900/70 border border-current/15 px-2.5 py-0.5 text-xs font-medium">
+          <span className="inline-flex items-center rounded-full bg-white/80 border border-current/15 px-2.5 py-0.5 text-xs font-medium">
             {credentialWarningsCount === 0
               ? "PSIRA Credentials OK"
               : `${credentialWarningsCount} PSIRA Alert${credentialWarningsCount === 1 ? "" : "s"}`}

@@ -45,6 +45,13 @@
   /* Chrome height, shared by the fixed header and every page that has to
      reserve space beneath it. */
   --chrome-h: 3.5rem;
+  --in-oklab: ;
+}
+
+@supports (background: linear-gradient(in oklab, white, black)) {
+  :root {
+    --in-oklab: in oklab;
+  }
 }
 
 html {
@@ -193,13 +200,13 @@ body {
     @apply text-[1.6rem] font-semibold leading-tight tracking-[-0.02em] text-security-navy-900 sm:text-[1.8rem];
   }
   .section-title {
-    @apply font-mono text-[0.6875rem] font-medium uppercase tracking-[0.14em] text-security-navy-500;
+    @apply text-xs font-semibold text-security-navy-600;
   }
   .label-text {
     @apply text-xs font-semibold tracking-[0.01em] text-security-navy-700;
   }
   .eyebrow {
-    @apply font-mono text-[0.6875rem] font-medium uppercase tracking-[0.16em] text-security-amber-700;
+    @apply text-xs font-semibold text-security-amber-700;
   }
   .metric {
     font-family: 'Space Grotesk', 'Archivo', system-ui, sans-serif;
@@ -352,4 +359,48 @@ dialog::backdrop {
     min-width: 44px;
     min-height: 44px;
   }
+}
+
+/* Header dropdown popovers anchored via Popover API + CSS Anchor Positioning */
+.header-popover {
+  overscroll-behavior: contain;
+}
+
+@supports (position-area: block-end) {
+  [popover].header-popover {
+    inset: auto;
+    margin: 0;
+    margin-block-start: 0.5rem;
+    position-area: block-end span-inline-start;
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  }
+}
+
+@supports not (position-area: block-end) {
+  [popover].header-popover {
+    position: fixed;
+    inset: calc(3.25rem + 0.5rem) 1rem auto auto;
+    margin: 0;
+  }
+}
+
+/* Dashboard bento surface washes with progressive oklab interpolation */
+.kpi-wash-neutral {
+  background: linear-gradient(145deg var(--in-oklab), #ffffff 42%, #f1f5f9 100%);
+}
+.kpi-wash-emerald {
+  background: linear-gradient(145deg var(--in-oklab), #ffffff 42%, #ecfdf5 100%);
+}
+.kpi-wash-amber {
+  background: linear-gradient(145deg var(--in-oklab), #ffffff 42%, #fff7ed 100%);
+}
+.kpi-wash-indigo {
+  background: linear-gradient(145deg var(--in-oklab), #ffffff 42%, #eef2ff 100%);
+}
+.ai-panel-surface {
+  isolation: isolate;
+  background-color: #121621;
+  background-image:
+    radial-gradient(circle at 92% 96%, rgba(249, 122, 8, 0.24), transparent 52%),
+    linear-gradient(160deg var(--in-oklab), #191f2e 0%, #111520 62%, #181726 100%);
 }

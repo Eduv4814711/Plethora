@@ -25,6 +25,18 @@ import {
   Line,
 } from "recharts";
 import { CHART_PRIMARY, CHART_SERIES } from "@/lib/chart-theme";
+import {
+  AlertBanner,
+  Button,
+  Card,
+  Field,
+  Input,
+  PageHeader,
+  PageShell,
+  Section,
+  Select,
+  SkeletonBlock,
+} from "@/components/ui";
 
 interface ReportsData {
   exportByStatus: { name: string; value: number }[];
@@ -129,131 +141,126 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-      <div className="animate-fade-in">
-        <h1 className="page-title mb-6">Reports</h1>
-        <div className="animate-pulse grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <PageShell width="wide" className="animate-fade-in">
+        <PageHeader title="Reports" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-80 bg-security-navy-100 dark:bg-security-navy-700 rounded-lg" />
+            <SkeletonBlock key={i} className="h-80 w-full" />
           ))}
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <div>
-          <h1 className="page-title">Reports</h1>
-          <p className="text-security-navy-600 dark:text-security-navy-400 mt-0.5 text-sm">
-            Charts showing your team, shifts, attendance, and payroll export batches over time.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <label htmlFor="reports-period" className="text-sm text-security-navy-600 dark:text-security-navy-400">Show:</label>
-          <select
-            id="reports-period"
-            value={payPeriodCount}
-            onChange={(e) => setPayPeriodCount(Number(e.target.value))}
-            className="input-compact w-auto"
-          >
-            <option value={3}>Last 3 periods</option>
-            <option value={6}>Last 6 periods</option>
-            <option value={12}>Last 12 periods</option>
-            <option value={24}>Last 24 periods</option>
-          </select>
-        </div>
-      </div>
+    <PageShell width="wide" className="animate-fade-in pb-12">
+      <PageHeader
+        title="Reports"
+        description="Operational metrics across team members, shifts, attendance, and Sage payroll exports."
+        actions={
+          <div className="flex items-center gap-2">
+            <label htmlFor="reports-period" className="text-xs font-medium text-security-navy-600">
+              Show
+            </label>
+            <Select
+              id="reports-period"
+              density="compact"
+              value={payPeriodCount}
+              onChange={(e) => setPayPeriodCount(Number(e.target.value))}
+              className="w-auto"
+            >
+              <option value={3}>Last 3 periods</option>
+              <option value={6}>Last 6 periods</option>
+              <option value={12}>Last 12 periods</option>
+              <option value={24}>Last 24 periods</option>
+            </Select>
+          </div>
+        }
+      />
 
-      {error && (
-        <div className="mb-6 rounded-security border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-          {error}
-        </div>
+      {error && <AlertBanner variant="error">{error}</AlertBanner>}
+
+      {canExport && (
+        <Card className="p-5">
+          <Section
+            title="Export operational reports"
+            description="Download attendance, incidents, and performance reports for sharing or records."
+          >
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="From">
+                <Input type="date" density="compact" value={exportStart} onChange={(e) => setExportStart(e.target.value)} />
+              </Field>
+              <Field label="To">
+                <Input type="date" density="compact" value={exportEnd} onChange={(e) => setExportEnd(e.target.value)} />
+              </Field>
+              <Field label="Site">
+                <Select density="compact" value={exportSiteId} onChange={(e) => setExportSiteId(e.target.value)}>
+                  <option value="">All sites</option>
+                  {sites.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Client">
+                <Select density="compact" value={exportClientId} onChange={(e) => setExportClientId(e.target.value)}>
+                  <option value="">All clients</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-end">
+              <Field label="Report type" id="extended-report-type" className="min-w-0 flex-1 max-w-md">
+                <Select
+                  value={selectedReportType}
+                  onChange={(e) => setSelectedReportType(e.target.value)}
+                >
+                  {reportTypes.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </Select>
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={exporting === "csv"}
+                  disabled={!selectedReportType || exporting !== null}
+                  onClick={() => handleExport("csv")}
+                >
+                  Export CSV
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={exporting === "excel"}
+                  disabled={!selectedReportType || exporting !== null}
+                  onClick={() => handleExport("excel")}
+                >
+                  Export Excel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={exporting === "pdf"}
+                  disabled={!selectedReportType || exporting !== null}
+                  onClick={() => handleExport("pdf")}
+                >
+                  Export PDF
+                </Button>
+              </div>
+            </div>
+            {exportError && <AlertBanner variant="error">{exportError}</AlertBanner>}
+          </Section>
+        </Card>
       )}
 
-      {canExport && <div className="card-dashboard mb-8 p-5">
-        <h2 className="section-title text-security-navy-900 mb-1">Export operational reports</h2>
-        <p className="text-sm text-security-navy-600 mb-4">
-          Download attendance, incidents, and performance reports for sharing or records.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-          <div>
-            <label className="label-text block mb-1">From</label>
-            <input type="date" className="input-modern w-full" value={exportStart} onChange={(e) => setExportStart(e.target.value)} />
-          </div>
-          <div>
-            <label className="label-text block mb-1">To</label>
-            <input type="date" className="input-modern w-full" value={exportEnd} onChange={(e) => setExportEnd(e.target.value)} />
-          </div>
-          <div>
-            <label className="label-text block mb-1">Site</label>
-            <select className="input-modern w-full" value={exportSiteId} onChange={(e) => setExportSiteId(e.target.value)}>
-              <option value="">All sites</option>
-              {sites.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="label-text block mb-1">Client</label>
-            <select className="input-modern w-full" value={exportClientId} onChange={(e) => setExportClientId(e.target.value)}>
-              <option value="">All clients</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-          <div className="flex-1 min-w-0">
-            <label htmlFor="extended-report-type" className="label-text block mb-1">Report type</label>
-            <select
-              id="extended-report-type"
-              value={selectedReportType}
-              onChange={(e) => setSelectedReportType(e.target.value)}
-              className="input-modern w-full max-w-md"
-            >
-              {reportTypes.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="btn-secondary text-sm py-2"
-              disabled={!selectedReportType || exporting !== null}
-              onClick={() => handleExport("csv")}
-            >
-              {exporting === "csv" ? "Exporting…" : "Export CSV"}
-            </button>
-            <button
-              type="button"
-              className="btn-secondary text-sm py-2"
-              disabled={!selectedReportType || exporting !== null}
-              onClick={() => handleExport("excel")}
-            >
-              {exporting === "excel" ? "Exporting…" : "Export Excel"}
-            </button>
-            <button
-              type="button"
-              className="btn-primary text-sm py-2"
-              disabled={!selectedReportType || exporting !== null}
-              onClick={() => handleExport("pdf")}
-            >
-              {exporting === "pdf" ? "Exporting…" : "Export PDF"}
-            </button>
-          </div>
-        </div>
-        {exportError && (
-          <p className="mt-3 text-sm text-red-600" role="alert">{exportError}</p>
-        )}
-      </div>}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Export batches by status - Pie */}
-        <div className="card-elevated p-6">
-          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Payroll Export Batches by Status</h2>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card variant="dashboard" className="p-5">
+          <h2 className="mb-4 font-display text-sm font-semibold text-security-navy-900">
+            Payroll export batches by status
+          </h2>
           {data?.exportByStatus?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -278,13 +285,16 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No payroll export batches have been created for this period.</p>
+            <p className="py-12 text-center text-sm text-security-navy-500">
+              No payroll export batches have been created for this period.
+            </p>
           )}
-        </div>
+        </Card>
 
-        {/* Employees by status - Pie */}
-        <div className="card-elevated p-6">
-          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Team Members by Status</h2>
+        <Card variant="dashboard" className="p-5">
+          <h2 className="mb-4 font-display text-sm font-semibold text-security-navy-900">
+            Team members by status
+          </h2>
           {data?.employeesByStatus?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -309,25 +319,28 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No team status data is available for this period.</p>
+            <p className="py-12 text-center text-sm text-security-navy-500">
+              No team status data is available for this period.
+            </p>
           )}
-        </div>
+        </Card>
 
-        {/* Shifts over time - Bar */}
-        <div className="card-elevated p-6 lg:col-span-2">
-          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Shifts Scheduled Over Time</h2>
+        <Card variant="dashboard" className="p-5 lg:col-span-2">
+          <h2 className="mb-4 font-display text-sm font-semibold text-security-navy-900">
+            Shifts scheduled over time
+          </h2>
           {data?.shiftsOverTime?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.shiftsOverTime} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-security-navy-200 dark:stroke-security-navy-700" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e8eaee" />
                   <XAxis dataKey="month" className="text-xs" stroke="currentColor" />
                   <YAxis className="text-xs" stroke="currentColor" />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "var(--card)",
-                      border: "1px solid var(--card-border)",
-                      borderRadius: "4px",
+                      backgroundColor: "#ffffff",
+                      border: "1px solid #e8eaee",
+                      borderRadius: "8px",
                     }}
                   />
                   <Bar dataKey="shifts" fill={CHART_PRIMARY} name="Shifts" radius={[4, 4, 0, 0]} />
@@ -335,26 +348,29 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No shifts were scheduled during this period.</p>
+            <p className="py-12 text-center text-sm text-security-navy-500">
+              No shifts were scheduled during this period.
+            </p>
           )}
-        </div>
+        </Card>
 
-        {/* Exported hours over time - Line */}
-        <div className="card-elevated p-6 lg:col-span-2">
-          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Exported Hours Over Time</h2>
+        <Card variant="dashboard" className="p-5 lg:col-span-2">
+          <h2 className="mb-4 font-display text-sm font-semibold text-security-navy-900">
+            Exported hours over time
+          </h2>
           {data?.exportsOverTime?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data.exportsOverTime} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-security-navy-200 dark:stroke-security-navy-700" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e8eaee" />
                   <XAxis dataKey="month" className="text-xs" stroke="currentColor" />
                   <YAxis className="text-xs" stroke="currentColor" tickFormatter={(v) => `${v}h`} />
                   <Tooltip
                     formatter={(v) => [`${Number(v ?? 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })} hrs`, ""]}
                     contentStyle={{
-                      backgroundColor: "var(--card)",
-                      border: "1px solid var(--card-border)",
-                      borderRadius: "4px",
+                      backgroundColor: "#ffffff",
+                      border: "1px solid #e8eaee",
+                      borderRadius: "8px",
                     }}
                   />
                   <Legend />
@@ -365,25 +381,28 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No locked or exported payroll batches are available for this period.</p>
+            <p className="py-12 text-center text-sm text-security-navy-500">
+              No locked or exported payroll batches are available for this period.
+            </p>
           )}
-        </div>
+        </Card>
 
-        {/* Shifts by status - Bar */}
-        <div className="card-elevated p-6">
-          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Shifts by Status</h2>
+        <Card variant="dashboard" className="p-5">
+          <h2 className="mb-4 font-display text-sm font-semibold text-security-navy-900">
+            Shifts by status
+          </h2>
           {data?.shiftsByStatus?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.shiftsByStatus} layout="vertical" margin={{ top: 5, right: 30, left: 80, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-security-navy-200 dark:stroke-security-navy-700" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e8eaee" />
                   <XAxis type="number" className="text-xs" stroke="currentColor" />
                   <YAxis type="category" dataKey="name" width={70} className="text-xs" stroke="currentColor" />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "var(--card)",
-                      border: "1px solid var(--card-border)",
-                      borderRadius: "4px",
+                      backgroundColor: "#ffffff",
+                      border: "1px solid #e8eaee",
+                      borderRadius: "8px",
                     }}
                   />
                   <Bar dataKey="value" fill={CHART_PRIMARY} name="Shifts" radius={[0, 4, 4, 0]} />
@@ -391,26 +410,29 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No site hour totals are available for this period.</p>
+            <p className="py-12 text-center text-sm text-security-navy-500">
+              No site hour totals are available for this period.
+            </p>
           )}
-        </div>
+        </Card>
 
-        {/* Hours by site - Bar */}
-        <div className="card-elevated p-6">
-          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Hours Worked by Site (Top 10)</h2>
+        <Card variant="dashboard" className="p-5">
+          <h2 className="mb-4 font-display text-sm font-semibold text-security-navy-900">
+            Hours worked by site (Top 10)
+          </h2>
           {data?.hoursBySite?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.hoursBySite} layout="vertical" margin={{ top: 5, right: 30, left: 80, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-security-navy-200 dark:stroke-security-navy-700" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e8eaee" />
                   <XAxis type="number" className="text-xs" stroke="currentColor" />
                   <YAxis type="category" dataKey="name" width={70} className="text-xs" stroke="currentColor" tick={{ fontSize: 10 }} />
                   <Tooltip
                     formatter={(v) => [`${Number(v ?? 0).toFixed(1)} hrs`, "Hours"]}
                     contentStyle={{
-                      backgroundColor: "var(--card)",
-                      border: "1px solid var(--card-border)",
-                      borderRadius: "4px",
+                      backgroundColor: "#ffffff",
+                      border: "1px solid #e8eaee",
+                      borderRadius: "8px",
                     }}
                   />
                   <Bar dataKey="hours" fill="#22c55e" name="Hours" radius={[0, 4, 4, 0]} />
@@ -418,10 +440,12 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No attendance trend data is available for this period.</p>
+            <p className="py-12 text-center text-sm text-security-navy-500">
+              No attendance trend data is available for this period.
+            </p>
           )}
-        </div>
+        </Card>
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -7,7 +7,7 @@ import {
   type ShiftRollCallSummary,
 } from "../shift-roll-call.service.js";
 import { prisma } from "../../lib/prisma.js";
-import { sendText } from "../../whatsapp/services/send.service.js";
+import { sendTextWithTemplateFallback } from "../../whatsapp/services/send.service.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { operationalEventBus } from "../../lib/events.js";
 
@@ -26,7 +26,8 @@ vi.mock("../../lib/prisma.js", () => ({
 }));
 
 vi.mock("../../whatsapp/services/send.service.js", () => ({
-  sendText: vi.fn().mockResolvedValue({ messages: [{ id: "wam-rc-1" }] }),
+  sendTextWithTemplateFallback: vi.fn().mockResolvedValue({ success: true, messageId: "wam-rc-1" }),
+  templateBodyParameters: vi.fn().mockReturnValue([]),
 }));
 
 vi.mock("../../lib/audit.js", () => ({
@@ -298,9 +299,9 @@ describe("Shift Attendance Roll-Call Service", () => {
 
       expect(result.success).toBe(true);
       expect(result.recipientCount).toBe(2);
-      expect(sendText).toHaveBeenCalledTimes(2);
-      expect(sendText).toHaveBeenCalledWith("27821234567", expect.stringContaining("PLETHORA — SHIFT ROLL-CALL SUMMARY"));
-      expect(sendText).toHaveBeenCalledWith("27837654321", expect.stringContaining("PLETHORA — SHIFT ROLL-CALL SUMMARY"));
+      expect(sendTextWithTemplateFallback).toHaveBeenCalledTimes(2);
+      expect(sendTextWithTemplateFallback).toHaveBeenCalledWith("27821234567", expect.any(String), expect.any(Object));
+      expect(sendTextWithTemplateFallback).toHaveBeenCalledWith("27837654321", expect.any(String), expect.any(Object));
 
       // Audit log
       expect(createAuditLog).toHaveBeenCalledWith(
@@ -337,7 +338,7 @@ describe("Shift Attendance Roll-Call Service", () => {
 
       expect(result.success).toBe(true);
       expect(result.recipientCount).toBe(1);
-      expect(sendText).toHaveBeenCalledWith("27845551212", expect.any(String));
+      expect(sendTextWithTemplateFallback).toHaveBeenCalledWith("27845551212", expect.any(String), expect.any(Object));
     });
 
     it("returns success=false without error when no recipient phones are configured", async () => {
@@ -352,7 +353,7 @@ describe("Shift Attendance Roll-Call Service", () => {
       const result = await dispatchShiftRollCall("co-1");
       expect(result.success).toBe(false);
       expect(result.recipientCount).toBe(0);
-      expect(sendText).not.toHaveBeenCalled();
+      expect(sendTextWithTemplateFallback).not.toHaveBeenCalled();
     });
   });
 });

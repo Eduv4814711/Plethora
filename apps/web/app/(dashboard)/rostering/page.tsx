@@ -20,6 +20,20 @@ import {
   rosterSiteActionLabel,
   type RosterStatusFilter,
 } from "@/lib/roster-operations-utils";
+import {
+  AlertBanner,
+  Button,
+  Card,
+  EmptyState,
+  KpiStrip,
+  PageHeader,
+  PageShell,
+  SearchInput,
+  SkeletonBlock,
+  StatusBadge,
+  Tabs,
+  Toolbar,
+} from "@/components/ui";
 import { SiteQuickSetupDrawer } from "./_components/SiteQuickSetupDrawer";
 
 export default function RosteringHubPage() {
@@ -89,7 +103,7 @@ export default function RosteringHubPage() {
       });
       setAutoBuildBanner(
         res.builtCount > 0
-          ? `Built & published SA-compliant rosters for ${res.builtCount} site${res.builtCount === 1 ? "" : "s"} (${period.rosterLabel || period.label}).`
+          ? `Built and published SA-compliant rosters for ${res.builtCount} site${res.builtCount === 1 ? "" : "s"} (${period.rosterLabel || period.label}).`
           : "All active sites with guard headcount already have shifts in this cycle."
       );
       await loadHub();
@@ -114,143 +128,103 @@ export default function RosteringHubPage() {
   }, [sites]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-security-navy-900 dark:text-white">
-            Rostering Command Hub
-          </h1>
-          <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mt-1">
-            Build, adjust, and publish guard schedules for every site using South African Sector 6 rules.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          {token && (
-            <div className="w-64">
-              <PayPeriodSelect
-                token={token}
-                variant="roster"
-                value={period?.periodKey ?? ""}
-                onChange={(nextPeriod) => setPeriod(nextPeriod)}
-              />
-            </div>
-          )}
-          {canEdit && period && (
-            <button
-              type="button"
-              onClick={handleAutoBuildUnrostered}
-              disabled={autoBuilding}
-              className="btn-primary min-h-[44px]"
-            >
-              {autoBuilding ? "Building Rosters…" : "Auto-Build Unrostered Sites"}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
-          {error}
-        </div>
-      )}
-
-      {autoBuildBanner && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100">
-          {autoBuildBanner}
-        </div>
-      )}
-
-      {/* KPI Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-4">
-          <div className="text-xs text-security-navy-500 dark:text-security-navy-400">Active Sites</div>
-          <div className="text-2xl font-bold tabular-nums text-security-navy-900 dark:text-white mt-1">
-            {sites.length}
-          </div>
-        </div>
-        <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-white dark:bg-security-navy-900 p-4">
-          <div className="text-xs text-emerald-700 dark:text-emerald-300">Schedules Running</div>
-          <div className="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 mt-1">
-            {stats.ready}
-          </div>
-        </div>
-        <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-security-navy-900 p-4">
-          <div className="text-xs text-amber-700 dark:text-amber-300">Needs Setup / Paused</div>
-          <div className="text-2xl font-bold tabular-nums text-amber-700 dark:text-amber-300 mt-1">
-            {stats.notSetup}
-          </div>
-        </div>
-        <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-4">
-          <div className="text-xs text-security-navy-500 dark:text-security-navy-400">Open Shift Issues</div>
-          <div className="text-2xl font-bold tabular-nums text-[var(--accent-signal-deep)] dark:text-amber-300 mt-1">
-            {stats.openIssues}
-          </div>
-        </div>
-      </div>
-
-      {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex flex-nowrap overflow-x-auto gap-1.5 pb-1">
-          {(
-            [
-              { id: "all", label: `All Sites (${sites.length})` },
-              { id: "needs_attention", label: `Needs Attention (${stats.needsAttention})` },
-              { id: "not_setup", label: `Not Set Up (${stats.notSetup})` },
-              { id: "running", label: `Ready (${stats.ready})` },
-            ] as const
-          ).map((f) => {
-            const active = statusFilter === f.id;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setStatusFilter(f.id)}
-                className={`shrink-0 rounded-full px-3.5 py-2 text-xs font-semibold transition-colors min-h-[38px] ${
-                  active
-                    ? "bg-security-navy-900 text-white dark:bg-white dark:text-security-navy-950"
-                    : "bg-security-navy-100 dark:bg-security-navy-800 text-security-navy-700 dark:text-security-navy-300 hover:bg-security-navy-200"
-                }`}
+    <PageShell width="wide" className="animate-fade-in">
+      <PageHeader
+        title="Rostering"
+        description="Build, adjust, and publish guard schedules for every site using South African Sector 6 rules."
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            {token && (
+              <div className="w-64">
+                <PayPeriodSelect
+                  token={token}
+                  variant="roster"
+                  value={period?.periodKey ?? ""}
+                  onChange={(nextPeriod) => setPeriod(nextPeriod)}
+                />
+              </div>
+            )}
+            {canEdit && period && (
+              <Button
+                variant="primary"
+                loading={autoBuilding}
+                onClick={handleAutoBuildUnrostered}
               >
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
+                Auto-build unrostered sites
+              </Button>
+            )}
+          </div>
+        }
+      />
 
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Find a site…"
-          className="input-modern sm:w-64 text-sm"
+      {error && <AlertBanner variant="error">{error}</AlertBanner>}
+      {autoBuildBanner && <AlertBanner variant="success">{autoBuildBanner}</AlertBanner>}
+
+      <KpiStrip
+        ariaLabel="Rostering overview metrics"
+        items={[
+          { label: "Active sites", value: sites.length },
+          { label: "Schedules running", value: stats.ready, tone: "success" },
+          {
+            label: "Needs setup / paused",
+            value: stats.notSetup,
+            tone: stats.notSetup > 0 ? "warning" : "default",
+          },
+          {
+            label: "Open shift issues",
+            value: stats.openIssues,
+            tone: stats.openIssues > 0 ? "danger" : "default",
+          },
+        ]}
+      />
+
+      <Toolbar className="justify-between">
+        <Tabs
+          ariaLabel="Filter sites by roster status"
+          variant="segmented"
+          value={statusFilter}
+          onChange={(val) => setStatusFilter(val)}
+          items={[
+            { value: "all", label: "All sites", count: sites.length },
+            { value: "needs_attention", label: "Needs attention", count: stats.needsAttention },
+            { value: "not_setup", label: "Not set up", count: stats.notSetup },
+            { value: "running", label: "Ready", count: stats.ready },
+          ]}
         />
-      </div>
 
-      {/* Site Cards */}
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Find a site..."
+          className="w-full sm:w-64"
+        />
+      </Toolbar>
+
       {loading ? (
-        <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-8 text-center text-sm text-security-navy-500">
-          Loading sites…
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <SkeletonBlock key={i} className="h-40 w-full" />
+          ))}
         </div>
       ) : filteredSites.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-security-navy-300 dark:border-security-navy-700 p-8 text-center text-sm text-security-navy-500">
-          No sites match your filter.
-        </div>
+        <EmptyState
+          title="No sites match your filter"
+          description="Try clearing the search query or switching the status filter."
+        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredSites.map((site) => {
-            const statusBadge =
+            const statusProps =
               site.state === "running"
-                ? { text: "Ready", cls: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200" }
+                ? { status: "ready", label: "Ready" }
                 : site.state === "needs_attention"
                   ? {
-                      text: `${site.issueCount} Issue${site.issueCount === 1 ? "" : "s"}`,
-                      cls: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
+                      status: "warning",
+                      label: `${site.issueCount} Issue${site.issueCount === 1 ? "" : "s"}`,
                     }
                   : site.state === "paused"
-                    ? { text: "Paused", cls: "bg-security-navy-200 text-security-navy-800" }
-                    : { text: "Needs Setup", cls: "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200" };
+                    ? { status: "inactive", label: "Paused" }
+                    : { status: "draft", label: "Needs setup" };
 
             const defaultTab = site.state === "not_setup" ? "builder" : site.issueCount > 0 ? "issues" : "schedule";
             const query = period
@@ -258,53 +232,48 @@ export default function RosteringHubPage() {
               : `?tab=${defaultTab}`;
 
             return (
-              <div
-                key={site.siteId}
-                className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-4 flex flex-col justify-between gap-4 shadow-xs"
-              >
+              <Card key={site.siteId} variant="dashboard" className="flex flex-col justify-between gap-4 p-4">
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-2">
-                    <h2 className="text-base font-semibold text-security-navy-900 dark:text-white leading-snug">
+                    <h2 className="font-display text-base font-semibold leading-snug text-security-navy-900">
                       {site.siteName}
                     </h2>
-                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusBadge.cls}`}>
-                      {statusBadge.text}
+                    <StatusBadge status={statusProps.status} label={statusProps.label} />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-security-navy-500">
+                    <span>
+                      {site.guardCount} guard{site.guardCount === 1 ? "" : "s"} assigned
+                    </span>
+                    <span>·</span>
+                    <span>
+                      {site.calendar.name} ({site.calendar.startDay}th–{site.calendar.endDay}th)
                     </span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-security-navy-500 dark:text-security-navy-400">
-                    <span>{site.guardCount} guard{site.guardCount === 1 ? "" : "s"} assigned</span>
-                    <span>·</span>
-                    <span>{site.calendar.name} ({site.calendar.startDay}th–{site.calendar.endDay}th)</span>
-                  </div>
-
                   {site.nextIssue && (
-                    <p className="rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+                    <AlertBanner variant="warning" className="py-2 text-xs">
                       Next alert: {site.nextIssue.title}
-                    </p>
+                    </AlertBanner>
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-security-navy-100 dark:border-security-navy-800">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-security-navy-100 pt-3">
                   {canEdit ? (
-                    <button
-                      type="button"
-                      onClick={() => openQuickSetup(site.siteId)}
-                      className="rounded-lg border border-security-navy-300 dark:border-security-navy-700 px-3 py-2 text-xs font-medium text-security-navy-700 dark:text-security-navy-200 hover:bg-security-navy-50 dark:hover:bg-security-navy-800 min-h-[40px]"
-                    >
-                      Quick Setup
-                    </button>
+                    <Button variant="secondary" size="sm" onClick={() => openQuickSetup(site.siteId)}>
+                      Quick setup
+                    </Button>
                   ) : (
                     <span />
                   )}
                   <Link
                     href={`/rostering/sites/${site.siteId}${query}`}
-                    className="btn-primary text-xs min-h-[40px] inline-flex items-center"
+                    className="btn-primary inline-flex items-center px-3 py-2 text-xs no-underline"
                   >
                     {rosterSiteActionLabel(site)}
                   </Link>
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
@@ -342,6 +311,6 @@ export default function RosteringHubPage() {
           onSaved={loadHub}
         />
       )}
-    </div>
+    </PageShell>
   );
 }

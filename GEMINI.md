@@ -1,7 +1,7 @@
 # GEMINI.md — Master Customization Context
 
 All development in this repository must comply with:
-- [PLETHORA_CONTEXT.md](./PLETHORA_CONTEXT.md)
+- [.agents/rules/PLETHORA_CONTEXT.md](./.agents/rules/PLETHORA_CONTEXT.md)
 - [.agents/rules/plethora_master_rules.md](./.agents/rules/plethora_master_rules.md)
 
 Never bypass:

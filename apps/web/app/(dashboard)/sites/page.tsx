@@ -8,6 +8,7 @@ import { authFetch } from "@/lib/api";
 import { hasCapability } from "@/lib/permissions";
 import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
 import { SiteOperationalActions } from "@/components/site-operational-actions";
+import { AlertBanner, Button, EmptyState, Modal, PageHeader, PageShell, SkeletonBlock } from "@/components/ui";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   guarding: "Guarding",
@@ -152,43 +153,37 @@ export default function SitesPage() {
 
   if (loading) {
     return (
-      <div className="animate-pulse space-y-6">
+      <PageShell>
         <div className="flex justify-between items-center">
-          <div className="h-9 bg-white border-2 border-security-navy-100 rounded-[10px] w-48" />
-          <div className="h-10 bg-white border-2 border-security-navy-100 rounded-[10px] w-32" />
+          <SkeletonBlock className="h-9 w-48" />
+          <SkeletonBlock className="h-10 w-32" />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-64 bg-white border-2 border-security-navy-100 rounded-[10px]" />
+            <SkeletonBlock key={i} className="h-64" />
           ))}
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="page-title">Sites</h1>
-          <p className="text-security-navy-600 mt-1 text-sm">
-            Add the locations you protect, keep contacts up to date, and assign guards to each site.
-          </p>
-        </div>
-        {canCreateSites && (
-          <button
-            onClick={() => setShowCreateForm(!showCreateForm)}
-            className={`${showCreateForm ? "btn-secondary" : "btn-primary"} flex items-center gap-2 shrink-0`}
-          >
-            {!showCreateForm && (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            )}
-            {showCreateForm ? "Cancel" : "Add site"}
-          </button>
-        )}
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Sites"
+        description="Add the locations you protect, keep contacts up to date, and assign guards to each site."
+        actions={
+          canCreateSites ? (
+            <Button
+              type="button"
+              variant={showCreateForm ? "secondary" : "primary"}
+              onClick={() => setShowCreateForm(!showCreateForm)}
+            >
+              {showCreateForm ? "Cancel" : "+ Add site"}
+            </Button>
+          ) : undefined
+        }
+      />
 
       {showCreateForm && canCreateSites && (
         <SiteForm
@@ -217,25 +212,17 @@ export default function SitesPage() {
       </div>
 
       {sites.length === 0 && (
-        <div className="card-wireframe text-center py-16 px-6">
-          <div className="w-16 h-16 mx-auto rounded-lg bg-security-navy-50 dark:bg-security-navy-800 flex items-center justify-center mb-4">
-            <svg className="w-8 h-8 text-security-navy-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          </div>
-          <p className="font-semibold text-security-navy-700 dark:text-security-navy-300">No sites added yet</p>
-          <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mt-1 max-w-sm mx-auto">
-            Add your first site to start assigning guards, building rosters, and tracking attendance.
-          </p>
-          {canCreateSites && (
-            <button
-              onClick={() => setShowCreateForm(true)}
-              className="mt-6 btn-primary"
-            >
-              Add your first site
-            </button>
-          )}
-        </div>
+        <EmptyState
+          title="No sites added yet"
+          description="Add your first site to start assigning guards, building rosters, and tracking attendance."
+          action={
+            canCreateSites ? (
+              <Button type="button" onClick={() => setShowCreateForm(true)}>
+                Add your first site
+              </Button>
+            ) : undefined
+          }
+        />
       )}
 
       {editingSite && canEditSites && (
@@ -261,7 +248,7 @@ export default function SitesPage() {
           }}
         />
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -307,18 +294,18 @@ function SiteCard({
       <div className="flex justify-between items-start gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-lg bg-security-navy-50 dark:bg-security-navy-800 flex items-center justify-center shrink-0">
-              <svg className="w-6 h-6 text-security-navy-600 dark:text-security-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-12 h-12 rounded-lg bg-security-navy-50 flex items-center justify-center shrink-0">
+              <svg className="w-6 h-6 text-security-navy-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
             </div>
             <div>
-              <h3 className="font-semibold text-security-navy-900 dark:text-security-navy-100 truncate">
+              <h3 className="font-semibold text-security-navy-900 truncate">
                 {site.name}
               </h3>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                 {site.serviceType && (
-                  <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-medium bg-security-navy-50 dark:bg-security-navy-900/40 text-security-navy-700 dark:text-security-navy-300">
+                  <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-medium bg-security-navy-50 text-security-navy-700">
                     {SERVICE_TYPE_LABELS[site.serviceType] || site.serviceType}
                   </span>
                 )}
@@ -366,10 +353,10 @@ function SiteCard({
                 <span
                   className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-medium ${
                     hasError
-                      ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                      ? "bg-red-100 text-red-700"
                       : hasWarning
-                        ? "bg-security-amber-100 text-security-amber-800 dark:bg-security-amber-950/40 dark:text-security-amber-300"
-                        : "bg-security-emerald-100 text-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-300"
+                        ? "bg-security-amber-100 text-security-amber-800"
+                        : "bg-security-emerald-100 text-security-emerald-700"
                   }`}
                   title={`Day requires ${dayRequired}, night requires ${nightRequired}`}
                 >
@@ -383,7 +370,7 @@ function SiteCard({
           {expanded && (
             <>
               {address && (
-                <p className="mt-3 text-sm text-security-navy-600 dark:text-security-navy-400 flex items-start gap-2">
+                <p className="mt-3 text-sm text-security-navy-600 flex items-start gap-2">
                   <svg className="w-4 h-4 mt-0.5 shrink-0 text-security-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -393,7 +380,7 @@ function SiteCard({
               )}
 
               {(site.contactPersonName || site.contactPersonPhone) && (
-                <p className="mt-2 text-sm text-security-navy-600 dark:text-security-navy-400 flex items-center gap-2">
+                <p className="mt-2 text-sm text-security-navy-600 flex items-center gap-2">
                   <svg className="w-4 h-4 shrink-0 text-security-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
@@ -401,7 +388,7 @@ function SiteCard({
                     {site.contactPersonName}
                     {site.contactPersonName && site.contactPersonPhone && " • "}
                     {site.contactPersonPhone && (
-                      <a href={`tel:${site.contactPersonPhone}`} onClick={(e) => e.stopPropagation()} className="text-security-navy-600 dark:text-security-navy-400 hover:underline">
+                      <a href={`tel:${site.contactPersonPhone}`} onClick={(e) => e.stopPropagation()} className="text-security-navy-600 hover:underline">
                         {site.contactPersonPhone}
                       </a>
                     )}
@@ -410,7 +397,7 @@ function SiteCard({
               )}
 
               {site.contractOrServiceAgreement && (
-                <p className="mt-2 text-sm text-security-navy-500 dark:text-security-navy-500 truncate" title={site.contractOrServiceAgreement}>
+                <p className="mt-2 text-sm text-security-navy-500 truncate" title={site.contractOrServiceAgreement}>
                   Contract: {site.contractOrServiceAgreement}
                 </p>
               )}
@@ -426,7 +413,7 @@ function SiteCard({
             {canEditSites && <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              className="p-2 rounded-lg text-security-navy-500 hover:text-security-navy-700 hover:bg-security-navy-50 dark:hover:bg-security-navy-900/20 transition-colors"
+              className="p-2 rounded-lg text-security-navy-500 hover:text-security-navy-700 hover:bg-security-navy-50 transition-colors"
               title="Edit site"
               aria-label={`Edit ${site.name}`}
             >
@@ -437,7 +424,7 @@ function SiteCard({
             {canDeleteSites && <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="p-2 rounded-lg text-security-navy-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-security-navy-900/20 transition-colors"
+              className="p-2 rounded-lg text-security-navy-500 hover:text-red-600 hover:bg-red-50 transition-colors"
               title="Delete site"
               aria-label={`Delete ${site.name}`}
             >
@@ -449,7 +436,7 @@ function SiteCard({
         )}
       </div>
       {expanded && (
-        <div className="mt-4 pt-4 border-t border-security-navy-100 dark:border-security-navy-700 space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-4 pt-4 border-t border-security-navy-100 space-y-3" onClick={(e) => e.stopPropagation()}>
           {hints.filter((h) => h.level !== "ok").length > 0 && (
             <ul className="space-y-1">
               {hints
@@ -457,7 +444,7 @@ function SiteCard({
                 .map((h) => (
                   <li
                     key={h.code + h.message}
-                    className={`text-xs ${h.level === "error" ? "text-red-600 dark:text-red-400" : "text-security-amber-700 dark:text-security-amber-400"}`}
+                    className={`text-xs ${h.level === "error" ? "text-red-600" : "text-security-amber-700"}`}
                   >
                     {h.level === "error" ? "✕ " : "! "}
                     {h.message}
@@ -467,12 +454,12 @@ function SiteCard({
           )}
 
           {coverageReady ? (
-            <div className="space-y-3 rounded-lg border border-security-emerald-200 bg-security-emerald-50 px-3 py-3 text-sm text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/30 dark:text-security-emerald-300">
+            <div className="space-y-3 rounded-lg border border-security-emerald-200 bg-security-emerald-50 px-3 py-3 text-sm text-security-emerald-700">
               <p>Guards assigned. Next: build the roster, then record attendance when shifts are done.</p>
               <SiteOperationalActions siteId={site.id} layout="stack" />
             </div>
           ) : (
-            <p className="text-xs text-security-navy-500 dark:text-security-navy-400">
+            <p className="text-xs text-security-navy-500">
               Assign enough active guards to this site before building a roster.
             </p>
           )}
@@ -480,7 +467,7 @@ function SiteCard({
           <button
             type="button"
             onClick={() => router.push(`/sites/${site.id}`)}
-            className="text-sm font-medium text-security-navy-600 dark:text-security-navy-400 hover:text-security-navy-700 dark:hover:text-security-navy-300 underline"
+            className="text-sm font-medium text-security-navy-600 hover:text-security-navy-700 underline"
           >
             Open full site details
           </button>
@@ -573,11 +560,11 @@ function SiteMoreDetailsFields({
   supervisorUsers: { id: string; displayName: string }[];
 }) {
   return (
-    <div className="md:col-span-2 border-t border-security-navy-100 dark:border-security-navy-700 pt-4 mt-2 space-y-4">
-      <h4 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-200">More details</h4>
+    <div className="md:col-span-2 border-t border-security-navy-100 pt-4 mt-2 space-y-4">
+      <h4 className="text-sm font-semibold text-security-navy-900">More details</h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Client</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Client</label>
           <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="input-modern">
             <option value="">No client linked</option>
             {clients.map((c) => (
@@ -586,11 +573,11 @@ function SiteMoreDetailsFields({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Client contact email</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Client contact email</label>
           <input type="email" value={clientContactEmail} onChange={(e) => setClientContactEmail(e.target.value)} className="input-modern" placeholder="client@example.com" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Site supervisor</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Site supervisor</label>
           <select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} className="input-modern">
             <option value="">No supervisor assigned</option>
             {supervisorUsers.map((u) => (
@@ -599,15 +586,15 @@ function SiteMoreDetailsFields({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Contract start</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Contract start</label>
           <input type="date" value={contractStartDate} onChange={(e) => setContractStartDate(e.target.value)} className="input-modern" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Contract end</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Contract end</label>
           <input type="date" value={contractEndDate} onChange={(e) => setContractEndDate(e.target.value)} className="input-modern" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Risk level</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Risk level</label>
           <select value={riskLevel} onChange={(e) => setRiskLevel(e.target.value)} className="input-modern">
             <option value="">Not set</option>
             <option value="LOW">Low</option>
@@ -617,7 +604,7 @@ function SiteMoreDetailsFields({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Site status</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Site status</label>
           <select value={siteStatus} onChange={(e) => setSiteStatus(e.target.value)} className="input-modern">
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
@@ -626,7 +613,7 @@ function SiteMoreDetailsFields({
           </select>
         </div>
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Site instructions</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Site instructions</label>
           <textarea value={siteInstructions} onChange={(e) => setSiteInstructions(e.target.value)} className="input-modern w-full" rows={3} placeholder="Special instructions for guards at this site" />
         </div>
       </div>
@@ -738,7 +725,7 @@ function SiteForm({
       className="card-wireframe p-6 shadow-lg"
     >
       <div className="mb-6">
-        <h3 className="text-lg font-semibold text-security-navy-900 dark:text-security-navy-100 flex items-center gap-2">
+        <h3 className="text-lg font-semibold text-security-navy-900 flex items-center gap-2">
           <svg className="w-5 h-5 text-security-navy-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
@@ -757,7 +744,7 @@ function SiteForm({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Site name *</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Site name *</label>
           <input
             placeholder="e.g. Head Office Building"
             value={name}
@@ -767,7 +754,7 @@ function SiteForm({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Type of service</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Type of service</label>
           <select
             value={serviceType}
             onChange={(e) => setServiceType(e.target.value)}
@@ -781,7 +768,7 @@ function SiteForm({
         </div>
 
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Physical address</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Physical address</label>
           <input
             placeholder="Full street address, suburb, city"
             value={physicalAddress}
@@ -791,7 +778,7 @@ function SiteForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Short location (optional)</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Short location (optional)</label>
           <input
             placeholder="e.g. Sandton"
             value={location}
@@ -801,7 +788,7 @@ function SiteForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Contact person</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Contact person</label>
           <input
             placeholder="Name"
             value={contactPersonName}
@@ -811,7 +798,7 @@ function SiteForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Contact phone</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Contact phone</label>
           <input
             placeholder="e.g. 082 123 4567"
             value={contactPersonPhone}
@@ -821,7 +808,7 @@ function SiteForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">
             Sage Cost Center Code (optional)
           </label>
           <input
@@ -833,7 +820,7 @@ function SiteForm({
         </div>
 
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Contract / service agreement</label>
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Contract / service agreement</label>
           <select
             value={contractAgreementType}
             onChange={(e) => setContractAgreementType(e.target.value)}
@@ -886,14 +873,14 @@ function SiteForm({
           />
         )}
 
-        <div className="md:col-span-2 border-t border-security-navy-100 dark:border-security-navy-700 pt-4 mt-2">
-          <h4 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-200 mb-2">Clock-in geofence (optional)</h4>
-          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mb-3">
+        <div className="md:col-span-2 border-t border-security-navy-100 pt-4 mt-2">
+          <h4 className="text-sm font-semibold text-security-navy-900 mb-2">Clock-in geofence (optional)</h4>
+          <p className="text-xs text-security-navy-500 mb-3">
             Set a center point (WGS84) and radius in meters. When all three are filled, guards on WhatsApp must share their location to complete clock-in/out for shifts at this site. Dashboard clock-in is unchanged.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">Latitude</label>
+              <label className="block text-xs font-medium text-security-navy-600 mb-1">Latitude</label>
               <input
                 placeholder="-26.1076"
                 value={latitude}
@@ -903,7 +890,7 @@ function SiteForm({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">Longitude</label>
+              <label className="block text-xs font-medium text-security-navy-600 mb-1">Longitude</label>
               <input
                 placeholder="28.0567"
                 value={longitude}
@@ -913,7 +900,7 @@ function SiteForm({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">Radius (m)</label>
+              <label className="block text-xs font-medium text-security-navy-600 mb-1">Radius (m)</label>
               <input
                 placeholder="e.g. 150"
                 value={geofenceRadiusMeters}
@@ -926,10 +913,10 @@ function SiteForm({
         </div>
 
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">
+          <label className="block text-sm font-medium text-security-navy-600 mb-1.5">
             Assigned guards
           </label>
-          <div className="border border-security-navy-100 dark:border-security-navy-700 rounded-lg p-4 bg-security-navy-50/50 dark:bg-security-navy-800/30 max-h-40 overflow-y-auto">
+          <div className="border border-security-navy-100 rounded-lg p-4 bg-security-navy-50/50 max-h-40 overflow-y-auto">
             {guards.length === 0 ? (
               <p className="text-sm text-security-navy-500">
                 No guards to assign yet. Add guards on the Team page first — you can also assign them later.
@@ -937,14 +924,14 @@ function SiteForm({
             ) : (
               <div className="space-y-2">
                 {guards.map((g) => (
-                  <label key={g.id} className="flex items-center gap-3 cursor-pointer hover:bg-security-navy-50 dark:hover:bg-security-navy-800/50 rounded-lg p-2 -mx-2">
+                  <label key={g.id} className="flex items-center gap-3 cursor-pointer hover:bg-security-navy-50 rounded-lg p-2 -mx-2">
                     <input
                       type="checkbox"
                       checked={assignedGuardIds.includes(g.id)}
                       onChange={() => toggleGuard(g.id)}
-                      className="w-4 h-4 rounded border-security-navy-100 dark:border-security-navy-600 text-security-navy-600 focus:ring-security-navy-400"
+                      className="w-4 h-4 rounded border-security-navy-100 text-security-navy-600 focus:ring-security-navy-400"
                     />
-                    <span className="text-sm font-medium text-security-navy-700 dark:text-security-navy-300">
+                    <span className="text-sm font-medium text-security-navy-700">
                       {g.firstName} {g.lastName}
                     </span>
                     <span className="text-xs text-security-navy-500">{g.status}</span>
@@ -1097,27 +1084,24 @@ function EditSiteModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="card-wireframe w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
-        <div className="p-6 border-b border-security-navy-100 dark:border-security-navy-700 shrink-0">
-          <h3 className="text-lg font-semibold text-security-navy-900 dark:text-security-navy-100">Edit site</h3>
-          <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mt-1">{site.name}</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-6">
-          {error && (
-            <div className="p-4 text-sm text-red-800 bg-red-50 border border-red-200 rounded-security" role="alert">
-              {error}
-            </div>
-          )}
+    <Modal
+      open={true}
+      onClose={() => { if (!submitting) onClose(); }}
+      title="Edit site"
+      description={site.name}
+      size="lg"
+      closeOnBackdrop={!submitting}
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Site name *</label>
+              <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Site name *</label>
               <input value={name} onChange={(e) => setName(e.target.value)} required className="input-modern" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Type of service</label>
+              <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Type of service</label>
               <select value={serviceType} onChange={(e) => setServiceType(e.target.value)} className="input-modern">
                 <option value="">Select service type</option>
                 {Object.entries(SERVICE_TYPE_LABELS).map(([value, label]) => (
@@ -1126,23 +1110,23 @@ function EditSiteModal({
               </select>
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Physical address</label>
+              <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Physical address</label>
               <input value={physicalAddress} onChange={(e) => setPhysicalAddress(e.target.value)} className="input-modern" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Short location</label>
+              <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Short location</label>
               <input value={location} onChange={(e) => setLocation(e.target.value)} className="input-modern" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Contact person</label>
+              <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Contact person</label>
               <input value={contactPersonName} onChange={(e) => setContactPersonName(e.target.value)} className="input-modern" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Contact phone</label>
+              <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Contact phone</label>
               <input value={contactPersonPhone} onChange={(e) => setContactPersonPhone(e.target.value)} className="input-modern" />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Contract / service agreement</label>
+              <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Contract / service agreement</label>
               <select value={contractAgreementType} onChange={(e) => setContractAgreementType(e.target.value)} className="input-modern">
                 {CONTRACT_AGREEMENT_OPTIONS.map((opt) => (
                   <option key={opt.value || "empty"} value={opt.value}>{opt.label}</option>
@@ -1159,7 +1143,7 @@ function EditSiteModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">
+              <label className="block text-sm font-medium text-security-navy-600 mb-1.5">
                 Sage Cost Center Code
               </label>
               <input
@@ -1203,12 +1187,12 @@ function EditSiteModal({
               />
             )}
 
-            <div className="md:col-span-2 border-t border-security-navy-100 dark:border-security-navy-700 pt-4">
-              <h4 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-200 mb-2">Clock-in geofence</h4>
-              <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mb-3">
+            <div className="md:col-span-2 border-t border-security-navy-100 pt-4">
+              <h4 className="text-sm font-semibold text-security-navy-900 mb-2">Clock-in geofence</h4>
+              <p className="text-xs text-security-navy-500 mb-3">
                 All three values required to enforce location on WhatsApp. Supervisors can still clock guards in here without GPS.
               </p>
-              <label className="flex items-center gap-2 text-sm text-security-navy-600 dark:text-security-navy-400 mb-3 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-security-navy-600 mb-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={clearGeofence}
@@ -1227,7 +1211,7 @@ function EditSiteModal({
               {!clearGeofence && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">Latitude</label>
+                    <label className="block text-xs font-medium text-security-navy-600 mb-1">Latitude</label>
                     <input
                       value={latitude}
                       onChange={(e) => setLatitude(e.target.value)}
@@ -1237,7 +1221,7 @@ function EditSiteModal({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">Longitude</label>
+                    <label className="block text-xs font-medium text-security-navy-600 mb-1">Longitude</label>
                     <input
                       value={longitude}
                       onChange={(e) => setLongitude(e.target.value)}
@@ -1247,7 +1231,7 @@ function EditSiteModal({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">Radius (m)</label>
+                    <label className="block text-xs font-medium text-security-navy-600 mb-1">Radius (m)</label>
                     <input
                       value={geofenceRadiusMeters}
                       onChange={(e) => setGeofenceRadiusMeters(e.target.value)}
@@ -1261,8 +1245,8 @@ function EditSiteModal({
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Assigned guards</label>
-              <div className="border border-security-navy-100 dark:border-security-navy-700 rounded-lg p-4 bg-security-navy-50/50 dark:bg-security-navy-800/30 max-h-40 overflow-y-auto">
+              <label className="block text-sm font-medium text-security-navy-600 mb-1.5">Assigned guards</label>
+              <div className="border border-security-navy-100 rounded-lg p-4 bg-security-navy-50/50 max-h-40 overflow-y-auto">
                 {guards.length === 0 ? (
                   <p className="text-sm text-security-navy-500">
                     No guards to assign yet. Add guards on the Team page first.
@@ -1270,14 +1254,14 @@ function EditSiteModal({
                 ) : (
                   <div className="space-y-2">
                     {guards.map((g) => (
-                      <label key={g.id} className="flex items-center gap-3 cursor-pointer hover:bg-security-navy-50 dark:hover:bg-security-navy-800/50 rounded-lg p-2 -mx-2">
+                      <label key={g.id} className="flex items-center gap-3 cursor-pointer hover:bg-security-navy-50 rounded-lg p-2 -mx-2">
                         <input
                           type="checkbox"
                           checked={assignedGuardIds.includes(g.id)}
                           onChange={() => toggleGuard(g.id)}
-                          className="w-4 h-4 rounded border-security-navy-100 dark:border-security-navy-600 text-security-navy-600 focus:ring-security-navy-400"
+                          className="w-4 h-4 rounded border-security-navy-100 text-security-navy-600 focus:ring-security-navy-400"
                         />
-                        <span className="text-sm font-medium text-security-navy-700 dark:text-security-navy-300">
+                        <span className="text-sm font-medium text-security-navy-700">
                           {g.firstName} {g.lastName}
                         </span>
                         <span className="text-xs text-security-navy-500">{g.status}</span>
@@ -1290,16 +1274,15 @@ function EditSiteModal({
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 btn-secondary">
+            <Button variant="secondary" onClick={onClose} disabled={submitting} className="flex-1">
               Cancel
-            </button>
-            <button type="submit" disabled={submitting} className="flex-1 btn-primary">
-              {submitting ? "Saving..." : "Save changes"}
-            </button>
+            </Button>
+            <Button type="submit" variant="primary" loading={submitting} className="flex-1">
+              Save changes
+            </Button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -1335,43 +1318,28 @@ function DeleteConfirmModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="card-wireframe w-full max-w-md shadow-xl">
-        <div className="p-6">
-          <div className="w-12 h-12 rounded-lg bg-red-50 flex items-center justify-center mb-4">
-            <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-security-navy-900 dark:text-security-navy-100">Delete site?</h3>
-          <p className="mt-2 text-sm text-security-navy-600 dark:text-security-navy-400">
-            You are about to delete <strong>{site.name}</strong>. All its posts and guard assignments will be removed. This cannot be undone.
-          </p>
-          {error && (
-            <div className="mt-4 p-3 text-sm text-red-800 bg-red-50 border border-red-200 rounded-security" role="alert">
-              {error}
-            </div>
-          )}
-          <div className="mt-6 flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 btn-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="flex-1 btn-destructive"
-            >
-              {deleting ? "Deleting..." : "Delete site"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <Modal
+      open={true}
+      onClose={() => { if (!deleting) onClose(); }}
+      title="Delete site?"
+      size="sm"
+      closeOnBackdrop={!deleting}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={deleting} className="flex-1">
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={handleDelete} loading={deleting} className="flex-1">
+            Delete site
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-security-navy-600">
+        You are about to delete <strong>{site.name}</strong>. All its posts and guard assignments will be removed. This cannot be undone.
+      </p>
+      {error && <AlertBanner variant="error" className="mt-4">{error}</AlertBanner>}
+    </Modal>
   );
 }
 
@@ -1415,7 +1383,7 @@ function PostRow({
 
   return (
     <li
-      className="text-sm text-security-navy-700 dark:text-security-navy-300 flex items-center gap-2 group/post"
+      className="text-sm text-security-navy-700 flex items-center gap-2 group/post"
       onClick={(e) => editing && e.stopPropagation()}
     >
       <span className="w-1.5 h-1.5 rounded-full bg-security-navy-300 shrink-0" />
@@ -1440,7 +1408,7 @@ function PostRow({
             type="button"
             onClick={() => { setEditing(false); setName(post.name); }}
             disabled={saving}
-            className="px-2 py-1 text-xs font-medium border border-security-navy-200 dark:border-security-navy-600 rounded hover:bg-security-navy-50 dark:hover:bg-security-navy-800"
+            className="px-2 py-1 text-xs font-medium border border-security-navy-200 rounded hover:bg-security-navy-50"
           >
             Cancel
           </button>
@@ -1454,7 +1422,7 @@ function PostRow({
             </span>
           )}
           {post.assignedGuards?.length ? (
-            <span className="text-xs text-security-navy-600 dark:text-security-navy-400 shrink-0">
+            <span className="text-xs text-security-navy-600 shrink-0">
               {post.assignedGuards.length} guard{post.assignedGuards.length !== 1 ? "s" : ""}
             </span>
           ) : null}
@@ -1462,7 +1430,7 @@ function PostRow({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-              className="p-1 rounded text-security-navy-500 hover:text-security-navy-600 hover:bg-security-navy-50 dark:hover:bg-security-navy-800 opacity-0 group-hover/post:opacity-100 transition-opacity shrink-0"
+              className="p-1 rounded text-security-navy-500 hover:text-security-navy-600 hover:bg-security-navy-50 opacity-0 group-hover/post:opacity-100 transition-opacity shrink-0"
               title="Edit post name"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1526,7 +1494,7 @@ function PostForm({
           <button
             type="button"
             onClick={() => setShow(false)}
-            className="px-4 py-2 text-sm font-medium border border-security-navy-100 dark:border-security-navy-600 rounded-sm hover:bg-security-navy-50 dark:hover:bg-security-navy-800 transition-colors"
+            className="px-4 py-2 text-sm font-medium border border-security-navy-100 rounded-sm hover:bg-security-navy-50 transition-colors"
           >
             Cancel
           </button>
@@ -1534,7 +1502,7 @@ function PostForm({
       ) : (
         <button
           onClick={() => setShow(true)}
-          className="mt-2 text-sm font-medium text-security-navy-600 dark:text-security-navy-400 hover:text-security-navy-700 dark:hover:text-security-navy-300 flex items-center gap-1.5"
+          className="mt-2 text-sm font-medium text-security-navy-600 hover:text-security-navy-700 flex items-center gap-1.5"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

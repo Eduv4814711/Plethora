@@ -9,6 +9,7 @@ import { fetchEmployeePickerOptions, type GuardPickerOption } from "@/lib/roster
 import { DateInput } from "@/components/date-input";
 import { GuardSearchPicker } from "@/components/guard-search-picker";
 import { hasCapability } from "@/lib/permissions";
+import { AlertBanner, Button, Modal, PageHeader, PageShell, StatusBadge } from "@/components/ui";
 
 type Tab = "queue" | "approved" | "records" | "balances" | "calendar" | "adjustments" | "audit" | "add";
 type IconName = "inbox" | "records" | "balance" | "calendar" | "adjust" | "audit" | "plus" | "arrow" | "warning" | "check" | "file" | "search" | "close";
@@ -486,26 +487,26 @@ export default function LeaveManagementPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1500px] animate-fade-in pb-12">
-      <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-start gap-3">
-          <Link href="/employees" className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-security-lg border border-security-navy-100 bg-white text-security-navy-600 shadow-security-card transition hover:border-security-navy-200 hover:text-security-navy-900" aria-label="Back to team">
-            <Icon name="arrow" />
-          </Link>
-          <div>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-security-amber-600">Team workspace</p>
-            <h1 className="text-3xl font-bold tracking-tight text-security-navy-900">Leave management</h1>
-            <p className="mt-1 max-w-2xl text-sm text-security-navy-600">Annual, sick, family responsibility, parental, and study leave for general staff and NBCPSS security officers.</p>
-          </div>
-        </div>
-        {canCreate && (
-          <button onClick={() => setTab("add")} className="btn-primary inline-flex items-center justify-center gap-2 shadow-security-card">
-            <Icon name="plus" className="h-4 w-4" /> New leave request
-          </button>
-        )}
-      </header>
+    <PageShell width="wide" className="animate-fade-in pb-12">
+      <div className="space-y-3">
+        <Link href="/employees" className="inline-flex items-center text-xs font-medium text-security-navy-600 hover:text-security-navy-900">
+          ← Back to team
+        </Link>
+        <PageHeader
+          title="Leave management"
+          description="Annual, sick, family responsibility, parental, and study leave for general staff and NBCPSS security officers."
+          actions={
+            canCreate ? (
+              <Button variant="primary" onClick={() => setTab("add")}>
+                <Icon name="plus" className="h-4 w-4" />
+                New leave request
+              </Button>
+            ) : undefined
+          }
+        />
+      </div>
 
-      <nav className="mb-6 overflow-x-auto rounded-security-lg border border-security-navy-100 bg-white p-1.5 shadow-security-card" aria-label="Leave sections">
+      <nav className="overflow-x-auto rounded-security-lg border border-security-navy-100 bg-white p-1.5 shadow-security-card" aria-label="Leave sections">
         <div className="flex min-w-max gap-1">
           {tabs.map((item) => (
             <button
@@ -524,11 +525,12 @@ export default function LeaveManagementPage() {
       </nav>
 
       {error && (
-        <div role="alert" className="mb-5 flex items-start gap-3 rounded-security-lg border border-red-200 bg-red-50 p-4 text-red-800">
-          <span className="mt-0.5 rounded-full bg-red-100 p-1"><Icon name="warning" className="h-4 w-4" /></span>
-          <div className="min-w-0 flex-1"><p className="text-sm font-semibold">We could not complete that action</p><p className="mt-0.5 break-words text-sm text-red-700">{error}</p></div>
-          <button onClick={() => setError(null)} aria-label="Dismiss error" className="rounded p-1 hover:bg-red-100"><Icon name="close" className="h-4 w-4" /></button>
-        </div>
+        <AlertBanner variant="error" title="We could not complete that action">
+          <div className="flex items-start justify-between gap-2">
+            <p className="break-words text-sm">{error}</p>
+            <button onClick={() => setError(null)} aria-label="Dismiss error" className="rounded p-1 hover:bg-red-100"><Icon name="close" className="h-4 w-4" /></button>
+          </div>
+        </AlertBanner>
       )}
 
       {tab === "queue" && (
@@ -776,7 +778,7 @@ export default function LeaveManagementPage() {
           onSubmit={uploadCertificate}
         />
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -952,18 +954,24 @@ function ActionDialog({ kind, leaveRequest, reason, onReasonChange, busy, onClos
 }) {
   const requiresReason = kind === "cancel";
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
-        <div className="border-b border-security-navy-100 px-5 py-4"><h3 className="font-bold text-security-navy-900">{kind === "reject" ? "Reject leave request" : "Cancel leave"}</h3><p className="mt-1 text-sm text-security-navy-500">{employeeName(leaveRequest.employee)} · {leaveTypeLabel(leaveRequest.leaveType)} · {period(leaveRequest.startDate, leaveRequest.endDate)}</p></div>
-        <div className="p-5">
-          <Field label="Reason" required={requiresReason}><textarea value={reason} onChange={(event) => onReasonChange(event.target.value)} className="input-modern mt-1 min-h-24" /></Field>
-        </div>
-        <div className="flex justify-end gap-3 border-t border-security-navy-100 bg-security-navy-50 p-4">
-          <button type="button" onClick={onClose} className="btn-ghost">Close</button>
-          <button type="button" disabled={busy || (requiresReason && !reason.trim())} onClick={onSubmit} className="btn-primary">{busy ? "Working..." : "Confirm"}</button>
-        </div>
-      </div>
-    </div>
+    <Modal
+      open={true}
+      onClose={() => { if (!busy) onClose(); }}
+      title={kind === "reject" ? "Reject leave request" : "Cancel leave"}
+      description={`${employeeName(leaveRequest.employee)} · ${leaveTypeLabel(leaveRequest.leaveType)} · ${period(leaveRequest.startDate, leaveRequest.endDate)}`}
+      size="sm"
+      closeOnBackdrop={!busy}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>Close</Button>
+          <Button variant="primary" loading={busy} disabled={requiresReason && !reason.trim()} onClick={onSubmit}>Confirm</Button>
+        </>
+      }
+    >
+      <Field label="Reason" required={requiresReason}>
+        <textarea value={reason} onChange={(event) => onReasonChange(event.target.value)} className="input-modern mt-1 min-h-24" />
+      </Field>
+    </Modal>
   );
 }
 
@@ -978,31 +986,35 @@ function CertificateDialog({ leaveRequest, form, file, onFormChange, onFileChang
   onSubmit: (event: React.FormEvent) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
-      <form onSubmit={onSubmit} className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-        <div className="border-b border-security-navy-100 px-5 py-4"><h3 className="font-bold text-security-navy-900">Attach medical certificate</h3><p className="mt-1 text-sm text-security-navy-500">{employeeName(leaveRequest.employee)} · {period(leaveRequest.startDate, leaveRequest.endDate)}</p></div>
-        <div className="space-y-4 p-5">
-          <Field label="Practitioner name" required><input required value={form.practitionerName} onChange={(event) => onFormChange((old) => ({ ...old, practitionerName: event.target.value }))} className="input-modern mt-1" /></Field>
-          <Field label="Practitioner registration number" required><input required value={form.practitionerRegistrationNumber} onChange={(event) => onFormChange((old) => ({ ...old, practitionerRegistrationNumber: event.target.value }))} className="input-modern mt-1" /></Field>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Consultation date" required><DateInput value={form.consultationDate} onChange={(consultationDate) => onFormChange((old) => ({ ...old, consultationDate }))} className="input-modern mt-1" /></Field>
-            <Field label="Booked off from" required><DateInput value={form.bookedOffStartDate} onChange={(bookedOffStartDate) => onFormChange((old) => ({ ...old, bookedOffStartDate }))} className="input-modern mt-1" /></Field>
-            <Field label="Booked off to" required><DateInput value={form.bookedOffEndDate} onChange={(bookedOffEndDate) => onFormChange((old) => ({ ...old, bookedOffEndDate }))} className="input-modern mt-1" /></Field>
-          </div>
-          <Field label="Certificate file" required hint="PDF, JPG, PNG or WebP">
-            <label className="mt-1 flex cursor-pointer items-center gap-3 rounded-security-lg border-2 border-dashed border-security-navy-200 bg-security-navy-50 p-4 transition hover:border-security-amber-400 hover:bg-security-amber-50/40">
-              <span className="rounded-lg bg-white p-2 text-security-navy-600 shadow-security-card"><Icon name="file" /></span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{file?.name ?? "Choose a file"}</span></span>
-              <input required type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => onFileChange(event.target.files?.[0] ?? null)} className="sr-only" />
-            </label>
-          </Field>
+    <Modal
+      open={true}
+      onClose={() => { if (!busy) onClose(); }}
+      title="Attach medical certificate"
+      description={`${employeeName(leaveRequest.employee)} · ${period(leaveRequest.startDate, leaveRequest.endDate)}`}
+      size="md"
+      closeOnBackdrop={!busy}
+    >
+      <form onSubmit={onSubmit} className="space-y-4">
+        <Field label="Practitioner name" required><input required value={form.practitionerName} onChange={(event) => onFormChange((old) => ({ ...old, practitionerName: event.target.value }))} className="input-modern mt-1" /></Field>
+        <Field label="Practitioner registration number" required><input required value={form.practitionerRegistrationNumber} onChange={(event) => onFormChange((old) => ({ ...old, practitionerRegistrationNumber: event.target.value }))} className="input-modern mt-1" /></Field>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Consultation date" required><DateInput value={form.consultationDate} onChange={(consultationDate) => onFormChange((old) => ({ ...old, consultationDate }))} className="input-modern mt-1" /></Field>
+          <Field label="Booked off from" required><DateInput value={form.bookedOffStartDate} onChange={(bookedOffStartDate) => onFormChange((old) => ({ ...old, bookedOffStartDate }))} className="input-modern mt-1" /></Field>
+          <Field label="Booked off to" required><DateInput value={form.bookedOffEndDate} onChange={(bookedOffEndDate) => onFormChange((old) => ({ ...old, bookedOffEndDate }))} className="input-modern mt-1" /></Field>
         </div>
-        <div className="flex justify-end gap-3 border-t border-security-navy-100 bg-security-navy-50 p-4">
-          <button type="button" onClick={onClose} className="btn-ghost">Close</button>
-          <button type="submit" disabled={busy || !file} className="btn-primary">{busy ? "Uploading..." : "Attach certificate"}</button>
+        <Field label="Certificate file" required hint="PDF, JPG, PNG or WebP">
+          <label className="mt-1 flex cursor-pointer items-center gap-3 rounded-security-lg border-2 border-dashed border-security-navy-200 bg-security-navy-50 p-4 transition hover:border-security-amber-400 hover:bg-security-amber-50/40">
+            <span className="rounded-lg bg-white p-2 text-security-navy-600 shadow-security-card"><Icon name="file" /></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{file?.name ?? "Choose a file"}</span></span>
+            <input required type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => onFileChange(event.target.files?.[0] ?? null)} className="sr-only" />
+          </label>
+        </Field>
+        <div className="flex justify-end gap-3 border-t border-security-navy-100 pt-4">
+          <Button variant="ghost" onClick={onClose} disabled={busy}>Close</Button>
+          <Button type="submit" variant="primary" loading={busy} disabled={!file}>Attach certificate</Button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }
 

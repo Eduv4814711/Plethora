@@ -78,7 +78,7 @@ export function SiteTimesheetTable({
         role="region"
         tabIndex={0}
         aria-label="Site attendance entries table"
-        className="overflow-x-auto rounded-lg border border-security-navy-100 dark:border-security-navy-700"
+        className="overflow-x-auto rounded-lg border border-security-navy-100"
       >
         <table className="site-timesheet-table w-full table-fixed text-left text-xs">
           <colgroup>
@@ -93,7 +93,7 @@ export function SiteTimesheetTable({
             <col className="w-[8%]" />
             <col className="w-[7%]" />
           </colgroup>
-          <thead className="bg-security-navy-50 text-security-navy-600 dark:bg-security-navy-900 dark:text-security-navy-300">
+          <thead className="bg-security-navy-50 text-security-navy-600">
             <tr>
               {COLUMNS.map((column) => (
                 <th key={column} className="px-2 py-1.5 font-semibold">
@@ -102,18 +102,18 @@ export function SiteTimesheetTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
+          <tbody className="divide-y divide-security-navy-100">
             {rows.map((row) => {
               const focused = row.id === focusedRowId;
               const rowSurfaceClass = focused
-                ? "bg-security-amber-50 dark:bg-security-amber-950/30"
+                ? "bg-security-amber-50"
                 : isRowFullyReviewed(row.approvalStatus)
-                ? "bg-security-emerald-50/40 dark:bg-security-emerald-700/15"
+                ? "bg-security-emerald-50/40"
                 : row.approvalStatus === "partially_reviewed"
-                  ? "bg-security-amber-50/50 dark:bg-security-amber-950/20"
+                  ? "bg-security-amber-50/50"
                   : row.discrepancyCodes.length
-                    ? "bg-security-amber-50/60 dark:bg-security-amber-950/20"
-                    : "bg-white dark:bg-security-navy-900";
+                    ? "bg-security-amber-50/60"
+                    : "bg-white";
               const cellClass = `px-2 py-1.5 align-top ${rowSurfaceClass}`;
               const guardChanged =
                 !!row.actualGuardId && !!row.plannedGuardId && row.actualGuardId !== row.plannedGuardId;
@@ -214,7 +214,7 @@ export function SiteTimesheetTable({
                   </td>
                   <td className={cellClass}>
                     <span
-                      className="font-medium text-security-navy-900 dark:text-security-navy-200"
+                      className="font-medium text-security-navy-900"
                       title="Set automatically when you confirm this attendance entry"
                     >
                       {formatAttendanceStatus(row.attendanceStatus)}
@@ -249,7 +249,7 @@ export function SiteTimesheetTable({
                   <td className={cellClass}>
                     {readOnly || row.approvalStatus === "approved" || dutyOnLocked ? (
                       <span
-                        className="font-medium text-security-navy-900 dark:text-security-navy-200"
+                        className="font-medium text-security-navy-900"
                         title={
                           dutyOnLocked
                             ? "Duty ON OB is locked. Attendance approval access is required to change it."
@@ -276,7 +276,7 @@ export function SiteTimesheetTable({
                   <td className={cellClass}>
                     {readOnly || row.approvalStatus === "approved" || dutyOffLocked ? (
                       <span
-                        className="font-medium text-security-navy-900 dark:text-security-navy-200"
+                        className="font-medium text-security-navy-900"
                         title={
                           dutyOffLocked
                             ? "Duty OFF OB is locked. Attendance approval access is required to change it."
@@ -302,7 +302,7 @@ export function SiteTimesheetTable({
                   </td>
                   <td className={cellClass}>
                     {row.approvalStatus === "approved" || locked ? (
-                      <span className="inline-flex items-center rounded-full border border-security-emerald-200 bg-security-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-300">
+                      <span className="inline-flex items-center rounded-full border border-security-emerald-200 bg-security-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-security-emerald-700">
                         Approved
                       </span>
                     ) : !canEdit ? (
@@ -311,14 +311,14 @@ export function SiteTimesheetTable({
                       </span>
                     ) : row.approvalStatus === "reviewed" ? (
                       <div className="flex flex-col gap-0.5">
-                        <span className="inline-flex w-fit items-center rounded-full border border-security-emerald-200 bg-security-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-300">
+                        <span className="inline-flex w-fit items-center rounded-full border border-security-emerald-200 bg-security-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-security-emerald-700">
                           Confirmed
                         </span>
                         <button
                           type="button"
                           disabled={savingRowId === row.id}
                           onClick={() => onReopen(row)}
-                          className="text-left text-[9px] text-security-navy-500 underline-offset-2 hover:text-security-navy-700 hover:underline dark:hover:text-security-navy-300"
+                          className="text-left text-[9px] text-security-navy-500 underline-offset-2 hover:text-security-navy-700 hover:underline"
                         >
                           Reopen
                         </button>

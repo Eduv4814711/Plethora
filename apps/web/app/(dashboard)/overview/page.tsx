@@ -32,6 +32,16 @@ import {
 import { CHART_PRIMARY, CHART_SECONDARY, CHART_SERIES } from "@/lib/chart-theme";
 import { ComplianceSummaryWidget } from "@/components/dashboard/ComplianceSummaryWidget";
 import { useOperationalEvents } from "@/lib/use-operational-events";
+import {
+  AlertBanner,
+  Button,
+  Card,
+  PageHeader,
+  PageShell,
+  SkeletonBlock,
+  StatusBadge,
+  Tabs,
+} from "@/components/ui";
 
 interface Site {
   id: string;
@@ -268,28 +278,19 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto flex min-h-0 w-full max-w-[1600px] animate-pulse flex-col">
-        <div className="flex shrink-0 flex-col gap-3 border-b border-security-navy-100/80 pb-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-2">
-            <div className="h-3 w-32 rounded-full bg-security-navy-200/80" />
-            <div className="h-8 w-44 rounded-security-lg bg-security-navy-100" />
-          </div>
-          <div className="flex gap-2">
-            <div className="h-9 w-36 rounded-security-lg bg-security-navy-100" />
-            <div className="h-9 w-48 rounded-full bg-security-navy-100" />
-          </div>
-        </div>
-        <div className="grid shrink-0 grid-cols-2 gap-2 py-2 sm:grid-cols-3 lg:grid-cols-5">
+      <PageShell width="wide" className="gap-4">
+        <SkeletonBlock className="h-14 w-full" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={`kpi-${i}`} className="h-[4.25rem] rounded-security-lg border border-security-navy-100/80 bg-white shadow-security-card" />
+            <SkeletonBlock key={`kpi-${i}`} className="h-[4.5rem] w-full" />
           ))}
         </div>
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-4 xl:grid-rows-2 xl:gap-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div key={i} className="min-h-0 rounded-security-lg border border-security-navy-100/80 bg-white shadow-security-card" />
+            <SkeletonBlock key={i} className="h-56 w-full" />
           ))}
         </div>
-      </div>
+      </PageShell>
     );
   }
 
@@ -340,13 +341,13 @@ export default function DashboardPage() {
   })();
 
   const DashboardCard = ({ title, children, className = "", action }: { title: string; children: React.ReactNode; className?: string; action?: React.ReactNode }) => (
-    <article className={`card-dashboard flex h-full min-h-0 flex-col overflow-hidden p-3 lg:p-3.5 ${className}`}>
+    <Card variant="dashboard" className={`flex h-full min-h-0 flex-col overflow-hidden p-3.5 ${className}`}>
       <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
-        <h2 className="section-title truncate">{title}</h2>
+        <h2 className="truncate font-display text-sm font-semibold text-security-navy-900">{title}</h2>
         {action}
       </div>
       <div className="flex min-h-0 flex-1 flex-col">{children}</div>
-    </article>
+    </Card>
   );
 
   const KpiTile = ({
@@ -373,7 +374,7 @@ export default function DashboardPage() {
     const content = (
       <>
         <div className="flex items-center justify-between gap-1">
-          <p className="truncate font-mono text-[0.625rem] font-medium uppercase tracking-[0.12em] text-security-navy-500">
+          <p className="truncate text-xs font-medium text-security-navy-500">
             {label}
           </p>
           {(href || onClick) && (
@@ -385,10 +386,10 @@ export default function DashboardPage() {
             </span>
           )}
         </div>
-        <p className="mt-1 font-display text-xl font-semibold tabular-nums tracking-[-0.02em] text-security-navy-900 lg:text-lg">
+        <p className="mt-1 font-display text-xl font-semibold tabular-nums tracking-[-0.02em] text-security-navy-900">
           {value}
         </p>
-        {hint ? <p className="mt-0.5 truncate text-[10px] text-security-navy-500">{hint}</p> : null}
+        {hint ? <p className="mt-0.5 truncate text-xs text-security-navy-500">{hint}</p> : null}
       </>
     );
 
@@ -414,186 +415,134 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="animate-fade-in mx-auto flex min-h-0 w-full min-w-0 max-w-[1600px] flex-col pb-6">
-      <header className="flex shrink-0 flex-col gap-3 border-b border-security-navy-100/80 pb-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:pb-2.5">
-        <div className="min-w-0 shrink-0 lg:flex-1">
+    <PageShell width="wide" className="animate-fade-in gap-4 pb-6">
+      <PageHeader
+        title="Operations Overview & Analytics"
+        description={`${format(new Date(), "EEEE, d MMMM yyyy")} · Live snapshot of guards, sites, shifts, and compliance.`}
+        actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1 rounded border border-security-navy-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-security-navy-700 shadow-sm transition hover:border-security-amber-400 hover:bg-security-amber-50/40 hover:text-security-navy-900"
-            >
-              <span aria-hidden="true">←</span>
-              <span>Command Center</span>
-            </Link>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-security-navy-700 lg:text-xs">
-              {format(new Date(), "EEEE, MMMM d, yyyy")}
-            </p>
+            <Button variant="secondary" size="sm" onClick={() => fetchDashboard()}>
+              Refresh
+            </Button>
+            {canSites && (
+              <div className="relative" ref={siteFilterRef}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setSiteFilterOpen((o) => !o)}
+                  aria-expanded={siteFilterOpen}
+                >
+                  <span className="max-w-[10rem] truncate">
+                    {selectedSiteIds.length === 0
+                      ? "All sites"
+                      : selectedSiteIds.length === 1
+                        ? sites.find((s) => s.id === selectedSiteIds[0])?.name ?? "1 site"
+                        : `${selectedSiteIds.length} sites`}
+                  </span>
+                  <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </Button>
+                {siteFilterOpen && (
+                  <div className="absolute right-0 top-full z-20 mt-2 max-h-64 w-72 overflow-auto rounded-security-lg border border-security-navy-100 bg-white py-1.5 shadow-security-elevated">
+                    {selectedSiteIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearSiteFilter}
+                        className="w-full px-4 py-2 text-left text-xs font-semibold text-security-navy-800 hover:bg-security-navy-50"
+                      >
+                        Clear filter
+                      </button>
+                    )}
+                    {sites.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => toggleSite(s.id)}
+                        className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm ${selectedSiteIds.includes(s.id) ? "bg-security-navy-50 font-semibold text-security-navy-900" : "text-security-navy-700 hover:bg-security-navy-50"}`}
+                      >
+                        {selectedSiteIds.includes(s.id) && <span className="text-security-amber-700">✓</span>}
+                        {s.name}
+                      </button>
+                    ))}
+                    {sites.length === 0 && (
+                      <p className="px-4 py-3 text-sm text-security-navy-600">No sites</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            <Tabs
+              ariaLabel="Date range"
+              variant="segmented"
+              value={dateRange}
+              onChange={(val) => setDateRange(val)}
+              items={DATE_RANGES}
+            />
           </div>
-          <h1 className="mt-1 text-xl font-bold tracking-tight text-security-navy-900 lg:text-2xl">
-            Operations Overview &amp; Analytics
-          </h1>
-          <p className="mt-1 hidden text-sm text-security-navy-600 max-lg:block">
-            Live snapshot of guards, sites, shifts, and compliance alerts.
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-          <button
-            type="button"
-            onClick={() => fetchDashboard()}
-            className="inline-flex items-center justify-center gap-1.5 rounded-security-lg border border-security-navy-100 bg-white px-3 py-2 text-xs font-semibold text-security-navy-800 shadow-security-card transition hover:border-security-navy-300 hover:bg-security-navy-50"
-            title="Refresh dashboard metrics"
-          >
-            <svg className="h-3.5 w-3.5 text-security-navy-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span>Refresh</span>
-          </button>
-          {canSites && (
-            <div className="relative w-full min-w-0 sm:w-auto" ref={siteFilterRef}>
-              <button
-                type="button"
-                onClick={() => setSiteFilterOpen((o) => !o)}
-                className="flex w-full min-w-0 items-center gap-2 rounded-security-lg border border-security-navy-100 bg-white px-3 py-2 text-left text-sm font-medium text-security-navy-900 shadow-security-card transition-all hover:border-security-navy-300 hover:shadow-md sm:min-w-[200px] sm:w-auto"
-              >
-                <span className="truncate">
-                  {selectedSiteIds.length === 0
-                    ? "All sites"
-                    : selectedSiteIds.length === 1
-                      ? sites.find((s) => s.id === selectedSiteIds[0])?.name ?? "1 site"
-                      : `${selectedSiteIds.length} sites`}
-                </span>
-                <svg className="w-4 h-4 shrink-0 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              {siteFilterOpen && (
-                <div className="absolute top-full left-0 mt-2 z-20 w-72 max-h-64 overflow-auto rounded-security-lg border border-security-navy-100/80 bg-white shadow-security-elevated py-1.5">
-                  {selectedSiteIds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={clearSiteFilter}
-                      className="w-full px-4 py-2.5 text-left text-sm text-security-navy-800 hover:bg-security-navy-50 font-semibold"
-                    >
-                      Clear filter
-                    </button>
-                  )}
-                  {sites.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => toggleSite(s.id)}
-                      className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 rounded-lg mx-1 w-[calc(100%-0.5rem)] ${selectedSiteIds.includes(s.id) ? "bg-security-navy-50 text-security-navy-900 font-semibold" : "hover:bg-security-navy-50 text-security-navy-700"}`}
-                    >
-                      {selectedSiteIds.includes(s.id) && <span className="text-security-navy-700">✓</span>}
-                      {s.name}
-                    </button>
-                  ))}
-                  {sites.length === 0 && (
-                    <p className="px-4 py-3 text-sm text-security-navy-600">No sites</p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          <div
-            className="flex w-full min-w-0 rounded-full border border-security-navy-100/90 bg-security-navy-50/80 p-1 shadow-inner sm:inline-flex sm:w-auto"
-            role="group"
-            aria-label="Date range"
-          >
-            {DATE_RANGES.map((r) => (
-              <button
-                key={r.value}
-                type="button"
-                onClick={() => setDateRange(r.value)}
-                className={`min-w-0 flex-1 px-3 py-1.5 text-sm font-semibold rounded-full transition-all sm:flex-none sm:px-4 ${dateRange === r.value ? "bg-security-navy-700 text-white shadow-md" : "text-security-navy-700 hover:text-security-navy-900 hover:bg-white/80"}`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </header>
+        }
+      />
 
       {liveEscalation && (
-        <div
-          role="alert"
-          className="mb-3 mt-3 flex flex-col gap-2 rounded-security-lg border-2 border-red-500 bg-red-50 p-3 shadow-md sm:flex-row sm:items-center sm:justify-between animate-fade-in"
+        <AlertBanner
+          variant="error"
+          title={`Supervisor escalation dispatched: ${liveEscalation.guardName} (${liveEscalation.guardPhone || "Guard"})`}
         >
-          <div className="flex items-start gap-2.5">
-            <span className="flex h-3 w-3 relative mt-1">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600" />
-            </span>
-            <div>
-              <p className="font-bold text-red-900 text-sm">
-                🚨 Supervisor Escalation Dispatched: {liveEscalation.guardName} ({liveEscalation.guardPhone || "Guard"})
-              </p>
-              <p className="text-xs text-red-800">
-                Site: <span className="font-semibold">{liveEscalation.siteName || "Field Post"}</span> · Ref:{" "}
-                <span className="font-mono font-bold">{liveEscalation.refCode || "SUP"}</span> · Context:{" "}
-                {liveEscalation.reason || "Urgent assistance requested"}
-              </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-red-800">
+              Site: <span className="font-semibold">{liveEscalation.siteName || "Field Post"}</span> · Ref:{" "}
+              <span className="font-mono font-bold">{liveEscalation.refCode || "SUP"}</span> · Context:{" "}
+              {liveEscalation.reason || "Urgent assistance requested"}
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              <Link href="/incidents" className="btn-destructive py-1 px-3 text-xs no-underline">
+                View control feed
+              </Link>
+              <Button variant="ghost" size="sm" onClick={() => setLiveEscalation(null)}>
+                Dismiss
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Link href="/incidents" className="btn-primary text-xs py-1 px-3 bg-red-700 hover:bg-red-800">
-              View Control Feed
-            </Link>
-            <button
-              type="button"
-              onClick={() => setLiveEscalation(null)}
-              className="text-xs font-semibold text-red-700 hover:text-red-900 px-2 py-1"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
+        </AlertBanner>
       )}
 
       {liveIncidentNotice && (
-        <div
-          role="status"
-          className="mb-2 mt-2 flex items-center justify-between gap-3 rounded-security-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 shadow-sm animate-fade-in"
-        >
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-amber-600 animate-ping" />
+        <AlertBanner variant="warning">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-medium">{liveIncidentNotice}</p>
+            <div className="flex items-center gap-2">
+              <Link href="/incidents" className="text-xs font-semibold underline">
+                View log
+              </Link>
+              <button
+                type="button"
+                onClick={() => setLiveIncidentNotice(null)}
+                className="text-xs font-semibold hover:opacity-75"
+                aria-label="Dismiss notice"
+              >
+                ✕
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Link href="/incidents" className="text-xs font-semibold text-amber-800 hover:text-amber-950 underline">
-              View Log
-            </Link>
-            <button
-              type="button"
-              onClick={() => setLiveIncidentNotice(null)}
-              className="text-xs font-semibold text-amber-700 hover:text-amber-900"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
+        </AlertBanner>
       )}
 
       {error && (
-        <div
-          role="alert"
-          className="mb-2 mt-2 flex shrink-0 flex-col gap-2 rounded-security-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div className="min-w-0">
-            <p className="font-semibold text-red-900">Couldn&apos;t load the dashboard</p>
-            <p className="truncate text-xs text-red-800">{error}</p>
+        <AlertBanner variant="error" title="Couldn't load the dashboard">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs">{error}</p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setLoading(true);
+                fetchDashboard();
+              }}
+            >
+              Retry
+            </Button>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setLoading(true);
-              fetchDashboard();
-            }}
-            className="btn-secondary shrink-0 px-3 py-1.5 text-xs"
-          >
-            Retry
-          </button>
-        </div>
+        </AlertBanner>
       )}
 
       {error && !data ? null : (
@@ -703,7 +652,7 @@ export default function DashboardPage() {
             aria-controls="dashboard-operational-alerts"
           >
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-security-navy-900">Operational alerts</h2>
+              <h2 className="text-sm font-semibold text-security-navy-900">Operational alerts</h2>
               {!alertsSectionOpen && (
                 <span className="text-xs text-security-navy-600">
                   {alertCounts?.allOpen ?? operationalAlerts.length} open
@@ -1020,9 +969,7 @@ export default function DashboardPage() {
             </Link>
             <div className="flex shrink-0 items-center justify-between rounded-security border border-security-navy-100 bg-security-navy-50/60 px-3 py-1.5 lg:py-2">
               <span className="text-xs font-medium text-security-navy-900 lg:text-sm">Latest cycle batch</span>
-              <span className="text-xs font-bold uppercase tracking-wider text-security-navy-900">
-                {data?.exportReadiness?.latestBatch?.status ?? "NOT CREATED"}
-              </span>
+              <StatusBadge status={data?.exportReadiness?.latestBatch?.status ?? "NOT_CREATED"} />
             </div>
             {canPayrollExport && (
               <Link href="/payroll-exports" className="btn-primary mt-auto w-full shrink-0 py-1.5 text-center text-xs lg:text-sm">
@@ -1094,6 +1041,6 @@ export default function DashboardPage() {
       </section>
       </>
       )}
-    </div>
+    </PageShell>
   );
 }

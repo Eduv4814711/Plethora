@@ -30,6 +30,7 @@ import { InvoiceDocument } from "../../_components/invoice-document";
 import { BillingAccessRestricted } from "../../_components/billing-access-restricted";
 import { computeTotalsPreview, DocumentTotals } from "../../_components/document-totals";
 import { emptyLine, LineItemsEditor, type EditableLine } from "../../_components/line-items-editor";
+import { AlertBanner, Button, Modal, PageShell } from "@/components/ui";
 import { clsx } from "clsx";
 
 // Quote lifecycle pipeline
@@ -349,14 +350,14 @@ export default function QuoteDetailPage() {
 
   if (!quote) {
     return (
-      <main className="space-y-4">
+      <PageShell width="wide">
         <Link href="/billing/quotes" className="text-sm font-semibold text-security-navy-700 hover:underline">
           ← Back to quotes
         </Link>
-        <p className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <AlertBanner variant="error">
           {error ?? "Quote not found"}
-        </p>
-      </main>
+        </AlertBanner>
+      </PageShell>
     );
   }
 
@@ -367,7 +368,7 @@ export default function QuoteDetailPage() {
   const isExpired = new Date(quote.validUntil) < new Date() && quote.status === "issued";
 
   return (
-    <main className="animate-fade-in space-y-5 pb-16">
+    <PageShell width="wide" className="animate-fade-in pb-16">
       {/* Header */}
       <header className="space-y-4">
         <Link href="/billing/quotes" className="section-title hover:underline">
@@ -648,260 +649,45 @@ export default function QuoteDetailPage() {
       </section>
 
       {/* Edit Quote Modal */}
-      {showEditModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-fade-in overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="edit-quote-modal-title"
-        >
-          <div className="w-full max-w-3xl rounded-security-lg border border-security-navy-200 bg-white p-6 shadow-xl space-y-5 animate-scale-in my-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 id="edit-quote-modal-title" className="text-lg font-bold text-security-navy-900">
-                  Edit Quotation {quote.quoteNumber}
-                </h2>
-                <p className="text-xs text-security-navy-500 mt-0.5">
-                  Update line items, pricing, rates, and notes for this draft quotation.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowEditModal(false)}
-                className="text-security-navy-400 hover:text-security-navy-600 font-bold"
-              >
-                ✕
-              </button>
-            </div>
+      <Modal
+        open={showEditModal}
+        onClose={() => !busy && setShowEditModal(false)}
+        title={`Edit Quotation ${quote.quoteNumber}`}
+        description="Update line items, pricing, rates, and notes for this draft quotation."
+        size="xl"
+      >
+        <div className="space-y-4">
+          {editError && <AlertBanner variant="error">{editError}</AlertBanner>}
 
-            {editError && (
-              <div className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                {editError}
-              </div>
-            )}
-
-            <form onSubmit={executeSaveEdit} className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <label className="block">
-                  <span className="label-text mb-1 block">Quote Date</span>
-                  <input
-                    type="date"
-                    value={editQuoteDate}
-                    onChange={(e) => setEditQuoteDate(e.target.value)}
-                    required
-                    className="input-modern w-full"
-                  />
-                </label>
-                <label className="block">
-                  <span className="label-text mb-1 block">Valid Until</span>
-                  <input
-                    type="date"
-                    value={editValidUntil}
-                    onChange={(e) => setEditValidUntil(e.target.value)}
-                    required
-                    className="input-modern w-full"
-                  />
-                </label>
-                {clientSites.length > 0 && (
-                  <label className="block">
-                    <span className="label-text mb-1 block">Target Site (optional)</span>
-                    <select
-                      value={editSiteId}
-                      onChange={(e) => setEditSiteId(e.target.value)}
-                      className="input-modern w-full"
-                    >
-                      <option value="">All Sites / Client-wide</option>
-                      {clientSites.map((s) => (
-                        <option key={s.siteId} value={s.siteId}>
-                          {s.siteName}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="label-text mb-1 block">Reference</span>
-                  <input
-                    type="text"
-                    value={editReference}
-                    onChange={(e) => setEditReference(e.target.value)}
-                    placeholder="e.g. PO-8841 or tender ref"
-                    className="input-modern w-full"
-                  />
-                </label>
-                <label className="block">
-                  <span className="label-text mb-1 block">Notes / Terms</span>
-                  <input
-                    type="text"
-                    value={editNotes}
-                    onChange={(e) => setEditNotes(e.target.value)}
-                    placeholder="Payment terms, exclusions, validity notes"
-                    className="input-modern w-full"
-                  />
-                </label>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="label-text mb-1 block">Discount Amount</span>
-                  <input
-                    type="text"
-                    value={editDiscount}
-                    onChange={(e) => setEditDiscount(e.target.value)}
-                    placeholder="0.00"
-                    className="input-modern w-full font-mono"
-                  />
-                </label>
-                <label className="block">
-                  <span className="label-text mb-1 block">VAT Rate (%)</span>
-                  <input
-                    type="text"
-                    value={editVatRate}
-                    onChange={(e) => setEditVatRate(e.target.value)}
-                    placeholder="15"
-                    className="input-modern w-full font-mono"
-                  />
-                </label>
-              </div>
-
-              <LineItemsEditor
-                token={token!}
-                clientId={quote.clientId || ""}
-                siteId={editSiteId || null}
-                lines={editLines}
-                onChange={setEditLines}
-                currency={currency}
-              />
-
-              <DocumentTotals
-                totals={editTotals}
-                vatRate={editVatRate}
-                currency={currency}
-              />
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-security-navy-100">
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  disabled={busy}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="btn-primary"
-                  id="save-quote-edit-btn"
-                >
-                  {busy ? "Saving…" : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Quote Confirmation Modal */}
-      {showDeleteModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-fade-in"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-md rounded-security-lg border border-red-200 bg-white p-6 shadow-xl space-y-4 animate-scale-in">
-            <h2 className="text-lg font-bold text-red-700">Delete Draft Quote?</h2>
-            <p className="text-sm text-security-navy-600">
-              Are you sure you want to delete quotation <strong>{quote.quoteNumber}</strong>?
-              This action cannot be undone.
-            </p>
-            <div className="rounded-security border border-security-navy-100 bg-security-navy-50/60 p-3 text-xs space-y-1">
-              <div>Client: <strong>{quote.client?.name || quote.prospectName}</strong></div>
-              <div>Total: <strong>{formatCurrency(quote.totalAmount, { currency })}</strong></div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDeleteModal(false)}
-                disabled={busy}
-                className="btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={executeDelete}
-                disabled={busy}
-                className="btn-primary bg-red-600 hover:bg-red-700"
-                id="confirm-delete-quote-btn"
-              >
-                {busy ? "Deleting…" : "Confirm Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Convert to Invoice Modal */}
-      {showConvertModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-fade-in"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="convert-modal-title"
-        >
-          <div className="w-full max-w-lg rounded-security-lg border border-security-navy-200 bg-white p-6 shadow-xl space-y-5 animate-scale-in">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 id="convert-modal-title" className="text-lg font-bold text-security-navy-900">
-                  Convert Quote to Tax Invoice
-                </h2>
-                <p className="text-xs text-security-navy-500 mt-0.5">
-                  Quote <span className="font-mono font-semibold text-security-navy-700">{quote.quoteNumber}</span> → New Invoice
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowConvertModal(false)}
-                className="text-security-navy-400 hover:text-security-navy-600 font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            {convertError && (
-              <div className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                {convertError}
-              </div>
-            )}
-
-            <form onSubmit={executeConvert} className="space-y-4">
-              {/* Client & Target Site */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-security-navy-700">
-                  Target Client
-                </label>
-                <div className="rounded-security border border-security-navy-100 bg-security-navy-50/50 px-3 py-2 text-sm text-security-navy-900 font-medium">
-                  {quote.client?.name || quote.prospectName || "—"}
-                  {!quote.clientId && (
-                    <span className="ml-2 text-xs text-security-amber-700">
-                      (Will be created as a new billable client)
-                    </span>
-                  )}
-                </div>
-              </div>
-
+          <form onSubmit={executeSaveEdit} className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="block">
+                <span className="label-text mb-1 block">Quote Date</span>
+                <input
+                  type="date"
+                  value={editQuoteDate}
+                  onChange={(e) => setEditQuoteDate(e.target.value)}
+                  required
+                  className="input-modern w-full"
+                />
+              </label>
+              <label className="block">
+                <span className="label-text mb-1 block">Valid Until</span>
+                <input
+                  type="date"
+                  value={editValidUntil}
+                  onChange={(e) => setEditValidUntil(e.target.value)}
+                  required
+                  className="input-modern w-full"
+                />
+              </label>
               {clientSites.length > 0 && (
                 <label className="block">
-                  <span className="label-text mb-1.5 block">Target Site (optional)</span>
+                  <span className="label-text mb-1 block">Target Site (optional)</span>
                   <select
-                    value={convertSiteId}
-                    onChange={(e) => setConvertSiteId(e.target.value)}
+                    value={editSiteId}
+                    onChange={(e) => setEditSiteId(e.target.value)}
                     className="input-modern w-full"
-                    id="convert-target-site"
                   >
                     <option value="">All Sites / Client-wide</option>
                     {clientSites.map((s) => (
@@ -910,98 +696,267 @@ export default function QuoteDetailPage() {
                       </option>
                     ))}
                   </select>
+                </label>
+              )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="label-text mb-1 block">Reference</span>
+                <input
+                  type="text"
+                  value={editReference}
+                  onChange={(e) => setEditReference(e.target.value)}
+                  placeholder="e.g. PO-8841 or tender ref"
+                  className="input-modern w-full"
+                />
+              </label>
+              <label className="block">
+                <span className="label-text mb-1 block">Notes / Terms</span>
+                <input
+                  type="text"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="Payment terms, exclusions, validity notes"
+                  className="input-modern w-full"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="label-text mb-1 block">Discount Amount</span>
+                <input
+                  type="text"
+                  value={editDiscount}
+                  onChange={(e) => setEditDiscount(e.target.value)}
+                  placeholder="0.00"
+                  className="input-modern w-full font-mono"
+                />
+              </label>
+              <label className="block">
+                <span className="label-text mb-1 block">VAT Rate (%)</span>
+                <input
+                  type="text"
+                  value={editVatRate}
+                  onChange={(e) => setEditVatRate(e.target.value)}
+                  placeholder="15"
+                  className="input-modern w-full font-mono"
+                />
+              </label>
+            </div>
+
+            <LineItemsEditor
+              token={token!}
+              clientId={quote.clientId || ""}
+              siteId={editSiteId || null}
+              lines={editLines}
+              onChange={setEditLines}
+              currency={currency}
+            />
+
+            <DocumentTotals
+              totals={editTotals}
+              vatRate={editVatRate}
+              currency={currency}
+            />
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-security-navy-100">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowEditModal(false)}
+                disabled={busy}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={busy}
+                loading={busy}
+                id="save-quote-edit-btn"
+              >
+                {busy ? "Saving…" : "Save Changes"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </Modal>
+
+      {/* Delete Quote Confirmation Modal */}
+      <Modal
+        open={showDeleteModal}
+        onClose={() => !busy && setShowDeleteModal(false)}
+        title="Delete Draft Quote?"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-security-navy-600">
+            Are you sure you want to delete quotation <strong>{quote.quoteNumber}</strong>?
+            This action cannot be undone.
+          </p>
+          <div className="rounded-security border border-security-navy-100 bg-security-navy-50/60 p-3 text-xs space-y-1">
+            <div>Client: <strong>{quote.client?.name || quote.prospectName}</strong></div>
+            <div>Total: <strong>{formatCurrency(quote.totalAmount, { currency })}</strong></div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={executeDelete}
+              disabled={busy}
+              loading={busy}
+              id="confirm-delete-quote-btn"
+            >
+              {busy ? "Deleting…" : "Confirm Delete"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Convert to Invoice Modal */}
+      <Modal
+        open={showConvertModal}
+        onClose={() => !busy && setShowConvertModal(false)}
+        title="Convert Quote to Tax Invoice"
+        description={`Quote ${quote.quoteNumber} → New Invoice`}
+        size="md"
+      >
+        <div className="space-y-4">
+          {convertError && <AlertBanner variant="error">{convertError}</AlertBanner>}
+
+          <form onSubmit={executeConvert} className="space-y-4">
+            {/* Client & Target Site */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-security-navy-700">
+                Target Client
+              </label>
+              <div className="rounded-security border border-security-navy-100 bg-security-navy-50/50 px-3 py-2 text-sm text-security-navy-900 font-medium">
+                {quote.client?.name || quote.prospectName || "—"}
+                {!quote.clientId && (
+                  <span className="ml-2 text-xs text-security-amber-700">
+                    (Will be created as a new billable client)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {clientSites.length > 0 && (
+              <label className="block">
+                <span className="label-text mb-1.5 block">Target Site (optional)</span>
+                <select
+                  value={convertSiteId}
+                  onChange={(e) => setConvertSiteId(e.target.value)}
+                  className="input-modern w-full"
+                  id="convert-target-site"
+                >
+                  <option value="">All Sites / Client-wide</option>
+                  {clientSites.map((s) => (
+                    <option key={s.siteId} value={s.siteId}>
+                      {s.siteName}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-[11px] text-security-navy-500">
+                  Selecting a site applies that site's invoice prefix and sequence configuration.
+                </span>
+              </label>
+            )}
+
+            {/* Invoice Numbering Section */}
+            <div className="rounded-security-md border border-security-navy-200 bg-security-navy-50/70 p-3.5 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-security-navy-700">
+                  Invoice Numbering
+                </span>
+                <div className="inline-flex rounded-security bg-security-navy-200/60 p-0.5" role="radiogroup" aria-label="Invoice numbering mode">
+                  <button
+                    type="button"
+                    onClick={() => setConvertNumberingMode("auto")}
+                    className={clsx(
+                      "px-3 py-1 text-xs font-semibold rounded-security transition-all",
+                      convertNumberingMode === "auto"
+                        ? "bg-white text-security-navy-900 shadow-sm"
+                        : "text-security-navy-600 hover:text-security-navy-900"
+                    )}
+                    id="convert-number-mode-auto"
+                  >
+                    ● Automatic
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConvertNumberingMode("manual")}
+                    className={clsx(
+                      "px-3 py-1 text-xs font-semibold rounded-security transition-all",
+                      convertNumberingMode === "manual"
+                        ? "bg-white text-security-navy-900 shadow-sm"
+                        : "text-security-navy-600 hover:text-security-navy-900"
+                    )}
+                    id="convert-number-mode-manual"
+                  >
+                    ○ Manual
+                  </button>
+                </div>
+              </div>
+
+              {convertNumberingMode === "auto" ? (
+                <div className="flex items-center justify-between rounded-security border border-security-navy-200 bg-white px-3 py-2 text-xs">
+                  <span className="text-security-navy-600">Next number to be generated:</span>
+                  <span className="font-mono font-bold text-security-amber-700">
+                    {convertLoadingPreview ? "Checking…" : convertNumberPreview || "Generated on save (e.g. INV-0001)"}
+                  </span>
+                </div>
+              ) : (
+                <label className="block">
+                  <span className="label-text mb-1 block">
+                    Manual Invoice Number <span className="text-red-500">*</span>
+                  </span>
+                  <input
+                    type="text"
+                    value={convertManualNumber}
+                    onChange={(e) => setConvertManualNumber(e.target.value)}
+                    placeholder="e.g. INV-WOL-0027"
+                    className="input-modern w-full font-mono text-sm"
+                    required={convertNumberingMode === "manual"}
+                    id="convert-manual-number"
+                  />
                   <span className="mt-1 block text-[11px] text-security-navy-500">
-                    Selecting a site applies that site's invoice prefix and sequence configuration.
+                    Specify a custom or historical invoice number. It will be validated to prevent collisions.
                   </span>
                 </label>
               )}
+            </div>
 
-              {/* Invoice Numbering Section */}
-              <div className="rounded-security-md border border-security-navy-200 bg-security-navy-50/70 p-3.5 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-security-navy-700">
-                    Invoice Numbering
-                  </span>
-                  <div className="inline-flex rounded-security bg-security-navy-200/60 p-0.5" role="radiogroup" aria-label="Invoice numbering mode">
-                    <button
-                      type="button"
-                      onClick={() => setConvertNumberingMode("auto")}
-                      className={clsx(
-                        "px-3 py-1 text-xs font-semibold rounded-security transition-all",
-                        convertNumberingMode === "auto"
-                          ? "bg-white text-security-navy-900 shadow-sm"
-                          : "text-security-navy-600 hover:text-security-navy-900"
-                      )}
-                      id="convert-number-mode-auto"
-                    >
-                      ● Automatic
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConvertNumberingMode("manual")}
-                      className={clsx(
-                        "px-3 py-1 text-xs font-semibold rounded-security transition-all",
-                        convertNumberingMode === "manual"
-                          ? "bg-white text-security-navy-900 shadow-sm"
-                          : "text-security-navy-600 hover:text-security-navy-900"
-                      )}
-                      id="convert-number-mode-manual"
-                    >
-                      ○ Manual
-                    </button>
-                  </div>
-                </div>
-
-                {convertNumberingMode === "auto" ? (
-                  <div className="flex items-center justify-between rounded-security border border-security-navy-200 bg-white px-3 py-2 text-xs">
-                    <span className="text-security-navy-600">Next number to be generated:</span>
-                    <span className="font-mono font-bold text-security-amber-700">
-                      {convertLoadingPreview ? "Checking…" : convertNumberPreview || "Generated on save (e.g. INV-0001)"}
-                    </span>
-                  </div>
-                ) : (
-                  <label className="block">
-                    <span className="label-text mb-1 block">
-                      Manual Invoice Number <span className="text-red-500">*</span>
-                    </span>
-                    <input
-                      type="text"
-                      value={convertManualNumber}
-                      onChange={(e) => setConvertManualNumber(e.target.value)}
-                      placeholder="e.g. INV-WOL-0027"
-                      className="input-modern w-full font-mono text-sm"
-                      required={convertNumberingMode === "manual"}
-                      id="convert-manual-number"
-                    />
-                    <span className="mt-1 block text-[11px] text-security-navy-500">
-                      Specify a custom or historical invoice number. It will be validated to prevent collisions.
-                    </span>
-                  </label>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowConvertModal(false)}
-                  disabled={busy}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="btn-amber"
-                  id="confirm-convert-btn"
-                >
-                  {busy ? "Converting…" : "Confirm & Create Invoice"}
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowConvertModal(false)}
+                disabled={busy}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="amber"
+                disabled={busy}
+                loading={busy}
+                id="confirm-convert-btn"
+              >
+                {busy ? "Converting…" : "Confirm & Create Invoice"}
+              </Button>
+            </div>
+          </form>
         </div>
-      )}
-    </main>
+      </Modal>
+    </PageShell>
   );
 }

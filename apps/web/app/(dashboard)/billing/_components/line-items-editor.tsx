@@ -86,7 +86,7 @@ export function LineItemsEditor({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Line items</h3>
+        <h3 className="text-sm font-semibold text-security-navy-900">Line items</h3>
         <button
           type="button"
           onClick={pullSites}
@@ -109,7 +109,7 @@ export function LineItemsEditor({
       )}
 
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-security-navy-100 text-sm dark:divide-security-navy-700">
+        <table className="min-w-full divide-y divide-security-navy-100 text-sm">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-wider text-security-navy-500">
               <th className="py-2 pr-2">Description</th>
@@ -119,7 +119,7 @@ export function LineItemsEditor({
               <th className="w-12 py-2" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
+          <tbody className="divide-y divide-security-navy-100">
             {lines.map((line, index) => (
               <tr key={index}>
                 <td className="py-2 pr-2">
@@ -152,7 +152,7 @@ export function LineItemsEditor({
                     aria-label={`Line ${index + 1} unit price`}
                   />
                 </td>
-                <td className="py-2 px-2 text-right font-mono tabular-nums text-security-navy-900 dark:text-security-navy-200">
+                <td className="py-2 px-2 text-right font-mono tabular-nums text-security-navy-900">
                   {formatCurrency(lineTotal(line), { currency })}
                 </td>
                 <td className="py-2 text-right">

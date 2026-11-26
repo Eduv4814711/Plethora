@@ -131,8 +131,8 @@ export function ClientOverviewTab({
       <div className="grid gap-6 sm:grid-cols-2">
         {/* Commercial & Contact Profile */}
         <div className="card-dashboard space-y-4 p-5">
-          <div className="flex items-center justify-between border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-security-navy-800 dark:text-security-navy-200">
+          <div className="flex items-center justify-between border-b border-security-navy-100 pb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-security-navy-800">
               Primary Contacts
             </h2>
             <button
@@ -146,19 +146,19 @@ export function ClientOverviewTab({
 
           <div className="space-y-3">
             {primaryContact ? (
-              <div className="rounded-security border border-security-navy-100 bg-security-navy-50/50 p-3 dark:border-security-navy-800 dark:bg-security-navy-900/40">
+              <div className="rounded-security border border-security-navy-100 bg-security-navy-50/50 p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-security-navy-900 dark:text-security-navy-100">
+                  <span className="text-xs font-semibold text-security-navy-900">
                     {primaryContact.firstName} {primaryContact.lastName || ""}
                   </span>
                   <span className="rounded-full bg-security-amber-100 px-2 py-0.5 text-[10px] font-semibold text-security-amber-800">
                     Primary
                   </span>
                 </div>
-                <div className="mt-1 text-xs text-security-navy-600 dark:text-security-navy-400">
+                <div className="mt-1 text-xs text-security-navy-600">
                   {primaryContact.jobTitle || "Representative"}
                 </div>
-                <div className="mt-2 flex flex-wrap gap-4 text-xs font-mono text-security-navy-700 dark:text-security-navy-300">
+                <div className="mt-2 flex flex-wrap gap-4 text-xs font-mono text-security-navy-700">
                   {primaryContact.mobile && <span>📞 {primaryContact.mobile}</span>}
                   {primaryContact.email && <span>✉️ {primaryContact.email}</span>}
                 </div>
@@ -168,9 +168,9 @@ export function ClientOverviewTab({
             )}
 
             {operationsContact && operationsContact !== primaryContact && (
-              <div className="rounded-security border border-security-navy-100 bg-white p-3 dark:border-security-navy-800 dark:bg-security-navy-900">
+              <div className="rounded-security border border-security-navy-100 bg-white p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-security-navy-900 dark:text-security-navy-100">
+                  <span className="text-xs font-semibold text-security-navy-900">
                     {operationsContact.firstName} {operationsContact.lastName || ""}
                   </span>
                   <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-800">
@@ -184,7 +184,7 @@ export function ClientOverviewTab({
             )}
           </div>
 
-          <div className="border-t border-security-navy-100 pt-3 text-xs text-security-navy-500 dark:border-security-navy-800">
+          <div className="border-t border-security-navy-100 pt-3 text-xs text-security-navy-500">
             <strong>Registered Address:</strong>{" "}
             {client.registeredAddress || client.physicalAddress || "Not specified"}
           </div>
@@ -192,14 +192,14 @@ export function ClientOverviewTab({
 
         {/* Commercial & Contract Summary */}
         <div className="card-dashboard space-y-4 p-5">
-          <div className="flex items-center justify-between border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-security-navy-800 dark:text-security-navy-200">
+          <div className="flex items-center justify-between border-b border-security-navy-100 pb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-security-navy-800">
               Commercial & Finance
             </h2>
             {canAccessBilling && (
               <Link
                 href={`/billing/clients/${client.id}`}
-                className="text-xs font-medium text-security-emerald-700 hover:underline dark:text-security-emerald-400"
+                className="text-xs font-medium text-security-emerald-700 hover:underline"
               >
                 Open Client Billing →
               </Link>
@@ -207,34 +207,34 @@ export function ClientOverviewTab({
           </div>
 
           <div className="space-y-2 text-xs">
-            <div className="flex justify-between py-1 border-b border-security-navy-100 dark:border-security-navy-800">
+            <div className="flex justify-between py-1 border-b border-security-navy-100">
               <span className="text-security-navy-500">VAT Registration:</span>
-              <span className="font-mono font-medium text-security-navy-800 dark:text-security-navy-200">
+              <span className="font-mono font-medium text-security-navy-800">
                 {client.vatNumber || "Not VAT Registered"}
               </span>
             </div>
-            <div className="flex justify-between py-1 border-b border-security-navy-100 dark:border-security-navy-800">
+            <div className="flex justify-between py-1 border-b border-security-navy-100">
               <span className="text-security-navy-500">Payment Terms:</span>
-              <span className="font-medium text-security-navy-800 dark:text-security-navy-200">
+              <span className="font-medium text-security-navy-800">
                 {client.paymentTermsDays ?? 30} Days
               </span>
             </div>
-            <div className="flex justify-between py-1 border-b border-security-navy-100 dark:border-security-navy-800">
+            <div className="flex justify-between py-1 border-b border-security-navy-100">
               <span className="text-security-navy-500">Billing Email:</span>
-              <span className="font-mono text-security-navy-800 dark:text-security-navy-200">
+              <span className="font-mono text-security-navy-800">
                 {client.billingEmail || "Same as primary"}
               </span>
             </div>
             <div className="flex justify-between py-1">
               <span className="text-security-navy-500">Portal User Account:</span>
-              <span className="font-medium text-security-navy-800 dark:text-security-navy-200">
+              <span className="font-medium text-security-navy-800">
                 {client.user ? `${client.user.name} (${client.user.email})` : "No portal account linked"}
               </span>
             </div>
           </div>
 
           {canAccessBilling ? (
-            <div className="rounded-security bg-security-emerald-50/60 p-3 text-xs text-security-emerald-900 dark:bg-security-emerald-950/40 dark:text-security-emerald-300">
+            <div className="rounded-security bg-security-emerald-50/60 p-3 text-xs text-security-emerald-900">
               <div className="font-semibold">Billing Rate & Invoicing Governance</div>
               <p className="mt-0.5 text-[11px] leading-relaxed">
                 Site pricing, billing rates and credit notes are strictly managed under Client Billing.
@@ -247,7 +247,7 @@ export function ClientOverviewTab({
               </Link>
             </div>
           ) : (
-            <div className="rounded-security bg-security-navy-50 p-3 text-xs text-security-navy-600 dark:bg-security-navy-800 dark:text-security-navy-400">
+            <div className="rounded-security bg-security-navy-50 p-3 text-xs text-security-navy-600">
               Pricing and billing rates are restricted to authorised Finance personnel under{" "}
               <code>/billing</code>.
             </div>

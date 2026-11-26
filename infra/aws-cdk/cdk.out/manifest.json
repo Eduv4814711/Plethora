@@ -11,21 +11,21 @@
     },
     "PlethoraAwsStack": {
       "type": "aws:cloudformation:stack",
-      "environment": "aws://779391599178/af-south-1",
+      "environment": "aws://unknown-account/us-east-1",
       "properties": {
         "templateFile": "PlethoraAwsStack.template.json",
         "terminationProtection": false,
         "validateOnSynth": false,
-        "assumeRoleArn": "arn:${AWS::Partition}:iam::779391599178:role/cdk-hnb659fds-deploy-role-779391599178-af-south-1",
-        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::779391599178:role/cdk-hnb659fds-cfn-exec-role-779391599178-af-south-1",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-779391599178-af-south-1/7356a13425d28a42db73e10a4de9cc67a353df9da7f3807af68062c311d7550e.json",
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-us-east-1",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-us-east-1",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-us-east-1/14e08fbf11a10288804b2134fcc1b9b4684d385b1a268f506efac53b5ad59db1.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
           "PlethoraAwsStack.assets"
         ],
         "lookupRole": {
-          "arn": "arn:${AWS::Partition}:iam::779391599178:role/cdk-hnb659fds-lookup-role-779391599178-af-south-1",
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-us-east-1",
           "requiresBootstrapStackVersion": 8,
           "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
         }
@@ -46,21 +46,21 @@
     },
     "PlethoraCicdStack": {
       "type": "aws:cloudformation:stack",
-      "environment": "aws://779391599178/af-south-1",
+      "environment": "aws://unknown-account/us-east-1",
       "properties": {
         "templateFile": "PlethoraCicdStack.template.json",
         "terminationProtection": false,
         "validateOnSynth": false,
-        "assumeRoleArn": "arn:${AWS::Partition}:iam::779391599178:role/cdk-hnb659fds-deploy-role-779391599178-af-south-1",
-        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::779391599178:role/cdk-hnb659fds-cfn-exec-role-779391599178-af-south-1",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-779391599178-af-south-1/0af1456153ba43744394bb522ebe9558a88b4e66b1c1e1c5003892fdd1a1400c.json",
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-us-east-1",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-us-east-1",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-us-east-1/afd97b1613d83334b27ae1b66c951e5b08907d041b8e264170d02db5ee6ce290.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
           "PlethoraCicdStack.assets"
         ],
         "lookupRole": {
-          "arn": "arn:${AWS::Partition}:iam::779391599178:role/cdk-hnb659fds-lookup-role-779391599178-af-south-1",
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-us-east-1",
           "requiresBootstrapStackVersion": 8,
           "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
         }

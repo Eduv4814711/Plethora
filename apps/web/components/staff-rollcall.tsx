@@ -130,13 +130,13 @@ export function StaffRollCall({
   const remainingCount = day ? remainingToCapture(day.rows).length : 0;
 
   return (
-    <section className="space-y-4 rounded-security-lg border border-security-navy-100 bg-white p-4 shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900">
+    <section className="space-y-4 rounded-security-lg border border-security-navy-100 bg-white p-4 shadow-security-card">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
+          <h2 className="text-base font-semibold text-security-navy-900">
             Office staff roll call
           </h2>
-          <p className="mt-1 text-sm text-security-navy-500 dark:text-security-navy-400">
+          <p className="mt-1 text-sm text-security-navy-500">
             Tap Present or Absent for each person. Office staff are on a fixed salary, so this
             record is for leave and reporting — it does not change anyone&rsquo;s pay.
           </p>
@@ -188,8 +188,8 @@ export function StaffRollCall({
       )}
 
       {day && (
-        <div className="flex flex-col gap-3 rounded-lg border border-security-navy-100 bg-security-navy-50 p-3 dark:border-security-navy-700 dark:bg-security-navy-900 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-security-navy-700 dark:text-security-navy-300" aria-live="polite">
+        <div className="flex flex-col gap-3 rounded-lg border border-security-navy-100 bg-security-navy-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-security-navy-700" aria-live="polite">
             <span className="font-semibold">{day.counts.present} present</span> ·{" "}
             {day.counts.absent} absent · {day.counts.onLeave} on leave ·{" "}
             {day.counts.notCaptured} not captured
@@ -226,13 +226,13 @@ export function StaffRollCall({
       )}
 
       {day && day.totalGeneralEmployees === 0 && (
-        <div className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-4 text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">
+        <div className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-4 text-sm text-security-navy-600">
           No office staff on record. Employees with an employee type of “general” appear here.
         </div>
       )}
 
       {day && day.totalGeneralEmployees > 0 && visibleRows.length === 0 && (
-        <div className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-3 text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">
+        <div className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-3 text-sm text-security-navy-600">
           Nobody matches “{query.trim()}”.
         </div>
       )}
@@ -248,17 +248,17 @@ export function StaffRollCall({
               className={clsx(
                 "rounded-security-lg border p-3",
                 state === "present"
-                  ? "border-security-emerald-200 bg-security-emerald-50/50 dark:border-security-emerald-700 dark:bg-security-emerald-700/20"
+                  ? "border-security-emerald-200 bg-security-emerald-50/50"
                   : state === "absent"
-                    ? "border-security-amber-200 bg-security-amber-50/50 dark:border-security-amber-900 dark:bg-security-amber-950/20"
+                    ? "border-security-amber-200 bg-security-amber-50/50"
                     : state === "leave"
-                      ? "border-sky-200 bg-sky-50/50 dark:border-sky-900 dark:bg-sky-950/20"
-                      : "border-security-navy-100 bg-white dark:border-security-navy-700 dark:bg-security-navy-900"
+                      ? "border-sky-200 bg-sky-50/50"
+                      : "border-security-navy-100 bg-white"
               )}
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">
+                  <p className="truncate text-sm font-semibold text-security-navy-900">
                     {formatStaffName(row)}
                   </p>
                   <p className="text-xs text-security-navy-500">
@@ -268,7 +268,7 @@ export function StaffRollCall({
                       : ""}
                   </p>
                   {row.clockInLat != null && row.clockInLng != null && (
-                    <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-security-emerald-700 dark:text-security-emerald-400">
+                    <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-security-emerald-700">
                       <span className="inline-block h-1.5 w-1.5 rounded-full bg-security-emerald-500" />
                       <span>
                         📍 Verified: {row.siteName || "Office"}
@@ -281,7 +281,7 @@ export function StaffRollCall({
                 </div>
 
                 {state === "leave" && row.onApprovedLeave ? (
-                  <span className="rounded-full border border-sky-200 bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300">
+                  <span className="rounded-full border border-sky-200 bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800">
                     On approved leave
                     {row.approvedLeaveType ? ` · ${row.approvedLeaveType.toLowerCase()}` : ""}
                   </span>
@@ -296,7 +296,7 @@ export function StaffRollCall({
                         "min-h-11 rounded-security border-2 px-5 text-sm font-semibold disabled:opacity-50",
                         state === "present"
                           ? "border-security-emerald-600 bg-security-emerald-600 text-white"
-                          : "border-security-navy-200 bg-white text-security-navy-700 hover:border-security-emerald-500 dark:border-security-navy-600 dark:bg-security-navy-900 dark:text-security-navy-200"
+                          : "border-security-navy-200 bg-white text-security-navy-700 hover:border-security-emerald-500"
                       )}
                     >
                       Present
@@ -310,7 +310,7 @@ export function StaffRollCall({
                         "min-h-11 rounded-security border-2 px-5 text-sm font-semibold disabled:opacity-50",
                         state === "absent"
                           ? "border-security-amber-600 bg-security-amber-600 text-white"
-                          : "border-security-navy-200 bg-white text-security-navy-700 hover:border-security-amber-500 dark:border-security-navy-600 dark:bg-security-navy-900 dark:text-security-navy-200"
+                          : "border-security-navy-200 bg-white text-security-navy-700 hover:border-security-amber-500"
                       )}
                     >
                       Absent
@@ -328,7 +328,7 @@ export function StaffRollCall({
               </div>
 
               {expanded && (
-                <div className="mt-3 grid gap-3 border-t border-security-navy-100 pt-3 dark:border-security-navy-700 sm:grid-cols-3">
+                <div className="mt-3 grid gap-3 border-t border-security-navy-100 pt-3 sm:grid-cols-3">
                   <div>
                     <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
                       Start

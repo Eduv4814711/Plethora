@@ -1,7 +1,8 @@
 "use client";
 
-import { cloneElement, useCallback, useEffect, useId, useState } from "react";
+import { cloneElement, useCallback, useId, useState } from "react";
 import { clsx } from "clsx";
+import { Modal } from "./dialog";
 
 /**
  * `signal` is the orange one. It is for the single action on a screen that is
@@ -190,6 +191,71 @@ export function Badge({
   return <span className={clsx(badgeVariants[variant], className)} {...props} />;
 }
 
+const STATUS_BADGE_MAP: Record<string, BadgeVariant> = {
+  active: "success",
+  approved: "success",
+  compliant: "success",
+  confirmed: "success",
+  completed: "success",
+  exported: "success",
+  paid: "success",
+  ready: "success",
+  resolved: "success",
+  success: "success",
+  verified: "success",
+
+  pending: "warning",
+  in_review: "warning",
+  awaiting_approval: "warning",
+  needs_capture: "warning",
+  expiring: "warning",
+  expiring_soon: "warning",
+  partial: "warning",
+  partially_paid: "warning",
+  denied: "warning",
+  warning: "warning",
+  draft: "warning",
+
+  critical: "error",
+  error: "error",
+  expired: "error",
+  failed: "error",
+  failure: "error",
+  missing: "error",
+  overdue: "error",
+  rejected: "error",
+  suspended: "error",
+};
+
+/**
+ * Semantic status badge that maps domain statuses (e.g. ACTIVE, APPROVED,
+ * PENDING, OVERDUE, CRITICAL, EXPIRED) to a single consistent badge palette.
+ */
+export function StatusBadge({
+  status,
+  label,
+  className,
+}: {
+  status: string;
+  label?: string;
+  className?: string;
+}) {
+  const normalized = status.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const variant = STATUS_BADGE_MAP[normalized] ?? "neutral";
+  const display =
+    label ??
+    status
+      .replace(/[_-]+/g, " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (ch) => ch.toUpperCase());
+
+  return (
+    <Badge variant={variant} className={className}>
+      {display}
+    </Badge>
+  );
+}
+
 export function PageHeader({
   title,
   description,
@@ -374,42 +440,28 @@ export function ConfirmModal({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !loading) onCancel();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [loading, onCancel, open]);
-
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-[90] flex animate-fade-in items-center justify-center bg-security-navy-900/50 p-4 backdrop-blur-[3px]"
-      role="presentation"
-    >
-      <div
-        className="w-full max-w-md animate-slide-up rounded-security-lg border border-security-navy-100 bg-white p-6 shadow-security-elevated motion-reduce:animate-none"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirm-modal-title"
-      >
-        <h2 id="confirm-modal-title" className="text-lg font-semibold text-security-navy-900">
-          {title}
-        </h2>
-        <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-security-navy-500">{message}</p>
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
+    <Modal
+      open={open}
+      onClose={() => {
+        if (!loading) onCancel();
+      }}
+      title={title}
+      size="sm"
+      closeOnBackdrop={!loading}
+      footer={
+        <>
           <Button variant="secondary" onClick={onCancel} disabled={loading}>
             {cancelLabel}
           </Button>
           <Button variant={danger ? "destructive" : "primary"} onClick={onConfirm} loading={loading}>
             {confirmLabel}
           </Button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <p className="whitespace-pre-line text-sm leading-relaxed text-security-navy-600">{message}</p>
+    </Modal>
   );
 }
 
@@ -489,7 +541,7 @@ export function TableShell({
         <table
           className={clsx(
             "min-w-full divide-y divide-security-navy-100 text-sm",
-            "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-security-navy-50 [&_thead_th]:font-mono [&_thead_th]:text-[0.6875rem] [&_thead_th]:font-medium [&_thead_th]:uppercase [&_thead_th]:tracking-[0.12em] [&_thead_th]:text-security-navy-500",
+            "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-security-navy-50 [&_thead_th]:text-xs [&_thead_th]:font-semibold [&_thead_th]:text-security-navy-600",
             "[&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-security-amber-50/40",
             tableClassName
           )}
@@ -534,3 +586,7 @@ export function TableEmptyRow({ colSpan, message }: { colSpan: number; message: 
     </tr>
   );
 }
+
+export { Modal, Drawer } from "./dialog";
+export { Tabs, SubNav, type TabOption, type SubNavItem } from "./tabs";
+export { PageShell, Section, KpiStrip, SearchInput, type KpiItem } from "./layout";

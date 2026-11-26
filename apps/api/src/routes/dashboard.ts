@@ -83,6 +83,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
       shiftsByStatus,
       exportBatchStatus,
       latestExportBatch,
+      totalPosts,
+      activeClientsCount,
+      onLeaveToday,
+      attendanceRows14d,
     ] = await Promise.all([
       computeGuardsOnDutyByDay(companyId, startOfWeek, dayNames, timeZone, { siteIds }),
       getGuardsOnDutyNow(companyId, now, { siteIds }),
@@ -131,6 +135,35 @@ export async function dashboardRoutes(app: FastifyInstance) {
           periodKey: true,
           exportedAt: true,
         },
+      }),
+      prisma.sitePost.count({
+        where: {
+          isActive: true,
+          site: {
+            companyId,
+            ...(siteIds?.length ? { id: { in: siteIds } } : {}),
+          },
+        },
+      }),
+      prisma.client.count({
+        where: { companyId, isActive: true },
+      }),
+      prisma.leaveRequest.count({
+        where: {
+          companyId,
+          status: "APPROVED",
+          startDate: { lte: todayDateOnly },
+          endDate: { gte: todayDateOnly },
+        },
+      }),
+      prisma.siteTimesheetRow.groupBy({
+        by: ["workDate", "attendanceStatus"],
+        where: {
+          companyId,
+          workDate: { gte: addDays(todayDateOnly, -13), lte: todayDateOnly },
+          ...(siteIds?.length ? { siteId: { in: siteIds } } : {}),
+        },
+        _count: { id: true },
       }),
     ]);
 
@@ -275,6 +308,52 @@ export async function dashboardRoutes(app: FastifyInstance) {
 
     const activeSitesDelta = activeSitesCount - activeSitesLastMonth;
 
+    const totalEmployees = employeesByStatus.reduce((acc, row) => acc + row._count.id, 0);
+    const activeEmployeesCount =
+      employeesByStatus.find((row) => row.status === "active")?._count.id ?? 0;
+
+    const ATTENDED_STATUSES = new Set([
+      "present",
+      "late",
+      "left_early",
+      "reliever",
+      "shift_swapped",
+      "training",
+    ]);
+    const trendBuckets = new Map<string, { attended: number; scheduled: number; unconfirmed: number }>();
+    for (const row of attendanceRows14d) {
+      const dateKey = row.workDate.toISOString().slice(0, 10);
+      const entry = trendBuckets.get(dateKey) ?? { attended: 0, scheduled: 0, unconfirmed: 0 };
+      const count = row._count.id;
+      if (row.attendanceStatus !== "off") {
+        entry.scheduled += count;
+      }
+      if (ATTENDED_STATUSES.has(row.attendanceStatus)) {
+        entry.attended += count;
+      }
+      if (row.attendanceStatus === "pending") {
+        entry.unconfirmed += count;
+      }
+      trendBuckets.set(dateKey, entry);
+    }
+
+    const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+    const attendanceTrend14d = Array.from({ length: 14 }, (_, idx) => {
+      const d = addDays(todayDateOnly, -(13 - idx));
+      const dateKey = d.toISOString().slice(0, 10);
+      const stats = trendBuckets.get(dateKey) ?? { attended: 0, scheduled: 0, unconfirmed: 0 };
+      const rate =
+        stats.scheduled > 0 ? Math.round((stats.attended / stats.scheduled) * 1000) / 10 : null;
+      return {
+        date: dateKey,
+        label: WEEKDAY_SHORT[d.getUTCDay()],
+        attended: stats.attended,
+        scheduled: stats.scheduled,
+        unconfirmed: stats.unconfirmed,
+        rate,
+      };
+    });
+
     return reply.send({
       dateRange: window.range,
       windowStart: window.start.toISOString(),
@@ -284,6 +363,12 @@ export async function dashboardRoutes(app: FastifyInstance) {
       activeSitesCount,
       activeSitesAddedThisMonth: activeSitesDelta,
       activeSitesDelta,
+      totalEmployees,
+      activeEmployeesCount,
+      onLeaveToday,
+      totalPosts,
+      activeClientsCount,
+      attendanceTrend14d,
       alerts,
       alertCounts: operationalAlertCounts,
       operationalAlerts: persistedAlerts,

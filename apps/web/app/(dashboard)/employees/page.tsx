@@ -8,7 +8,7 @@ import { authFetch, downloadPrivateFile } from "@/lib/api";
 import { listDocuments, uploadDocument, type ManagedDocument } from "@/lib/msr-api";
 import { canManageEmployeeDetails, hasCapability } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
-import { useConfirmDialog } from "@/components/ui";
+import { AlertBanner, Button, EmptyState, Modal, PageHeader, PageShell, SearchInput, StatusBadge, Tabs, Toolbar, useConfirmDialog } from "@/components/ui";
 import { clsx } from "clsx";
 import { EmployeeDocumentsSection } from "@/components/employees/EmployeeDocumentsSection";
 
@@ -252,76 +252,62 @@ export default function EmployeesPage() {
   }
 
   return (
-    <div className="animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-        <div>
-          <h1 className="page-title">Team</h1>
-          <p className="text-sm text-security-navy-600 mt-1">
-            Add employees, keep their details up to date, and organise them into groups.
-          </p>
-          {searchQuery.trim().length >= 2 && (
-            <p className="text-xs text-security-navy-600 mt-2">
-              Filtered by &quot;{searchQuery}&quot;{" "}
-              <Link href="/employees" className="underline hover:no-underline">Clear</Link>
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <Link
-            href="/employees/compliance"
-            className="btn-secondary h-11 shrink-0 flex items-center gap-2 text-security-emerald-800 border-security-emerald-300 bg-security-emerald-50/50 hover:bg-security-emerald-100/60"
-          >
-            <svg className="w-5 h-5 text-security-emerald-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-            Compliance Report
-          </Link>
-          <Link
-            href="/employees/leave"
-            className="btn-secondary h-11 shrink-0 flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            Leave
-          </Link>
-          <button
-            onClick={() => setShowManageGroups(!showManageGroups)}
-            className="btn-secondary h-11 shrink-0"
-          >
-            {showManageGroups ? "Hide groups" : "Manage groups"}
-          </button>
-          <button
-            onClick={() => {
-              if (!canCreateEmployees) return;
-              setShowForm(!showForm);
-            }}
-            disabled={!canCreateEmployees}
-            title={
-              canCreateEmployees
-                ? undefined
-                : "Team or Payroll create access is required to add team members"
-            }
-            className={clsx(
-              showForm ? "btn-secondary" : "btn-primary",
-              "h-11 shrink-0",
-              !canCreateEmployees && "cursor-not-allowed opacity-45 hover:shadow-none"
+    <PageShell>
+      <PageHeader
+        title="Team"
+        description={
+          searchQuery.trim().length >= 2
+            ? `Add employees, keep their details up to date, and organise them into groups. Filtered by "${searchQuery}".`
+            : "Add employees, keep their details up to date, and organise them into groups."
+        }
+        actions={
+          <>
+            {searchQuery.trim().length >= 2 && (
+              <Link href="/employees" className="btn-secondary">
+                Clear search
+              </Link>
             )}
-          >
-            {showForm ? "Cancel" : "Add team member"}
-          </button>
-        </div>
-      </div>
+            <Link
+              href="/employees/compliance"
+              className="btn-secondary flex items-center gap-2 text-security-emerald-800 border-security-emerald-300 bg-security-emerald-50/50 hover:bg-security-emerald-100/60"
+            >
+              Compliance Report
+            </Link>
+            <Link href="/employees/leave" className="btn-secondary flex items-center gap-2">
+              Leave
+            </Link>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowManageGroups(!showManageGroups)}
+            >
+              {showManageGroups ? "Hide groups" : "Manage groups"}
+            </Button>
+            <Button
+              type="button"
+              variant={showForm ? "secondary" : "primary"}
+              onClick={() => {
+                if (!canCreateEmployees) return;
+                setShowForm(!showForm);
+              }}
+              disabled={!canCreateEmployees}
+              title={
+                canCreateEmployees
+                  ? undefined
+                  : "Team or Payroll create access is required to add team members"
+              }
+            >
+              {showForm ? "Cancel" : "Add team member"}
+            </Button>
+          </>
+        }
+      />
 
-      {fetchError && (
-        <div className="mb-4 rounded-security border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-          {fetchError}
-        </div>
-      )}
+      {fetchError && <AlertBanner variant="error">{fetchError}</AlertBanner>}
 
-      <div className="flex flex-wrap items-center gap-4 mb-8 p-4 sm:p-5 rounded-security-lg bg-gradient-to-br from-white via-security-navy-50/80 to-security-navy-50/30 border-2 border-security-navy-100 shadow-security-card">
-        <span className="text-xs font-bold uppercase tracking-widest text-security-navy-600 shrink-0">
-          Filters
+      <Toolbar>
+        <span className="text-xs font-semibold text-security-navy-600 shrink-0">
+          Status filter
         </span>
         <div className="relative shrink-0 min-w-[min(100%,14rem)] sm:min-w-[15.5rem]">
           <label htmlFor="team-status-filter" className="sr-only">
@@ -332,12 +318,11 @@ export default function EmployeesPage() {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className={clsx(
-              "h-11 w-full min-w-[13.5rem] appearance-none rounded-security-lg border-2 border-security-navy-100/90 bg-white",
-              "pl-4 pr-11 text-sm font-semibold text-security-navy-900 tracking-tight",
-              "shadow-security-card",
-              "cursor-pointer transition-all duration-200 ease-out",
-              "hover:border-security-navy-300 hover:shadow-security-card-hover",
-              "focus:border-security-navy-500 focus:outline-none focus:ring-2 focus:ring-security-navy-200 focus:ring-offset-2 focus:ring-offset-white"
+              "h-10 w-full min-w-[13.5rem] appearance-none rounded-security border border-security-navy-200 bg-white",
+              "pl-3.5 pr-10 text-sm font-medium text-security-navy-900",
+              "cursor-pointer transition-colors",
+              "hover:border-security-navy-300",
+              "focus:border-security-navy-500 focus:outline-none focus:ring-2 focus:ring-security-navy-200"
             )}
           >
             <option value="all">All statuses</option>
@@ -350,15 +335,15 @@ export default function EmployeesPage() {
             <option value="offboarded">Offboarded</option>
           </select>
           <span
-            className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-[calc(0.5rem-1px)] border-l border-security-navy-100/70 bg-gradient-to-b from-security-navy-50/90 to-white text-security-navy-700"
+            className="pointer-events-none absolute inset-y-0 right-0 flex w-9 items-center justify-center text-security-navy-600"
             aria-hidden
           >
-            <svg className="h-4 w-4 shrink-0 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M19 9l-7 7-7-7" />
             </svg>
           </span>
         </div>
-      </div>
+      </Toolbar>
 
       {showForm && canCreateEmployees && (
         <EmployeeForm
@@ -496,40 +481,39 @@ export default function EmployeesPage() {
       )}
 
       {employees.length === 0 && (
-        <div className="card-wireframe text-center py-16 px-6">
-          <p className="text-base font-semibold text-security-navy-900">
-            {statusFilter !== "all" || searchQuery.trim().length >= 2
+        <EmptyState
+          title={
+            statusFilter !== "all" || searchQuery.trim().length >= 2
               ? "No team members match your filters"
-              : "No team members yet"}
-          </p>
-          <p className="text-sm mt-2 text-security-navy-600 max-w-md mx-auto">
-            {statusFilter !== "all" || searchQuery.trim().length >= 2
+              : "No team members yet"
+          }
+          description={
+            statusFilter !== "all" || searchQuery.trim().length >= 2
               ? "Try a different status or clear the search to see everyone."
-              : "Add your first team member to start building rosters, tracking attendance, and preparing payroll."}
-          </p>
-          {statusFilter === "all" && searchQuery.trim().length < 2 && (
-            <button
-              onClick={() => {
-                if (!canCreateEmployees) return;
-                setShowForm(true);
-              }}
-              disabled={!canCreateEmployees}
-              title={
-                canCreateEmployees
-                  ? undefined
-                  : "Team or Payroll create access is required to add team members"
-              }
-              className={clsx(
-                "btn-primary mt-6",
-                !canCreateEmployees && "cursor-not-allowed opacity-45 hover:shadow-none"
-              )}
-            >
-              Add team member
-            </button>
-          )}
-        </div>
+              : "Add your first team member to start building rosters, tracking attendance, and preparing payroll."
+          }
+          action={
+            statusFilter === "all" && searchQuery.trim().length < 2 ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  if (!canCreateEmployees) return;
+                  setShowForm(true);
+                }}
+                disabled={!canCreateEmployees}
+                title={
+                  canCreateEmployees
+                    ? undefined
+                    : "Team or Payroll create access is required to add team members"
+                }
+              >
+                Add team member
+              </Button>
+            ) : undefined
+          }
+        />
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -1757,31 +1741,20 @@ function EditModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    <>
       {confirmDialog}
-      <div className="card-elevated w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="p-6 border-b-2 border-security-navy-100 shrink-0 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-security-navy-900">Edit Team Member</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-[10px] text-security-navy-900 hover:bg-security-navy-50 border-2 border-transparent hover:border-security-navy-300 transition-colors"
-            aria-label="Close"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+      <Modal
+        open={true}
+        onClose={() => { if (!saving && !deleting) onClose(); }}
+        title="Edit Team Member"
+        size="lg"
+        closeOnBackdrop={!saving && !deleting}
+      >
         {loading ? (
           <div className="p-8 text-center text-security-navy-500">Loading...</div>
         ) : (
-          <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-6">
-            {error && (
-              <div className="p-3 text-sm text-red-800 bg-red-50 border border-red-200 rounded-md">
-                {error}
-              </div>
-            )}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
             <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-100">
               <h4 className="text-sm font-semibold text-security-navy-700 mb-3">Staff type</h4>
@@ -2078,8 +2051,8 @@ function EditModal({
             </div>
           </form>
         )}
-      </div>
-    </div>
+      </Modal>
+    </>
   );
 }
 
@@ -2124,60 +2097,56 @@ function StatusModal({
 
   if (validNext.length === 0) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-        <div className="card-wireframe w-full max-w-sm p-6 shadow-xl">
-          <p className="text-security-navy-600">No status transitions available for offboarded team members.</p>
-          <button onClick={onClose} className="mt-4 btn-primary w-full">Close</button>
-        </div>
-      </div>
+      <Modal
+        open={true}
+        onClose={onClose}
+        title="Employment status"
+        size="sm"
+        footer={<Button variant="primary" onClick={onClose} className="w-full">Close</Button>}
+      >
+        <p className="text-sm text-security-navy-600">
+          No status transitions available for offboarded team members.
+        </p>
+      </Modal>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="card-wireframe w-full max-w-sm shadow-xl">
-        <div className="p-6 border-b-2 border-security-navy-100">
-          <h3 className="text-lg font-semibold text-security-navy-900">Change employment status</h3>
-          <p className="text-sm text-security-navy-500 mt-1">
-            {employee.firstName} {employee.lastName}
-          </p>
+    <Modal
+      open={true}
+      onClose={() => { if (!saving) onClose(); }}
+      title="Change employment status"
+      description={`${employee.firstName} ${employee.lastName}`}
+      size="sm"
+      closeOnBackdrop={!saving}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && <AlertBanner variant="error">{error}</AlertBanner>}
+        <p className="text-sm text-security-navy-600">
+          Current: <StatusBadge status={employee.status} />
+        </p>
+        <select
+          value={selectedStatus}
+          onChange={(e) => setSelectedStatus(e.target.value)}
+          required
+          className="input-modern"
+        >
+          <option value="">Select new status</option>
+          {validNext.map((s) => (
+            <option key={s} value={s}>
+              {s.charAt(0).toUpperCase() + s.slice(1)}
+            </option>
+          ))}
+        </select>
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={onClose} disabled={saving} className="flex-1">
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" loading={saving} className="flex-1">
+            Update status
+          </Button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6">
-          {error && (
-            <div className="mb-4 p-3 text-sm text-red-800 bg-red-50 border border-red-200 rounded-md">
-              {error}
-            </div>
-          )}
-          <p className="text-sm text-security-navy-600 mb-3">
-            Current: <span className={`badge ${statusColors[employee.status]}`}>{employee.status}</span>
-          </p>
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            required
-            className="input-modern mb-4"
-          >
-            <option value="">Select new status</option>
-            {validNext.map((s) => (
-              <option key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </option>
-            ))}
-          </select>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 btn-secondary"
-            >
-              Cancel
-            </button>
-            <button type="submit" disabled={saving} className="flex-1 btn-primary">
-              {saving ? "Updating..." : "Update status"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 }

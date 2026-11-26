@@ -22,7 +22,14 @@
   "PlethoraVpcPublicSubnet1Subnet2865C558": {
    "Type": "AWS::EC2::Subnet",
    "Properties": {
-    "AvailabilityZone": "af-south-1a",
+    "AvailabilityZone": {
+     "Fn::Select": [
+      0,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
     "CidrBlock": "10.0.0.0/24",
     "MapPublicIpOnLaunch": true,
     "Tags": [
@@ -141,7 +148,14 @@
   "PlethoraVpcPublicSubnet2SubnetB846346F": {
    "Type": "AWS::EC2::Subnet",
    "Properties": {
-    "AvailabilityZone": "af-south-1b",
+    "AvailabilityZone": {
+     "Fn::Select": [
+      1,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
     "CidrBlock": "10.0.1.0/24",
     "MapPublicIpOnLaunch": true,
     "Tags": [
@@ -218,7 +232,14 @@
   "PlethoraVpcPrivateAppSubnet1SubnetF783893C": {
    "Type": "AWS::EC2::Subnet",
    "Properties": {
-    "AvailabilityZone": "af-south-1a",
+    "AvailabilityZone": {
+     "Fn::Select": [
+      0,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
     "CidrBlock": "10.0.2.0/24",
     "MapPublicIpOnLaunch": false,
     "Tags": [
@@ -292,7 +313,14 @@
   "PlethoraVpcPrivateAppSubnet2Subnet34238544": {
    "Type": "AWS::EC2::Subnet",
    "Properties": {
-    "AvailabilityZone": "af-south-1b",
+    "AvailabilityZone": {
+     "Fn::Select": [
+      1,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
     "CidrBlock": "10.0.3.0/24",
     "MapPublicIpOnLaunch": false,
     "Tags": [
@@ -366,7 +394,14 @@
   "PlethoraVpcPrivateDataSubnet1Subnet96D20C0D": {
    "Type": "AWS::EC2::Subnet",
    "Properties": {
-    "AvailabilityZone": "af-south-1a",
+    "AvailabilityZone": {
+     "Fn::Select": [
+      0,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
     "CidrBlock": "10.0.4.0/24",
     "MapPublicIpOnLaunch": false,
     "Tags": [
@@ -425,7 +460,14 @@
   "PlethoraVpcPrivateDataSubnet2Subnet2F2FC2FD": {
    "Type": "AWS::EC2::Subnet",
    "Properties": {
-    "AvailabilityZone": "af-south-1b",
+    "AvailabilityZone": {
+     "Fn::Select": [
+      1,
+      {
+       "Fn::GetAZs": ""
+      }
+     ]
+    },
     "CidrBlock": "10.0.5.0/24",
     "MapPublicIpOnLaunch": false,
     "Tags": [
@@ -568,7 +610,7 @@
       "VPCId": {
        "Ref": "PlethoraVpcD2542505"
       },
-      "VPCRegion": "af-south-1"
+      "VPCRegion": "us-east-1"
      }
     ]
    },
@@ -1197,8 +1239,30 @@
        ],
        "Effect": "Allow",
        "Resource": [
-        "arn:aws:bedrock:*:779391599178:inference-profile/*moonshotai*",
-        "arn:aws:bedrock:*:779391599178:application-inference-profile/*",
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:aws:bedrock:*:",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":inference-profile/*moonshotai*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:aws:bedrock:*:",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":application-inference-profile/*"
+          ]
+         ]
+        },
         "arn:aws:bedrock:*::foundation-model/moonshot*"
        ],
        "Sid": "AllowBedrockKimiInference"
@@ -1289,7 +1353,7 @@
        "Fn::Join": [
         "",
         [
-         "#!/bin/bash\n#!/usr/bin/env bash\nset -euo pipefail\n\nexport DEBIAN_FRONTEND=noninteractive\n\napt-get update -y\napt-get upgrade -y\napt-get install -y \\\n  ca-certificates \\\n  curl \\\n  gnupg \\\n  jq \\\n  ruby-full \\\n  wget \\\n  unzip \\\n  chromium \\\n  fonts-liberation \\\n  libnss3 \\\n  libatk-bridge2.0-0 \\\n  libgtk-3-0 \\\n  libasound2t64 || apt-get install -y libasound2 \\\n  libxss1 \\\n  libgbm1\n\n# Install Node.js 24 LTS\ncurl -fsSL https://deb.nodesource.com/setup_24.x | bash -\napt-get install -y nodejs\nnpm install -g npm@11.17.0\n\n# Install AWS CLI v2 (detect architecture for ARM64 Graviton or x86_64)\nARCH=\"$(uname -m)\"\nif [[ \"$ARCH\" == \"aarch64\" ]]; then\n  AWS_CLI_URL=\"https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip\"\nelse\n  AWS_CLI_URL=\"https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip\"\nfi\ncurl -fsSL \"$AWS_CLI_URL\" -o /tmp/awscliv2.zip\nunzip -q /tmp/awscliv2.zip -d /tmp\n/tmp/aws/install --update\nrm -rf /tmp/aws /tmp/awscliv2.zip\n\n# Install AWS CodeDeploy Agent for af-south-1\ncd /tmp\nwget -q \"https://aws-codedeploy-af-south-1.s3.af-south-1.amazonaws.com/latest/install\" -O codedeploy-install\nchmod +x ./codedeploy-install\n./codedeploy-install auto\nsystemctl enable codedeploy-agent\nsystemctl start codedeploy-agent\nrm -f /tmp/codedeploy-install\n\n# Install AWS RDS Global CA Bundle for verified PostgreSQL TLS\ncurl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/ssl/certs/rds-global-bundle.pem\nchmod 0644 /etc/ssl/certs/rds-global-bundle.pem\n\n# Create dedicated service user and application directories\nid -u plethora >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin plethora\nmkdir -p /opt/plethora/current /opt/plethora/release /run/plethora\nchown -R plethora:plethora /opt/plethora /run/plethora\n\nmkdir -p /etc/plethora\ncat <<'EOF' > /etc/plethora/instance.env\nAWS_REGION=af-south-1\nPLETHORA_APP_SECRET_ID=",
+         "#!/bin/bash\n#!/usr/bin/env bash\nset -euo pipefail\n\nexport DEBIAN_FRONTEND=noninteractive\n\napt-get update -y\napt-get upgrade -y\napt-get install -y \\\n  ca-certificates \\\n  curl \\\n  gnupg \\\n  jq \\\n  ruby-full \\\n  wget \\\n  unzip \\\n  chromium \\\n  fonts-liberation \\\n  libnss3 \\\n  libatk-bridge2.0-0 \\\n  libgtk-3-0 \\\n  libasound2t64 || apt-get install -y libasound2 \\\n  libxss1 \\\n  libgbm1\n\n# Install Node.js 24 LTS\ncurl -fsSL https://deb.nodesource.com/setup_24.x | bash -\napt-get install -y nodejs\nnpm install -g npm@11.17.0\n\n# Install AWS CLI v2 (detect architecture for ARM64 Graviton or x86_64)\nARCH=\"$(uname -m)\"\nif [[ \"$ARCH\" == \"aarch64\" ]]; then\n  AWS_CLI_URL=\"https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip\"\nelse\n  AWS_CLI_URL=\"https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip\"\nfi\ncurl -fsSL \"$AWS_CLI_URL\" -o /tmp/awscliv2.zip\nunzip -q /tmp/awscliv2.zip -d /tmp\n/tmp/aws/install --update\nrm -rf /tmp/aws /tmp/awscliv2.zip\n\n# Install AWS CodeDeploy Agent for af-south-1\ncd /tmp\nwget -q \"https://aws-codedeploy-af-south-1.s3.af-south-1.amazonaws.com/latest/install\" -O codedeploy-install\nchmod +x ./codedeploy-install\n./codedeploy-install auto\nsystemctl enable codedeploy-agent\nsystemctl start codedeploy-agent\nrm -f /tmp/codedeploy-install\n\n# Install AWS RDS Global CA Bundle for verified PostgreSQL TLS\ncurl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/ssl/certs/rds-global-bundle.pem\nchmod 0644 /etc/ssl/certs/rds-global-bundle.pem\n\n# Create dedicated service user and application directories\nid -u plethora >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin plethora\nmkdir -p /opt/plethora/current /opt/plethora/release /run/plethora\nchown -R plethora:plethora /opt/plethora /run/plethora\n\nmkdir -p /etc/plethora\ncat <<'EOF' > /etc/plethora/instance.env\nAWS_REGION=us-east-1\nPLETHORA_APP_SECRET_ID=",
          {
           "Fn::Join": [
            "-",

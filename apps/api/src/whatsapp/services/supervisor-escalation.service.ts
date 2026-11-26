@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { normalizeWhatsAppPhone } from "../../lib/phone.js";
-import { sendText } from "./send.service.js";
+import { sendTextWithTemplateFallback, templateBodyParameters } from "./send.service.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { operationalEventBus } from "../../lib/events.js";
 import { format } from "date-fns";
@@ -177,7 +177,19 @@ export async function dispatchSupervisorEscalation(
   }
 
   try {
-    await sendText(supervisorPhone, message);
+    const delivery = await sendTextWithTemplateFallback(supervisorPhone, message, {
+      name: "plethora_supervisor_escalation",
+      components: templateBodyParameters([
+        refCode,
+        `${params.guardName} (${params.guardPhone})`,
+        siteName,
+        params.severity ?? "URGENT",
+        params.reason || "Guard requested immediate supervisor assistance",
+      ]),
+    });
+    if (!delivery.success) {
+      throw new Error(delivery.error ?? "Failed to dispatch WhatsApp message");
+    }
 
     // Record outbound communication in WhatsAppMessage table
     if (prisma.whatsAppMessage?.create) {
@@ -202,9 +214,9 @@ export async function dispatchSupervisorEscalation(
           data: {
             companyId: params.companyId,
             employeeId: targetEmpId,
-            whatsappMessageId: `outbound_sup_${Date.now()}_${refCode}`,
+            whatsappMessageId: delivery.messageId ?? `outbound_sup_${Date.now()}_${refCode}`,
             direction: "outbound",
-            type: "text",
+            type: delivery.usedTemplate ? "template" : "text",
             text: message,
           },
         }).catch((err) => console.warn("[Escalation Message Log Error]", err));
@@ -226,6 +238,7 @@ export async function dispatchSupervisorEscalation(
         supervisorUserId,
         siteName,
         reason: params.reason,
+        usedTemplate: delivery.usedTemplate === true,
       },
     }).catch(() => undefined);
 

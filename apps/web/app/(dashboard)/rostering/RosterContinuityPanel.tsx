@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import {
   activateRosterContinuity,
@@ -16,6 +16,7 @@ import {
   type RosterSetupSuggestion,
   type RosterShiftCode,
 } from "@/lib/roster-api";
+import { AlertBanner, Badge, Button, Card, Field, KpiStrip, Modal, SkeletonBlock, Textarea } from "@/components/ui";
 
 const SHIFT_LABELS: Record<RosterShiftCode, string> = {
   D: "Day shift",
@@ -49,9 +50,9 @@ function SetupSteps({ current }: { current: number }) {
         const active = number === current;
         const complete = number < current;
         return (
-          <li key={label} className={`rounded-security-lg border px-3 py-2 ${active ? "border-security-amber-400 bg-security-amber-50 dark:border-security-amber-700 dark:bg-security-amber-950/30" : "border-security-navy-100 bg-white dark:border-security-navy-700 dark:bg-security-navy-900"}`}>
-            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${complete ? "bg-security-emerald-600 text-white" : active ? "bg-security-amber-500 text-white" : "bg-security-navy-50 text-security-navy-500 dark:bg-security-navy-800"}`}>{complete ? "✓" : number}</span>
-            <span className="ml-2 text-xs font-semibold text-security-navy-900 dark:text-security-navy-200">{label}</span>
+          <li key={label} className={`rounded-security-lg border px-3 py-2 ${active ? "border-security-amber-400 bg-security-amber-50" : "border-security-navy-100 bg-white"}`}>
+            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${complete ? "bg-security-emerald-600 text-white" : active ? "bg-security-amber-500 text-white" : "bg-security-navy-50 text-security-navy-500"}`}>{complete ? "✓" : number}</span>
+            <span className="ml-2 text-xs font-semibold text-security-navy-900">{label}</span>
           </li>
         );
       })}
@@ -70,19 +71,19 @@ function PatternPreview({ suggestion }: { suggestion: RosterSetupSuggestion }) {
     }));
   }, [suggestion]);
   if (!suggestion.pattern) {
-    return <p className="rounded-security-lg border border-security-amber-200 bg-security-amber-50 p-4 text-sm text-security-amber-900 dark:border-security-amber-800 dark:bg-security-amber-950/30 dark:text-security-amber-200">Plethora could not confirm a safe repeating schedule from the available history.</p>;
+    return <p className="rounded-security-lg border border-security-amber-200 bg-security-amber-50 p-4 text-sm text-security-amber-900">Plethora could not confirm a safe repeating schedule from the available history.</p>;
   }
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-security-emerald-50 px-2.5 py-1 text-xs font-semibold text-security-emerald-700 ring-1 ring-security-emerald-200 dark:bg-security-emerald-700/40 dark:text-security-emerald-300 dark:ring-security-emerald-700">Schedule found</span>
-        <span className="text-sm text-security-navy-600 dark:text-security-navy-400">Matches {suggestion.confidencePercent}% of recent roster history</span>
+        <span className="rounded-full bg-security-emerald-50 px-2.5 py-1 text-xs font-semibold text-security-emerald-700 ring-1 ring-security-emerald-200">Schedule found</span>
+        <span className="text-sm text-security-navy-600">Matches {suggestion.confidencePercent}% of recent roster history</span>
       </div>
-      <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
+      <div className="overflow-x-auto rounded-security-lg border border-security-navy-100">
         <table className="min-w-full border-collapse text-sm">
-          <thead className="bg-security-navy-50 text-xs text-security-navy-500 dark:bg-security-navy-900 dark:text-security-navy-400"><tr><th className="sticky left-0 bg-security-navy-50 px-3 py-2 text-left dark:bg-security-navy-900">Guard</th>{Array.from({ length: suggestion.pattern.cycleLengthDays }, (_, index) => <th key={index} className="min-w-24 px-2 py-2 text-center">Cycle day {index + 1}</th>)}</tr></thead>
-          <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
-            {rows.map((row) => <tr key={row.id}><td className="sticky left-0 whitespace-nowrap bg-white px-3 py-2 font-medium dark:bg-security-navy-900">{row.name}</td>{Array.from({ length: suggestion.pattern!.cycleLengthDays }, (_, patternDayIndex) => { const cell = row.cells.find((item) => item.patternDayIndex === patternDayIndex); const code = cell?.shiftCode ?? "blank"; return <td key={patternDayIndex} className="px-2 py-2 text-center"><span className={`inline-flex rounded-lg px-2 py-1 text-xs font-semibold ${code === "D" ? "bg-security-amber-100 text-security-amber-800" : code === "N" ? "bg-indigo-100 text-indigo-800" : "bg-security-navy-50 text-security-navy-600"}`}>{SHIFT_LABELS[code]}</span></td>; })}</tr>)}
+          <thead className="bg-security-navy-50 text-xs text-security-navy-500"><tr><th className="sticky left-0 bg-security-navy-50 px-3 py-2 text-left">Guard</th>{Array.from({ length: suggestion.pattern.cycleLengthDays }, (_, index) => <th key={index} className="min-w-24 px-2 py-2 text-center">Cycle day {index + 1}</th>)}</tr></thead>
+          <tbody className="divide-y divide-security-navy-100">
+            {rows.map((row) => <tr key={row.id}><td className="sticky left-0 whitespace-nowrap bg-white px-3 py-2 font-medium">{row.name}</td>{Array.from({ length: suggestion.pattern!.cycleLengthDays }, (_, patternDayIndex) => { const cell = row.cells.find((item) => item.patternDayIndex === patternDayIndex); const code = cell?.shiftCode ?? "blank"; return <td key={patternDayIndex} className="px-2 py-2 text-center"><span className={`inline-flex rounded-lg px-2 py-1 text-xs font-semibold ${code === "D" ? "bg-security-amber-100 text-security-amber-800" : code === "N" ? "bg-indigo-100 text-indigo-800" : "bg-security-navy-50 text-security-navy-600"}`}>{SHIFT_LABELS[code]}</span></td>; })}</tr>)}
           </tbody>
         </table>
       </div>
@@ -114,7 +115,6 @@ export function RosterContinuityPanel({
   const [pauseReason, setPauseReason] = useState("");
   const [replacementIssue, setReplacementIssue] = useState<RosterContinuityIssue | null>(null);
   const [replacements, setReplacements] = useState<RosterReplacementSuggestion[]>([]);
-  const closeReplacementRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!token || status.state !== "not_setup") return;
@@ -129,10 +129,6 @@ export function RosterContinuityPanel({
       .catch((cause) => setError(cause instanceof Error ? cause.message : "Could not analyse the existing roster."))
       .finally(() => setLoadingSuggestion(false));
   }, [siteId, status.state, token]);
-
-  useEffect(() => {
-    if (replacementIssue) closeReplacementRef.current?.focus();
-  }, [replacementIssue]);
 
   const activate = async () => {
     if (!token || !status.permissions.canManageBaseline || !suggestion || !calendarId || !effectiveFrom) return;
@@ -202,46 +198,137 @@ export function RosterContinuityPanel({
 
   if (status.state === "not_setup") {
     return (
-      <section className="space-y-5 rounded-2xl border border-security-amber-200 bg-white p-4 shadow-security-card dark:border-security-amber-900/60 dark:bg-security-navy-900 sm:p-6">
-        <div><p className="text-xs font-semibold uppercase tracking-wider text-security-amber-700 dark:text-security-amber-300">Set up automatic rostering</p><h2 className="mt-1 text-xl font-semibold text-security-navy-900 dark:text-white">Review what Plethora found</h2><p className="mt-1 text-sm text-security-navy-600 dark:text-security-navy-400">Nothing will be activated until a user with roster edit access confirms all four steps.</p></div>
+      <section className="space-y-5 rounded-2xl border border-security-amber-200 bg-white p-4 shadow-security-card sm:p-6">
+        <div><p className="text-xs font-semibold uppercase tracking-wider text-security-amber-700">Set up automatic rostering</p><h2 className="mt-1 text-xl font-semibold text-security-navy-900">Review what Plethora found</h2><p className="mt-1 text-sm text-security-navy-600">Nothing will be activated until a user with roster edit access confirms all four steps.</p></div>
         <SetupSteps current={setupStep} />
-        {error && <div role="alert" className="rounded-security-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">{error}</div>}
-        {loadingSuggestion && <div className="h-44 animate-pulse rounded-security-lg bg-security-navy-50 dark:bg-security-navy-800" />}
-        {suggestion && setupStep === 1 && <div className="space-y-4"><div><h3 className="font-semibold text-security-navy-900 dark:text-white">Team at this site</h3><p className="mt-1 text-sm text-security-navy-500">{suggestion.assignedGuards.length} guard{suggestion.assignedGuards.length === 1 ? "" : "s"} included in the suggested roster.</p></div><div className="grid gap-2 sm:grid-cols-2">{suggestion.assignedGuards.map((guard) => <div key={guard.id} className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 px-3 py-2 text-sm font-medium dark:border-security-navy-700 dark:bg-security-navy-800">{guard.name}</div>)}</div>{suggestion.assignedGuards.length === 0 && <Link href={`/sites/${siteId}`} className="btn-primary inline-flex">Add guards to this site</Link>}</div>}
+        {error && <div role="alert" className="rounded-security-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
+        {loadingSuggestion && <div className="h-44 animate-pulse rounded-security-lg bg-security-navy-50" />}
+        {suggestion && setupStep === 1 && <div className="space-y-4"><div><h3 className="font-semibold text-security-navy-900">Team at this site</h3><p className="mt-1 text-sm text-security-navy-500">{suggestion.assignedGuards.length} guard{suggestion.assignedGuards.length === 1 ? "" : "s"} included in the suggested roster.</p></div><div className="grid gap-2 sm:grid-cols-2">{suggestion.assignedGuards.map((guard) => <div key={guard.id} className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 px-3 py-2 text-sm font-medium">{guard.name}</div>)}</div>{suggestion.assignedGuards.length === 0 && <Link href={`/sites/${siteId}`} className="btn-primary inline-flex">Add guards to this site</Link>}</div>}
         {suggestion && setupStep === 2 && <div className="space-y-4"><PatternPreview suggestion={suggestion} />{!suggestion.pattern && <div className="flex flex-wrap gap-2"><Link href={`/sites/${siteId}`} className="btn-secondary">Check team assignments</Link>{status.permissions.canUseAdvancedEditor && <Link href={`/rostering/sites/${siteId}/advanced`} className="btn-primary">Build schedule manually</Link>}</div>}</div>}
-        {suggestion && setupStep === 3 && <div className="grid gap-4 sm:grid-cols-2"><label className="rounded-security-lg border border-security-navy-100 p-4 dark:border-security-navy-700"><span className="text-sm font-semibold text-security-navy-900 dark:text-white">Roster period</span><select value={calendarId} onChange={(event) => setCalendarId(event.target.value)} className="input-modern mt-2 w-full">{suggestion.calendars.map((calendar) => <option key={calendar.id} value={calendar.id}>{calendar.name} ({calendar.startDay}–{calendar.endDay})</option>)}</select><span className="mt-2 block text-xs text-security-navy-500">The schedule will continue using this site calendar.</span></label><label className="rounded-security-lg border border-security-navy-100 p-4 dark:border-security-navy-700"><span className="text-sm font-semibold text-security-navy-900 dark:text-white">Start continuing from</span><input type="date" value={effectiveFrom} onChange={(event) => setEffectiveFrom(event.target.value)} className="input-modern mt-2 w-full" /><span className="mt-2 block text-xs text-security-navy-500">Existing published periods remain unchanged.</span></label></div>}
-        {suggestion && setupStep === 4 && <div className="space-y-4"><div className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-4 dark:border-security-navy-700 dark:bg-security-navy-800/50"><h3 className="font-semibold text-security-navy-900 dark:text-white">Ready to activate</h3><dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3"><div><dt className="text-security-navy-500">Team</dt><dd className="font-medium">{suggestion.assignedGuards.length} guards</dd></div><div><dt className="text-security-navy-500">Roster period</dt><dd className="font-medium">{suggestion.calendars.find((item) => item.id === calendarId)?.name}</dd></div><div><dt className="text-security-navy-500">Starts</dt><dd className="font-medium">{displayDate(effectiveFrom)}</dd></div></dl></div>{suggestion.issues.length > 0 && <div className="rounded-security-lg border border-security-amber-200 bg-security-amber-50 p-4 text-sm text-security-amber-900 dark:border-security-amber-800 dark:bg-security-amber-950/30 dark:text-security-amber-200"><p className="font-semibold">Resolve these items first</p><ul className="mt-2 list-disc space-y-1 pl-5">{suggestion.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul><div className="mt-3 flex flex-wrap gap-2"><Link href={`/sites/${siteId}`} className="btn-secondary">Update team or staffing</Link>{status.permissions.canUseAdvancedEditor && <Link href={`/rostering/sites/${siteId}/advanced`} className="btn-secondary">Edit suggested schedule</Link>}</div></div>}{!status.permissions.canManageBaseline && <p className="rounded-security-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">A user with roster edit access must complete activation.</p>}</div>}
-        {suggestion && <div className="flex flex-col-reverse gap-2 border-t border-security-navy-100 pt-4 dark:border-security-navy-700 sm:flex-row sm:items-center sm:justify-between"><button type="button" onClick={() => setSetupStep((step) => Math.max(1, step - 1))} disabled={setupStep === 1 || working} className="btn-secondary disabled:opacity-40">Back</button>{setupStep < 4 ? <button type="button" onClick={() => setSetupStep((step) => Math.min(4, step + 1))} disabled={(setupStep === 1 && suggestion.assignedGuards.length === 0) || (setupStep === 2 && !suggestion.pattern)} className="btn-primary disabled:opacity-50">Continue</button> : <button type="button" onClick={() => void activate()} disabled={!suggestion.canActivate || !status.permissions.canManageBaseline || working} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50">{working ? "Starting…" : "Activate automatic rostering"}</button>}</div>}
-        {suggestion && <details className="rounded-security-lg border border-security-navy-100 px-3 py-2 text-xs dark:border-security-navy-700"><summary className="cursor-pointer font-medium text-security-navy-600 dark:text-security-navy-300">Advanced suggestion details</summary><p className="mt-2 text-security-navy-500">{suggestion.pattern ? `${suggestion.pattern.cycleLengthDays}-day repeating cycle inferred from ${displayDate(suggestion.sourcePeriod?.startDate)} to ${displayDate(suggestion.sourcePeriod?.endDate)}.` : suggestion.message}</p></details>}
+        {suggestion && setupStep === 3 && <div className="grid gap-4 sm:grid-cols-2"><label className="rounded-security-lg border border-security-navy-100 p-4"><span className="text-sm font-semibold text-security-navy-900">Roster period</span><select value={calendarId} onChange={(event) => setCalendarId(event.target.value)} className="input-modern mt-2 w-full">{suggestion.calendars.map((calendar) => <option key={calendar.id} value={calendar.id}>{calendar.name} ({calendar.startDay}–{calendar.endDay})</option>)}</select><span className="mt-2 block text-xs text-security-navy-500">The schedule will continue using this site calendar.</span></label><label className="rounded-security-lg border border-security-navy-100 p-4"><span className="text-sm font-semibold text-security-navy-900">Start continuing from</span><input type="date" value={effectiveFrom} onChange={(event) => setEffectiveFrom(event.target.value)} className="input-modern mt-2 w-full" /><span className="mt-2 block text-xs text-security-navy-500">Existing published periods remain unchanged.</span></label></div>}
+        {suggestion && setupStep === 4 && <div className="space-y-4"><div className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-4"><h3 className="font-semibold text-security-navy-900">Ready to activate</h3><dl className="mt-3 grid gap-3 text-sm sm:grid-cols-3"><div><dt className="text-security-navy-500">Team</dt><dd className="font-medium">{suggestion.assignedGuards.length} guards</dd></div><div><dt className="text-security-navy-500">Roster period</dt><dd className="font-medium">{suggestion.calendars.find((item) => item.id === calendarId)?.name}</dd></div><div><dt className="text-security-navy-500">Starts</dt><dd className="font-medium">{displayDate(effectiveFrom)}</dd></div></dl></div>{suggestion.issues.length > 0 && <div className="rounded-security-lg border border-security-amber-200 bg-security-amber-50 p-4 text-sm text-security-amber-900"><p className="font-semibold">Resolve these items first</p><ul className="mt-2 list-disc space-y-1 pl-5">{suggestion.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul><div className="mt-3 flex flex-wrap gap-2"><Link href={`/sites/${siteId}`} className="btn-secondary">Update team or staffing</Link>{status.permissions.canUseAdvancedEditor && <Link href={`/rostering/sites/${siteId}/advanced`} className="btn-secondary">Edit suggested schedule</Link>}</div></div>}{!status.permissions.canManageBaseline && <p className="rounded-security-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">A user with roster edit access must complete activation.</p>}</div>}
+        {suggestion && <div className="flex flex-col-reverse gap-2 border-t border-security-navy-100 pt-4 sm:flex-row sm:items-center sm:justify-between"><button type="button" onClick={() => setSetupStep((step) => Math.max(1, step - 1))} disabled={setupStep === 1 || working} className="btn-secondary disabled:opacity-40">Back</button>{setupStep < 4 ? <button type="button" onClick={() => setSetupStep((step) => Math.min(4, step + 1))} disabled={(setupStep === 1 && suggestion.assignedGuards.length === 0) || (setupStep === 2 && !suggestion.pattern)} className="btn-primary disabled:opacity-50">Continue</button> : <button type="button" onClick={() => void activate()} disabled={!suggestion.canActivate || !status.permissions.canManageBaseline || working} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50">{working ? "Starting…" : "Activate automatic rostering"}</button>}</div>}
+        {suggestion && <details className="rounded-security-lg border border-security-navy-100 px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-security-navy-600">Advanced suggestion details</summary><p className="mt-2 text-security-navy-500">{suggestion.pattern ? `${suggestion.pattern.cycleLengthDays}-day repeating cycle inferred from ${displayDate(suggestion.sourcePeriod?.startDate)} to ${displayDate(suggestion.sourcePeriod?.endDate)}.` : suggestion.message}</p></details>}
       </section>
     );
   }
 
   return (
     <div className="space-y-5">
-      {(error || message) && <div role={error ? "alert" : "status"} className={`rounded-security-lg border px-4 py-3 text-sm ${error ? "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200" : "border-security-emerald-200 bg-security-emerald-50 text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/30 dark:text-security-emerald-200"}`}>{error ?? message}</div>}
+      {(error || message) && <div role={error ? "alert" : "status"} className={`rounded-security-lg border px-4 py-3 text-sm ${error ? "border-red-200 bg-red-50 text-red-800" : "border-security-emerald-200 bg-security-emerald-50 text-security-emerald-700"}`}>{error ?? message}</div>}
       <section className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-security-navy-100 bg-white p-4 shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900"><p className="text-xs text-security-navy-500">Coverage prepared through</p><p className="mt-1 text-lg font-semibold text-security-navy-900 dark:text-white">{status.maintainedThrough ? displayDate(status.maintainedThrough) : status.lastStatus === "failed" ? "Update failed" : "Preparing future shifts"}</p></div>
-        <div className="rounded-2xl border border-security-navy-100 bg-white p-4 shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900"><p className="text-xs text-security-navy-500">Normal schedule</p><p className="mt-1 text-lg font-semibold text-security-navy-900 dark:text-white">{status.activePattern?.name ?? "No active pattern"}</p><p className="mt-1 text-xs text-security-navy-500">{status.calendar.name} ({status.calendar.startDay}–{status.calendar.endDay})</p></div>
-        <div className="rounded-2xl border border-security-navy-100 bg-white p-4 shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900"><p className="text-xs text-security-navy-500">Items needing attention</p><p className="mt-1 text-lg font-semibold text-security-navy-900 dark:text-white">{status.issues.length}</p><p className="mt-1 text-xs text-security-navy-500">Last checked {status.lastReconciledAt ? new Date(status.lastReconciledAt).toLocaleString("en-ZA") : "not yet"}</p></div>
+        <div className="rounded-2xl border border-security-navy-100 bg-white p-4 shadow-security-card"><p className="text-xs text-security-navy-500">Coverage prepared through</p><p className="mt-1 text-lg font-semibold text-security-navy-900">{status.maintainedThrough ? displayDate(status.maintainedThrough) : status.lastStatus === "failed" ? "Update failed" : "Preparing future shifts"}</p></div>
+        <div className="rounded-2xl border border-security-navy-100 bg-white p-4 shadow-security-card"><p className="text-xs text-security-navy-500">Normal schedule</p><p className="mt-1 text-lg font-semibold text-security-navy-900">{status.activePattern?.name ?? "No active pattern"}</p><p className="mt-1 text-xs text-security-navy-500">{status.calendar.name} ({status.calendar.startDay}–{status.calendar.endDay})</p></div>
+        <div className="rounded-2xl border border-security-navy-100 bg-white p-4 shadow-security-card"><p className="text-xs text-security-navy-500">Items needing attention</p><p className="mt-1 text-lg font-semibold text-security-navy-900">{status.issues.length}</p><p className="mt-1 text-xs text-security-navy-500">Last checked {status.lastReconciledAt ? new Date(status.lastReconciledAt).toLocaleString("en-ZA") : "not yet"}</p></div>
       </section>
 
-      <section className="rounded-2xl border border-security-navy-100 bg-white p-4 shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900 sm:p-5">
-        <div><h2 className="text-base font-semibold text-security-navy-900 dark:text-white">Common actions</h2><p className="mt-1 text-sm text-security-navy-500">Use a focused action without rebuilding the full roster.</p></div>
+      <section className="rounded-2xl border border-security-navy-100 bg-white p-4 shadow-security-card sm:p-5">
+        <div><h2 className="text-base font-semibold text-security-navy-900">Common actions</h2><p className="mt-1 text-sm text-security-navy-500">Use a focused action without rebuilding the full roster.</p></div>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           {status.state === "paused" ? status.permissions.canManageBaseline && <button type="button" onClick={() => void resume()} disabled={working} className="btn-primary">{working ? "Resuming…" : "Resume automatic rostering"}</button> : <>{status.permissions.canManageExceptions && <button type="button" onClick={onOneDayChange} className="btn-primary">Make a one-day change</button>}{status.permissions.canManageBaseline && <><Link href={`/rostering/sites/${siteId}/advanced?mode=ongoing`} className="btn-secondary hidden sm:inline-flex">Change the ongoing schedule</Link><button type="button" onClick={() => void updateNow()} disabled={working} className="btn-secondary">{working ? "Updating…" : "Update roster now"}</button><button type="button" onClick={() => setPauseOpen(true)} className="btn-secondary">Pause automatic rostering</button></>}</>}
         </div>
-        {status.state === "paused" && status.pauseReason && <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800 dark:bg-blue-950/30 dark:text-blue-200"><span className="font-semibold">Reason:</span> {status.pauseReason}</p>}
+        {status.state === "paused" && status.pauseReason && <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800"><span className="font-semibold">Reason:</span> {status.pauseReason}</p>}
       </section>
 
       <section className="space-y-3">
-        <div><h2 className="text-lg font-semibold text-security-navy-900 dark:text-white">What needs attention</h2><p className="text-sm text-security-navy-500">Only the affected shift needs action; the rest of the roster continues normally.</p></div>
-        {status.issues.length === 0 ? <div className="rounded-2xl border border-security-emerald-200 bg-security-emerald-50 p-5 text-sm text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/30 dark:text-security-emerald-200"><p className="font-semibold">No interruptions</p><p className="mt-1">The roster is continuing normally.</p></div> : status.issues.map((issue) => { const canReplace = status.permissions.canManageExceptions && Boolean(issue.metadata?.dateKey && issue.metadata?.shiftType); return <article id={`roster-issue-${issue.id}`} key={issue.id} tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-security-amber-200 bg-security-amber-50/60 p-4 outline-none focus:ring-2 focus:ring-security-amber-400 dark:border-security-amber-800 dark:bg-security-amber-950/20"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-security-amber-950 dark:text-security-amber-100">{issue.title}</h3>{issue.priority === "CRITICAL" && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">Urgent</span>}</div><p className="mt-1 text-sm text-security-amber-900 dark:text-security-amber-200">{issue.message}</p></div>{canReplace && <button type="button" onClick={() => void findReplacement(issue)} disabled={working} className="btn-primary shrink-0">Find a replacement</button>}</div></article>; })}
+        <div><h2 className="text-lg font-semibold text-security-navy-900">What needs attention</h2><p className="text-sm text-security-navy-500">Only the affected shift needs action; the rest of the roster continues normally.</p></div>
+        {status.issues.length === 0 ? <div className="rounded-2xl border border-security-emerald-200 bg-security-emerald-50 p-5 text-sm text-security-emerald-700"><p className="font-semibold">No interruptions</p><p className="mt-1">The roster is continuing normally.</p></div> : status.issues.map((issue) => { const canReplace = status.permissions.canManageExceptions && Boolean(issue.metadata?.dateKey && issue.metadata?.shiftType); return <article id={`roster-issue-${issue.id}`} key={issue.id} tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-security-amber-200 bg-security-amber-50/60 p-4 outline-none focus:ring-2 focus:ring-security-amber-400"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-security-amber-950">{issue.title}</h3>{issue.priority === "CRITICAL" && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">Urgent</span>}</div><p className="mt-1 text-sm text-security-amber-900">{issue.message}</p></div>{canReplace && <button type="button" onClick={() => void findReplacement(issue)} disabled={working} className="btn-primary shrink-0">Find a replacement</button>}</div></article>; })}
       </section>
 
-      {pauseOpen && <div className="fixed inset-0 z-[90] flex items-end justify-center bg-security-navy-900/50 p-0 sm:items-center sm:p-4" role="presentation"><div role="dialog" aria-modal="true" aria-labelledby="pause-title" className="w-full rounded-t-2xl bg-white p-5 shadow-xl dark:bg-security-navy-900 sm:max-w-md sm:rounded-2xl"><h2 id="pause-title" className="text-lg font-semibold text-security-navy-900 dark:text-white">Pause automatic rostering</h2><p className="mt-1 text-sm text-security-navy-500">Future automatic updates stop until a user with roster edit access resumes them. Existing shifts remain unchanged.</p><label className="mt-4 block"><span className="text-sm font-medium text-security-navy-900 dark:text-security-navy-200">Reason for pausing</span><textarea value={pauseReason} onChange={(event) => setPauseReason(event.target.value)} rows={3} className="input-modern mt-2 w-full" placeholder="For example: site contract under review" autoFocus /></label><div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setPauseOpen(false)} className="btn-secondary">Cancel</button><button type="button" onClick={() => void pause()} disabled={!pauseReason.trim() || working} className="btn-primary disabled:opacity-50">{working ? "Pausing…" : "Pause rostering"}</button></div></div></div>}
+      {pauseOpen && (
+        <Modal
+          open={pauseOpen}
+          onClose={() => { if (!working) setPauseOpen(false); }}
+          title="Pause automatic rostering"
+          description="Future automatic updates stop until a user with roster edit access resumes them. Existing shifts remain unchanged."
+          size="sm"
+          closeOnBackdrop={!working}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setPauseOpen(false)} disabled={working}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                loading={working}
+                disabled={!pauseReason.trim()}
+                onClick={() => void pause()}
+              >
+                Pause rostering
+              </Button>
+            </>
+          }
+        >
+          <Field label="Reason for pausing">
+            <Textarea
+              value={pauseReason}
+              onChange={(event) => setPauseReason(event.target.value)}
+              rows={3}
+              placeholder="For example: site contract under review"
+              autoFocus
+            />
+          </Field>
+        </Modal>
+      )}
 
-      {replacementIssue && <div className="fixed inset-0 z-[90] flex items-end justify-center bg-security-navy-900/50 sm:items-center sm:p-4" role="presentation"><div role="dialog" aria-modal="true" aria-labelledby="replacement-title" className="max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl dark:bg-security-navy-900 sm:max-w-2xl sm:rounded-2xl"><div className="flex items-start justify-between gap-3"><div><h2 id="replacement-title" className="text-lg font-semibold text-security-navy-900 dark:text-white">Recommended replacements</h2><p className="mt-1 text-sm text-security-navy-500">Available and eligible guards are ranked with an explanation. The normal roster will not change.</p></div><button ref={closeReplacementRef} type="button" onClick={() => { setReplacementIssue(null); setReplacements([]); }} className="btn-secondary px-3 py-1.5">Close</button></div><div className="mt-4 space-y-3">{replacements.length === 0 ? <div className="rounded-security-lg border border-security-amber-200 bg-security-amber-50 p-4 text-sm text-security-amber-900 dark:border-security-amber-800 dark:bg-security-amber-950/30 dark:text-security-amber-200"><p className="font-semibold">No eligible replacement is available</p><p className="mt-1">Review site assignments or contact a user with roster approval access.</p></div> : replacements.slice(0, 5).map((replacement, index) => <div key={replacement.employeeId} className="rounded-security-lg border border-security-navy-100 p-4 dark:border-security-navy-700"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2"><p className="font-semibold text-security-navy-900 dark:text-white">{replacement.name}</p>{index === 0 && <span className="rounded-full bg-security-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-300">Best match</span>}</div><p className="mt-1 text-xs leading-relaxed text-security-navy-500">{replacement.reasons.join(" · ")}</p></div><button type="button" onClick={() => void assignReplacement(replacement.employeeId)} disabled={working} className="btn-primary shrink-0">{working ? "Assigning…" : "Assign and publish"}</button></div></div>)}</div></div></div>}
+      <Modal
+        open={Boolean(replacementIssue)}
+        onClose={() => {
+          if (!working) {
+            setReplacementIssue(null);
+            setReplacements([]);
+          }
+        }}
+        title="Recommended replacements"
+        description="Available and eligible guards are ranked with an explanation. The normal roster will not change."
+        size="lg"
+        closeOnBackdrop={!working}
+        footer={
+          <Button
+            variant="secondary"
+            disabled={working}
+            onClick={() => {
+              setReplacementIssue(null);
+              setReplacements([]);
+            }}
+          >
+            Close
+          </Button>
+        }
+      >
+        <div className="space-y-3">
+          {replacements.length === 0 ? (
+            <AlertBanner variant="warning" title="No eligible replacement is available">
+              Review site assignments or contact a user with roster approval access.
+            </AlertBanner>
+          ) : (
+            replacements.slice(0, 5).map((replacement, index) => (
+              <div
+                key={replacement.employeeId}
+                className="flex flex-col gap-3 rounded-security-lg border border-security-navy-100 p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-security-navy-900">{replacement.name}</p>
+                    {index === 0 && <Badge variant="success">Best match</Badge>}
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-security-navy-500">
+                    {replacement.reasons.join(" · ")}
+                  </p>
+                </div>
+                <Button
+                  variant="primary"
+                  loading={working}
+                  onClick={() => void assignReplacement(replacement.employeeId)}
+                  className="shrink-0"
+                >
+                  Assign and publish
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

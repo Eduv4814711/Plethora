@@ -116,23 +116,23 @@ export function ShiftCellActionDrawer({
       onClick={(e) => {
         if (e.target === dialogRef.current) onClose();
       }}
-      className="m-auto w-full max-w-lg rounded-2xl border border-security-navy-200 dark:border-security-navy-700 bg-white dark:bg-security-navy-900 p-0 text-security-navy-900 dark:text-white shadow-2xl"
+      className="m-auto w-full max-w-lg rounded-2xl border border-security-navy-200 bg-white p-0 text-security-navy-900 shadow-2xl"
     >
       {cell && (
         <>
-          <div className="flex items-center justify-between border-b border-security-navy-200 dark:border-security-navy-800 px-5 py-4">
+          <div className="flex items-center justify-between border-b border-security-navy-200 px-5 py-4">
             <div>
               <h2 className="text-base font-semibold">
                 {cell.guardName} · {cell.dateKey}
               </h2>
-              <p className="text-xs text-security-navy-500 dark:text-security-navy-400">
+              <p className="text-xs text-security-navy-500">
                 ID {cell.employeeNumber} · Current: {cell.currentCode || "Off"}
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg px-3 py-2 text-xs text-security-navy-500 hover:bg-security-navy-100 dark:hover:bg-security-navy-800 min-h-[38px]"
+              className="rounded-lg px-3 py-2 text-xs text-security-navy-500 hover:bg-security-navy-100 min-h-[38px]"
             >
               Close
             </button>
@@ -140,7 +140,7 @@ export function ShiftCellActionDrawer({
 
           <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700">
                 {error}
               </div>
             )}
@@ -171,7 +171,7 @@ export function ShiftCellActionDrawer({
                       className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition-all min-h-[44px] ${
                         active
                           ? "ring-2 ring-[var(--accent-primary)] " + opt.cls
-                          : "border-security-navy-200 dark:border-security-navy-700 hover:bg-security-navy-50 dark:hover:bg-security-navy-800"
+                          : "border-security-navy-200 hover:bg-security-navy-50"
                       }`}
                     >
                       {opt.label}
@@ -182,7 +182,7 @@ export function ShiftCellActionDrawer({
             </div>
 
             {shiftMode !== "O" && (
-              <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-700 p-3.5 space-y-3">
+              <div className="rounded-xl border border-security-navy-200 p-3.5 space-y-3">
                 <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
                   <input
                     type="checkbox"
@@ -213,10 +213,10 @@ export function ShiftCellActionDrawer({
                               onClick={() => setSelectedReplacementId(c.employeeId)}
                               className={`w-full text-left rounded-lg border p-2.5 text-xs transition-colors min-h-[44px] ${
                                 !c.eligible
-                                  ? "opacity-50 cursor-not-allowed border-security-navy-200 bg-security-navy-50 dark:bg-security-navy-800/30"
+                                  ? "opacity-50 cursor-not-allowed border-security-navy-200 bg-security-navy-50"
                                   : picked
-                                    ? "border-[var(--accent-primary)] bg-amber-50/70 dark:bg-amber-950/20"
-                                    : "border-security-navy-200 dark:border-security-navy-700 hover:border-security-navy-400"
+                                    ? "border-[var(--accent-primary)] bg-amber-50/70"
+                                    : "border-security-navy-200 hover:border-security-navy-400"
                               }`}
                             >
                               <div className="flex items-center justify-between gap-2">
@@ -240,14 +240,14 @@ export function ShiftCellActionDrawer({
                                           ? "bg-emerald-100 text-emerald-900"
                                           : b.startsWith("+")
                                             ? "bg-amber-100 text-amber-900"
-                                            : "bg-security-navy-100 dark:bg-security-navy-800 text-security-navy-700 dark:text-security-navy-200"
+                                            : "bg-security-navy-100 text-security-navy-700"
                                       }`}
                                     >
                                       {b}
                                     </span>
                                   ))
                                 ) : (
-                                  <span className="text-[11px] text-red-600 dark:text-red-400">
+                                  <span className="text-[11px] text-red-600">
                                     Unavailable: {c.ineligibleReason}
                                   </span>
                                 )}
@@ -274,12 +274,12 @@ export function ShiftCellActionDrawer({
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-security-navy-200 dark:border-security-navy-800 px-5 py-3.5">
+          <div className="flex items-center justify-end gap-2 border-t border-security-navy-200 px-5 py-3.5">
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="rounded-lg border border-security-navy-300 dark:border-security-navy-600 px-4 py-2 text-xs font-semibold min-h-[40px]"
+              className="rounded-lg border border-security-navy-300 px-4 py-2 text-xs font-semibold min-h-[40px]"
             >
               Cancel
             </button>

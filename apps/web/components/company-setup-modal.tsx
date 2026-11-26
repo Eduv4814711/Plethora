@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import type { CompanySettings } from "@/lib/api";
 import { uploadLogo } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { Button, Modal } from "@/components/ui";
 
 type CompanySetupModalProps = {
   settings: CompanySettings | null;
@@ -116,59 +117,56 @@ export function CompanySetupModal({
 
   if (!isOwner) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4">
-        <div className="card-elevated w-full max-w-md p-8 text-center">
-          <h2 className="text-xl font-bold text-security-navy-900 mb-2">
-            Company Setup Required
-          </h2>
-          <p className="text-sm text-security-navy-900 mb-6">
+      <Modal
+        open
+        onClose={() => {}}
+        dismissible={false}
+        closeOnBackdrop={false}
+        title="Company Setup Required"
+        size="sm"
+      >
+        <div className="py-2 text-center">
+          <p className="text-sm text-security-navy-700 mb-6">
             Company setup is required. Please contact the company owner to configure company details.
           </p>
-          <button
-            type="button"
-            onClick={onLogout}
-            className="btn-primary"
-          >
+          <Button type="button" onClick={onLogout}>
             Logout
-          </button>
+          </Button>
         </div>
-      </div>
+      </Modal>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/20">
-      <div className="flex-1 overflow-y-auto p-4 min-h-0">
-        <div className="max-w-2xl mx-auto my-4 sm:my-8 card-elevated flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-4rem)]">
-          {/* Sticky header - light blue accent */}
-          <div className="shrink-0 p-6 pb-4 border-b-2 border-security-navy-100 bg-wireframe-accent rounded-t-[10px]">
-            <h2 className="text-xl font-bold text-security-navy-900 mb-2">
-              Company Setup Required
-            </h2>
-            <p className="text-sm text-security-navy-900 mb-4">
-              Enter your company name below, then fill in the rest. This information is required for the system to function correctly.
+    <Modal
+      open
+      onClose={() => {}}
+      dismissible={false}
+      closeOnBackdrop={false}
+      title="Company Setup Required"
+      description="Enter your company name below, then fill in the rest. This information is required for the system to function correctly."
+      size="lg"
+    >
+      <div className="space-y-6">
+        <div className="p-4 rounded-[10px] bg-security-navy-50/60 border border-security-navy-100">
+          <label className="block text-sm font-medium text-security-navy-900 mb-1">Company Name *</label>
+          <input
+            type="text"
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            className="input-modern"
+            placeholder="Enter your company name (e.g. Quick Bopha Security)"
+            required
+          />
+          {nameInvalid && (
+            <p className="text-sm text-security-navy-700 mt-1">
+              Change from &quot;My Company&quot; to your actual company name to enable Save.
             </p>
-            <div className="p-4 rounded-[10px] bg-white border-2 border-security-navy-100">
-              <label className="block text-sm font-medium text-security-navy-900 mb-1">Company Name *</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="input-modern"
-                placeholder="Enter your company name (e.g. Quick Bopha Security)"
-                required
-              />
-              {nameInvalid && (
-                <p className="text-sm text-security-navy-900 mt-1">
-                  Change from &quot;My Company&quot; to your actual company name to enable Save.
-                </p>
-              )}
-            </div>
-          </div>
+          )}
+        </div>
 
-          {/* Scrollable form body */}
-          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-6">
           <div>
             <h3 className="font-semibold text-security-navy-900 mb-4">Business Details</h3>
             <div className="space-y-4">
@@ -332,28 +330,28 @@ export function CompanySetupModal({
           </div>
           </div>
 
-          {/* Sticky footer */}
-          <div className="shrink-0 p-6 pt-4 border-t-2 border-security-navy-100 bg-white rounded-b-[10px]">
+          {/* Footer */}
+          <div className="pt-4 border-t border-security-navy-100">
             {error && (
-              <p className="text-sm text-security-navy-900 mb-3">{error}</p>
+              <p className="text-sm text-red-700 mb-3">{error}</p>
             )}
             {nameInvalid && (
-              <p className="text-sm text-security-navy-900 mb-3">
+              <p className="text-sm text-security-navy-700 mb-3">
                 Save is disabled until you change the Company Name above.
               </p>
             )}
-            <button
+            <Button
               type="submit"
               disabled={saving || nameInvalid}
-              className="btn-primary w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+              loading={saving}
+              className="w-full sm:w-auto"
             >
               {saving ? "Saving..." : "Save & Continue"}
-            </button>
+            </Button>
           </div>
         </form>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

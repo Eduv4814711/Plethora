@@ -9,7 +9,27 @@ export type SendTextResult = {
   error?: string;
   messageId?: string;
   requiresTemplate?: boolean;
+  usedTemplate?: boolean;
 };
+
+export type TemplateFallback = {
+  name: string;
+  languageCode?: string;
+  components: unknown[];
+};
+
+/** Build the positional body parameters expected by a text-only WhatsApp template. */
+export function templateBodyParameters(values: Array<string | number>): unknown[] {
+  return [
+    {
+      type: "body",
+      parameters: values.map((value) => ({
+        type: "text",
+        text: String(value).slice(0, 1024),
+      })),
+    },
+  ];
+}
 
 export async function sendText(to: string, text: string): Promise<SendTextResult> {
   if (!config.whatsapp.enabled) {
@@ -132,6 +152,30 @@ export async function sendTemplate(
   }
 
   return { success: true, messageId };
+}
+
+/**
+ * Send rich text while the customer-service window is open, then fall back to
+ * an approved utility template when Meta reports that the window has closed.
+ */
+export async function sendTextWithTemplateFallback(
+  to: string,
+  text: string,
+  fallback: TemplateFallback
+): Promise<SendTextResult> {
+  const textResult = await sendText(to, text);
+  if (textResult.success || !textResult.requiresTemplate) {
+    return textResult;
+  }
+
+  const templateResult = await sendTemplate(
+    to,
+    fallback.name,
+    fallback.languageCode ?? "en",
+    fallback.components
+  );
+
+  return { ...templateResult, usedTemplate: templateResult.success };
 }
 
 export async function sendInteractiveButtons(

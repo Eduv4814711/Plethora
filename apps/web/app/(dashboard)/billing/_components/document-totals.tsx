@@ -47,8 +47,8 @@ export function DocumentTotals({
     <div
       className={
         strong
-          ? "flex justify-between border-t border-security-navy-200 pt-2 text-base font-bold text-security-navy-900 dark:border-security-navy-600 dark:text-security-navy-100"
-          : "flex justify-between text-sm text-security-navy-700 dark:text-security-navy-300"
+          ? "flex justify-between border-t border-security-navy-200 pt-2 text-base font-bold text-security-navy-900"
+          : "flex justify-between text-sm text-security-navy-700"
       }
     >
       <span>{label}</span>

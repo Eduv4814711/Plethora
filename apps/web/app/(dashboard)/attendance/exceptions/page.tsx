@@ -15,7 +15,22 @@ import {
   type AttendanceExceptionAnalytics,
   type AttendanceException,
 } from "@/lib/msr-api";
-import { AlertBanner, Badge, EmptyState, PageHeader } from "@/components/ui";
+import {
+  AlertBanner,
+  Badge,
+  Button,
+  EmptyState,
+  Field,
+  Input,
+  KpiStrip,
+  PageHeader,
+  PageShell,
+  Select,
+  SkeletonBlock,
+  StatusBadge,
+  Textarea,
+  Toolbar,
+} from "@/components/ui";
 import {
   ATTENDANCE_EXCEPTION_ACTIONS,
   attendanceExceptionCopy,
@@ -232,8 +247,8 @@ export default function AttendanceExceptionsPage() {
   overviewParams.set("shiftType", shiftFilter);
 
   return (
-    <main className="animate-fade-in mx-auto max-w-6xl space-y-5">
-      <Link href={`/attendance?view=attention&${overviewParams}`} className="inline-flex min-h-11 items-center text-sm font-medium text-security-navy-700 hover:underline dark:text-security-navy-300">
+    <PageShell width="default" className="animate-fade-in">
+      <Link href={`/attendance?view=attention&${overviewParams}`} className="inline-flex items-center text-xs font-medium text-security-navy-600 hover:text-security-navy-900">
         ← Back to attendance overview
       </Link>
 
@@ -241,9 +256,9 @@ export default function AttendanceExceptionsPage() {
         title="Attendance issues"
         description="Review missing clock events, late arrivals, and other attendance items before exporting hours to Sage."
         actions={canCreate ? (
-          <button type="button" className="btn-secondary min-h-11" onClick={() => void handleDetect()} disabled={detecting}>
-            {detecting ? "Scanning…" : "Scan for new issues"}
-          </button>
+          <Button variant="secondary" loading={detecting} onClick={() => void handleDetect()}>
+            Scan for new issues
+          </Button>
         ) : undefined}
       />
 
@@ -262,51 +277,43 @@ export default function AttendanceExceptionsPage() {
       {success && <AlertBanner variant="success" aria-live="polite">{success}</AlertBanner>}
 
       {summary && (
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Attendance issue summary">
-          {[
-            ["Open issues", summary.openCount ?? 0],
-            ["Issues this period", summary.total],
-            ["Absence rate", `${summary.absenteePercentage}%`],
-            ["Attendance complete", `${summary.completionRate ?? 100}%`],
-          ].map(([label, value]) => (
-            <div key={String(label)} className="card-dashboard p-3">
-              <p className="text-xs font-semibold uppercase text-security-navy-500">{label}</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
-            </div>
-          ))}
-        </section>
+        <KpiStrip
+          ariaLabel="Attendance issue summary"
+          items={[
+            { label: "Open issues", value: summary.openCount ?? 0, tone: (summary.openCount ?? 0) > 0 ? "warning" : "default" },
+            { label: "Issues this period", value: summary.total },
+            { label: "Absence rate", value: `${summary.absenteePercentage}%` },
+            { label: "Attendance complete", value: `${summary.completionRate ?? 100}%`, tone: "success" },
+          ]}
+        />
       )}
 
-      <section className="sticky top-0 z-20 grid gap-3 rounded-security-lg border border-security-navy-100 bg-white/95 p-4 shadow-security-card backdrop-blur dark:border-security-navy-700 dark:bg-security-navy-900/95 sm:grid-cols-2 lg:grid-cols-4" aria-label="Filter attendance issues">
-        <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
-          Status
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="input-modern mt-1 min-h-11 w-full">
+      <Toolbar className="sticky top-0 z-20 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Field label="Status">
+          <Select density="compact" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value="OPEN">Open</option><option value="UNDER_REVIEW">Follow up later</option><option value="all">All statuses</option><option value="RESOLVED">Resolved</option><option value="APPROVED">Confirmed</option><option value="REJECTED">Dismissed</option>
-          </select>
-        </label>
-        <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
-          Priority
-          <select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)} className="input-modern mt-1 min-h-11 w-full">
+          </Select>
+        </Field>
+        <Field label="Priority">
+          <Select density="compact" value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)}>
             <option value="">All priorities</option><option value="CRITICAL">Critical</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option>
-          </select>
-        </label>
-        <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
-          Site
-          <select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)} className="input-modern mt-1 min-h-11 w-full">
+          </Select>
+        </Field>
+        <Field label="Site">
+          <Select density="compact" value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}>
             <option value="">All sites</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}
-          </select>
-        </label>
-        <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
-          Shift
-          <select value={shiftFilter} onChange={(event) => setShiftFilter(validShift(event.target.value))} className="input-modern mt-1 min-h-11 w-full">
+          </Select>
+        </Field>
+        <Field label="Shift">
+          <Select density="compact" value={shiftFilter} onChange={(event) => setShiftFilter(validShift(event.target.value))}>
             <option value="all">All shifts</option><option value="day">Day shift</option><option value="night">Night shift</option>
-          </select>
-        </label>
-      </section>
+          </Select>
+        </Field>
+      </Toolbar>
 
       {loading ? (
-        <div className="animate-pulse space-y-3" aria-label="Loading attendance issues">
-          {[1, 2, 3].map((item) => <div key={item} className="h-36 rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" />)}
+        <div className="space-y-3" aria-label="Loading attendance issues">
+          {[1, 2, 3].map((item) => <SkeletonBlock key={item} className="h-36 w-full" />)}
         </div>
       ) : (
         <div className="space-y-3">
@@ -335,19 +342,19 @@ export default function AttendanceExceptionsPage() {
               <article id={`attendance-issue-${exception.id}`} key={exception.id} className="card-dashboard scroll-mt-24 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <h2 className="font-semibold text-security-navy-900 dark:text-security-navy-100">{copy.title}</h2>
-                    <p className="mt-1 text-sm text-security-navy-600 dark:text-security-navy-400">{copy.description}</p>
-                    <p className="mt-2 text-sm font-medium text-security-navy-900 dark:text-security-navy-200">
+                    <h2 className="font-semibold text-security-navy-900">{copy.title}</h2>
+                    <p className="mt-1 text-sm text-security-navy-600">{copy.description}</p>
+                    <p className="mt-2 text-sm font-medium text-security-navy-900">
                       {exception.employee ? `${exception.employee.firstName} ${exception.employee.lastName}` : "Unknown guard"}
                       {exception.site ? ` · ${exception.site.name}` : ""}{shift ? ` · ${shift} shift` : ""}
                     </p>
                     {exception.shift && <p className="mt-1 text-xs text-security-navy-500">{new Date(exception.shift.startTime).toLocaleString()} – {new Date(exception.shift.endTime).toLocaleTimeString()}</p>}
-                    {exception.reviewNote && <p className="mt-2 rounded-lg bg-security-navy-50 px-3 py-2 text-sm text-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">Previous note: {exception.reviewNote}</p>}
+                    {exception.reviewNote && <p className="mt-2 rounded-lg bg-security-navy-50 px-3 py-2 text-sm text-security-navy-700">Previous note: {exception.reviewNote}</p>}
 
                     {exception.attendance && (exception.exceptionType === "OUTSIDE_GEOFENCE" || exception.attendance.validationStatus === "REJECTED_GEOFENCE") && (
-                      <div className="mt-2.5 rounded-lg border border-red-200 bg-red-50/70 p-3 text-xs text-red-900 dark:border-red-800/40 dark:bg-red-950/30 dark:text-red-200">
+                      <div className="mt-2.5 rounded-lg border border-red-200 bg-red-50/70 p-3 text-xs text-red-900">
                         <div className="flex flex-wrap items-center gap-2 font-medium">
-                          <span className="inline-flex items-center rounded bg-red-100 px-1.5 py-0.5 font-bold text-red-800 dark:bg-red-900/60 dark:text-red-200">
+                          <span className="inline-flex items-center rounded bg-red-100 px-1.5 py-0.5 font-bold text-red-800">
                             Geofence Rejection
                           </span>
                           {exception.attendance.distanceMeters != null && (
@@ -357,12 +364,12 @@ export default function AttendanceExceptionsPage() {
                           )}
                         </div>
                         {exception.attendance.rejectionReason && (
-                          <p className="mt-1 text-red-700 dark:text-red-300">
+                          <p className="mt-1 text-red-700">
                             Reason: {exception.attendance.rejectionReason}
                           </p>
                         )}
                         {exception.attendance.submissionLat != null && exception.attendance.submissionLon != null && (
-                          <p className="mt-0.5 text-security-navy-500 dark:text-security-navy-400">
+                          <p className="mt-0.5 text-security-navy-500">
                             Submitted GPS: {exception.attendance.submissionLat.toFixed(5)}, {exception.attendance.submissionLon.toFixed(5)}
                             {exception.attendance.whatsappNumber ? ` · Phone: ${exception.attendance.whatsappNumber}` : ""}
                           </p>
@@ -377,7 +384,7 @@ export default function AttendanceExceptionsPage() {
                 </div>
 
                 {canApprove && ["OPEN", "UNDER_REVIEW"].includes(exception.status) && (
-                  <div className="mt-4 border-t border-security-navy-100 pt-3 dark:border-security-navy-800">
+                  <div className="mt-4 border-t border-security-navy-100 pt-3">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       {reviewHref && (
                         <Link href={reviewHref} className="btn-amber min-h-11 w-full sm:w-auto">
@@ -396,14 +403,14 @@ export default function AttendanceExceptionsPage() {
                       </button>
                     </div>
                     {reviewHref && (
-                      <p className="mt-2 text-xs text-security-navy-500 dark:text-security-navy-400">
+                      <p className="mt-2 text-xs text-security-navy-500">
                         Opens the exact site-timesheet row so you can correct the guard, shift, clock times, status, or notes before recording the outcome.
                       </p>
                     )}
                     {actionsOpen && (
-                      <div id={`attendance-outcomes-${exception.id}`} className="mt-3 rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-4 dark:border-security-navy-700 dark:bg-security-navy-900">
+                      <div id={`attendance-outcomes-${exception.id}`} className="mt-3 rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-4">
                         <div className="grid gap-3 sm:grid-cols-2">
-                          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300">
+                          <label className="block text-sm font-medium text-security-navy-700">
                             Supervisor note <span className="font-normal text-security-navy-500">(optional)</span>
                             <textarea
                               rows={2}
@@ -413,7 +420,7 @@ export default function AttendanceExceptionsPage() {
                               placeholder="Add context for the audit trail"
                             />
                           </label>
-                          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300">
+                          <label className="block text-sm font-medium text-security-navy-700">
                             Occurrence Book (OB) Number <span className="font-normal text-security-navy-500">(for manual override)</span>
                             <input
                               type="text"
@@ -426,10 +433,10 @@ export default function AttendanceExceptionsPage() {
                         </div>
 
                         {Boolean(obNumbers[exception.id]?.trim() || exception.exceptionType === "OUTSIDE_GEOFENCE" || exception.attendance?.validationStatus === "REJECTED_GEOFENCE") && (
-                          <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-800/40 dark:bg-amber-950/20">
-                            <div className="text-xs text-amber-900 dark:text-amber-200">
+                          <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3">
+                            <div className="text-xs text-amber-900">
                               <p className="font-semibold">Supervisor Manual Override</p>
-                              <p className="text-amber-700 dark:text-amber-300">Authorize and approve this attendance with an OB entry in the occurrence book.</p>
+                              <p className="text-amber-700">Authorize and approve this attendance with an OB entry in the occurrence book.</p>
                             </div>
                             <button
                               type="button"
@@ -484,9 +491,9 @@ export default function AttendanceExceptionsPage() {
         <EmptyState
           title="No attendance issues match these filters"
           description="Try another filter, or scan for new issues if attendance has recently changed."
-          action={canCreate ? <button type="button" className="btn-secondary min-h-11" onClick={() => void handleDetect()} disabled={detecting}>Scan for issues</button> : undefined}
+          action={canCreate ? <Button variant="secondary" loading={detecting} onClick={() => void handleDetect()}>Scan for issues</Button> : undefined}
         />
       )}
-    </main>
+    </PageShell>
   );
 }

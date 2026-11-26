@@ -16,7 +16,7 @@ import {
 import { authFetch, downloadPrivateFile } from "@/lib/api";
 import { hasCapability, canAccessSensitiveData } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
-import { useConfirmDialog } from "@/components/ui";
+import { AlertBanner, Button, Modal, useConfirmDialog } from "@/components/ui";
 import { clsx } from "clsx";
 
 const DOCUMENT_MIME_TYPES = [
@@ -882,62 +882,51 @@ export function EmployeeDocumentsSection({
       </div>
 
       {/* 4. UPLOAD MODAL */}
-      {showUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="w-full max-w-2xl bg-white rounded-security-lg border-2 border-security-navy-100 shadow-security-card overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="p-4 border-b border-security-navy-100 flex items-center justify-between bg-security-navy-50">
-              <div>
-                <h3 className="text-base font-bold text-security-navy-900">Upload Personnel Document / Certificate</h3>
-                <p className="text-xs text-security-navy-600">Attach and record credentials for employee digital personnel file</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowUploadModal(false)}
-                className="p-1 rounded text-security-navy-400 hover:text-security-navy-700"
+      <Modal
+        open={showUploadModal}
+        onClose={() => { if (!actionInProgress) setShowUploadModal(false); }}
+        title="Upload Personnel Document / Certificate"
+        description="Attach and record credentials for employee digital personnel file."
+        size="lg"
+        closeOnBackdrop={!actionInProgress}
+      >
+        <form onSubmit={handleUploadSubmit} className="space-y-4 text-xs">
+          {uploadError && <AlertBanner variant="error">{uploadError}</AlertBanner>}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-security-navy-700">
+                Document Category *
+              </label>
+              <select
+                value={uploadCategory}
+                onChange={(e) => handleCategoryChangeInUpload(e.target.value)}
+                className="input-compact w-full"
+                required
               >
-                ✕
-              </button>
+                {CATEGORY_OPTIONS.filter((c) => c.value !== "ALL").map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label} {c.isSensitive ? "(Restricted)" : ""}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <form onSubmit={handleUploadSubmit} className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
-              {uploadError && (
-                <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-security">{uploadError}</div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-security-navy-600 mb-1">
-                    Document Category *
-                  </label>
-                  <select
-                    value={uploadCategory}
-                    onChange={(e) => handleCategoryChangeInUpload(e.target.value)}
-                    className="input-compact w-full"
-                    required
-                  >
-                    {CATEGORY_OPTIONS.filter((c) => c.value !== "ALL").map((c) => (
-                      <option key={c.value} value={c.value}>
-                        {c.label} {c.isSensitive ? "🔒" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-security-navy-600 mb-1">
-                    Document Type *
-                  </label>
-                  <select
-                    value={uploadType}
-                    onChange={(e) => handleTypeChange(e.target.value)}
-                    className="input-compact w-full"
-                    required
-                  >
-                    {ALL_DOCUMENT_TYPES.filter((d) => d.category === uploadCategory).map((d) => (
-                      <option key={d.type} value={d.type}>
-                        {d.label} {d.isSensitive ? "🔒" : ""}
-                      </option>
-                    ))}
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-security-navy-700">
+                Document Type *
+              </label>
+              <select
+                value={uploadType}
+                onChange={(e) => handleTypeChange(e.target.value)}
+                className="input-compact w-full"
+                required
+              >
+                {ALL_DOCUMENT_TYPES.filter((d) => d.category === uploadCategory).map((d) => (
+                  <option key={d.type} value={d.type}>
+                    {d.label} {d.isSensitive ? "(Restricted)" : ""}
+                  </option>
+                ))}
                   </select>
                 </div>
               </div>
@@ -1052,8 +1041,8 @@ export function EmployeeDocumentsSection({
                 />
               </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-security-navy-100">
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-security-navy-700">
+              <div className="flex items-center justify-between border-t border-security-navy-100 pt-3">
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-security-navy-700">
                   <input
                     type="checkbox"
                     checked={uploadIsSensitive}
@@ -1064,188 +1053,155 @@ export function EmployeeDocumentsSection({
                 </label>
 
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowUploadModal(false)}
-                    className="btn-secondary text-xs py-2 px-3"
-                  >
+                  <Button variant="secondary" size="sm" onClick={() => setShowUploadModal(false)} disabled={actionInProgress}>
                     Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={actionInProgress}
-                    className="btn-primary text-xs py-2 px-4"
-                  >
-                    {actionInProgress ? "Uploading..." : "Save & Upload"}
-                  </button>
+                  </Button>
+                  <Button type="submit" variant="primary" size="sm" loading={actionInProgress}>
+                    Save &amp; Upload
+                  </Button>
                 </div>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* 5. EDIT METADATA MODAL */}
-      {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="w-full max-w-lg bg-white rounded-security-lg border-2 border-security-navy-100 shadow-security-card overflow-hidden">
-            <div className="p-4 border-b border-security-navy-100 flex items-center justify-between bg-security-navy-50">
-              <h3 className="text-sm font-bold text-security-navy-900">Edit Document Metadata</h3>
-              <button
-                type="button"
-                onClick={() => setShowEditModal(null)}
-                className="p-1 text-security-navy-400 hover:text-security-navy-700"
-              >
-                ✕
-              </button>
+      <Modal
+        open={Boolean(showEditModal)}
+        onClose={() => { if (!actionInProgress) setShowEditModal(null); }}
+        title="Edit Document Metadata"
+        size="md"
+        closeOnBackdrop={!actionInProgress}
+      >
+        {showEditModal && (
+          <form onSubmit={handleEditSubmit} className="space-y-3 text-xs">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-security-navy-700">
+                Title
+              </label>
+              <input
+                type="text"
+                value={showEditModal.title}
+                onChange={(e) => setShowEditModal({ ...showEditModal, title: e.target.value })}
+                className="input-compact w-full"
+                required
+              />
             </div>
 
-            <form onSubmit={handleEditSubmit} className="p-4 space-y-3 text-xs">
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-security-navy-600 mb-1">
-                  Title
+                <label className="mb-1 block text-xs font-semibold text-security-navy-700">
+                  Document Number
                 </label>
                 <input
                   type="text"
-                  value={showEditModal.title}
-                  onChange={(e) => setShowEditModal({ ...showEditModal, title: e.target.value })}
+                  value={showEditModal.documentNumber ?? ""}
+                  onChange={(e) => setShowEditModal({ ...showEditModal, documentNumber: e.target.value })}
                   className="input-compact w-full"
-                  required
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-security-navy-600 mb-1">
-                    Document Number
-                  </label>
-                  <input
-                    type="text"
-                    value={showEditModal.documentNumber ?? ""}
-                    onChange={(e) => setShowEditModal({ ...showEditModal, documentNumber: e.target.value })}
-                    className="input-compact w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-security-navy-600 mb-1">
-                    Issuing Authority
-                  </label>
-                  <input
-                    type="text"
-                    value={showEditModal.issuingAuthority ?? ""}
-                    onChange={(e) => setShowEditModal({ ...showEditModal, issuingAuthority: e.target.value })}
-                    className="input-compact w-full"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-security-navy-600 mb-1">
-                    Issue Date
-                  </label>
-                  <DateInput
-                    value={showEditModal.issueDate ? showEditModal.issueDate.slice(0, 10) : ""}
-                    onChange={(v) => setShowEditModal({ ...showEditModal, issueDate: v })}
-                    ariaLabel="Issue date"
-                  />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-security-navy-600">
-                      Expiry Date
-                    </label>
-                    <label className="flex items-center gap-1 text-[10px] cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={showEditModal.doesNotExpire ?? false}
-                        onChange={(e) =>
-                          setShowEditModal({
-                            ...showEditModal,
-                            doesNotExpire: e.target.checked,
-                            expiryDate: e.target.checked ? null : showEditModal.expiryDate,
-                          })
-                        }
-                      />
-                      No Expiry
-                    </label>
-                  </div>
-                  <DateInput
-                    value={showEditModal.expiryDate ? showEditModal.expiryDate.slice(0, 10) : ""}
-                    onChange={(v) => setShowEditModal({ ...showEditModal, expiryDate: v })}
-                    disabled={showEditModal.doesNotExpire}
-                    ariaLabel="Expiry date"
-                  />
-                </div>
-              </div>
-
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-security-navy-600 mb-1">
-                  Notes
+                <label className="mb-1 block text-xs font-semibold text-security-navy-700">
+                  Issuing Authority
                 </label>
-                <textarea
-                  value={showEditModal.notes ?? ""}
-                  onChange={(e) => setShowEditModal({ ...showEditModal, notes: e.target.value })}
-                  className="input-compact w-full h-16"
+                <input
+                  type="text"
+                  value={showEditModal.issuingAuthority ?? ""}
+                  onChange={(e) => setShowEditModal({ ...showEditModal, issuingAuthority: e.target.value })}
+                  className="input-compact w-full"
                 />
               </div>
+            </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-security-navy-100">
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(null)}
-                  className="btn-secondary text-xs py-1.5 px-3"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={actionInProgress}
-                  className="btn-primary text-xs py-1.5 px-4"
-                >
-                  Save Changes
-                </button>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-security-navy-700">
+                  Issue Date
+                </label>
+                <DateInput
+                  value={showEditModal.issueDate ? showEditModal.issueDate.slice(0, 10) : ""}
+                  onChange={(v) => setShowEditModal({ ...showEditModal, issueDate: v })}
+                  ariaLabel="Issue date"
+                />
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs font-semibold text-security-navy-700">
+                    Expiry Date
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-1 text-[11px]">
+                    <input
+                      type="checkbox"
+                      checked={showEditModal.doesNotExpire ?? false}
+                      onChange={(e) =>
+                        setShowEditModal({
+                          ...showEditModal,
+                          doesNotExpire: e.target.checked,
+                          expiryDate: e.target.checked ? null : showEditModal.expiryDate,
+                        })
+                      }
+                    />
+                    No Expiry
+                  </label>
+                </div>
+                <DateInput
+                  value={showEditModal.expiryDate ? showEditModal.expiryDate.slice(0, 10) : ""}
+                  onChange={(v) => setShowEditModal({ ...showEditModal, expiryDate: v })}
+                  disabled={showEditModal.doesNotExpire}
+                  ariaLabel="Expiry date"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-security-navy-700">
+                Notes
+              </label>
+              <textarea
+                value={showEditModal.notes ?? ""}
+                onChange={(e) => setShowEditModal({ ...showEditModal, notes: e.target.value })}
+                className="input-compact h-16 w-full"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-security-navy-100 pt-3">
+              <Button variant="secondary" size="sm" onClick={() => setShowEditModal(null)} disabled={actionInProgress}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" size="sm" loading={actionInProgress}>
+                Save Changes
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       {/* 6. REJECT DOCUMENT MODAL */}
-      {rejectingDoc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-white rounded-security-lg border-2 border-red-200 shadow-security-card p-5">
-            <h3 className="text-sm font-bold text-red-900 mb-1">Reject Document: {rejectingDoc.title}</h3>
-            <p className="text-xs text-security-navy-600 mb-3">
-              Provide a reason for rejecting this document so HR and auditing records capture why verification failed.
-            </p>
-            <textarea
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="e.g. Incomplete copy, illegible stamp, registration number mismatch..."
-              className="input-compact w-full h-24 text-xs mb-4"
-              required
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setRejectingDoc(null)}
-                className="btn-secondary text-xs py-1.5 px-3"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={actionInProgress}
-                onClick={handleReject}
-                className="btn-primary text-xs py-1.5 px-4 bg-red-600 hover:bg-red-700"
-              >
-                Confirm Rejection
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={Boolean(rejectingDoc)}
+        onClose={() => { if (!actionInProgress) setRejectingDoc(null); }}
+        title={rejectingDoc ? `Reject Document: ${rejectingDoc.title}` : "Reject Document"}
+        description="Provide a reason for rejecting this document so HR and auditing records capture why verification failed."
+        size="sm"
+        closeOnBackdrop={!actionInProgress}
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setRejectingDoc(null)} disabled={actionInProgress}>
+              Cancel
+            </Button>
+            <Button variant="destructive" size="sm" loading={actionInProgress} onClick={handleReject}>
+              Confirm Rejection
+            </Button>
+          </>
+        }
+      >
+        <textarea
+          value={rejectionReason}
+          onChange={(e) => setRejectionReason(e.target.value)}
+          placeholder="e.g. Incomplete copy, illegible stamp, registration number mismatch..."
+          className="input-compact h-24 w-full text-xs"
+          required
+        />
+      </Modal>
     </div>
   );
 }

@@ -18,8 +18,10 @@ import {
   Button,
   Card,
   EmptyState,
+  Modal,
   PageHeader,
   SkeletonBlock,
+  Tabs,
 } from "@/components/ui";
 
 export default function LegalAndRemediationPage() {
@@ -163,28 +165,15 @@ export default function LegalAndRemediationPage() {
       {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
       {/* Tabs */}
-      <div className="flex border-b border-security-navy-100 space-x-4 text-sm font-medium">
-        <button
-          onClick={() => setActiveTab("cases")}
-          className={`pb-2 transition-colors border-b-2 ${
-            activeTab === "cases"
-              ? "border-security-amber-500 text-security-amber-800 font-semibold"
-              : "border-transparent text-security-navy-500 hover:text-security-navy-900"
-          }`}
-        >
-          Disputes & CCMA Cases ({cases.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("remediation")}
-          className={`pb-2 transition-colors border-b-2 ${
-            activeTab === "remediation"
-              ? "border-security-amber-500 text-security-amber-800 font-semibold"
-              : "border-transparent text-security-navy-500 hover:text-security-navy-900"
-          }`}
-        >
-          Remediation & AOD Plans ({plans.length})
-        </button>
-      </div>
+      <Tabs
+        ariaLabel="Legal and remediation views"
+        value={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { value: "cases", label: "Disputes & CCMA Cases", count: cases.length },
+          { value: "remediation", label: "Remediation & AOD Plans", count: plans.length },
+        ]}
+      />
 
       {loading ? (
         <SkeletonBlock className="h-64" />
@@ -299,11 +288,13 @@ export default function LegalAndRemediationPage() {
       )}
 
       {/* Create Case Modal */}
-      {showCaseModal && (
-        <div className="fixed inset-0 bg-security-navy-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg p-6 space-y-4 border border-security-navy-200 shadow-xl bg-white">
-            <h2 className="text-lg font-bold text-security-navy-900">Add Legal / Dispute Case</h2>
-            <form onSubmit={handleCreateCase} className="space-y-3 text-sm">
+      <Modal
+        open={showCaseModal}
+        onClose={() => setShowCaseModal(false)}
+        title="Add Legal / Dispute Case"
+        size="md"
+      >
+        <form onSubmit={handleCreateCase} className="space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label-text mb-1 block">Case # / Referral # *</label>
@@ -396,17 +387,17 @@ export default function LegalAndRemediationPage() {
                   Record Case
                 </Button>
               </div>
-            </form>
-          </Card>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {/* Create Plan Modal */}
-      {showPlanModal && (
-        <div className="fixed inset-0 bg-security-navy-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg p-6 space-y-4 border border-security-navy-200 shadow-xl bg-white">
-            <h2 className="text-lg font-bold text-security-navy-900">Add Remediation / AOD Plan</h2>
-            <form onSubmit={handleCreatePlan} className="space-y-3 text-sm">
+      <Modal
+        open={showPlanModal}
+        onClose={() => setShowPlanModal(false)}
+        title="Add Remediation / AOD Plan"
+        size="md"
+      >
+        <form onSubmit={handleCreatePlan} className="space-y-3 text-sm">
               <div>
                 <label className="label-text mb-1 block">Plan Title *</label>
                 <input
@@ -486,10 +477,8 @@ export default function LegalAndRemediationPage() {
                   Save Plan
                 </Button>
               </div>
-            </form>
-          </Card>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }

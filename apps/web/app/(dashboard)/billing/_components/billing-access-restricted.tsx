@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { PageShell } from "@/components/ui";
 
 export function BillingAccessRestricted() {
   return (
-    <main className="animate-fade-in mx-auto max-w-2xl py-12">
+    <PageShell width="narrow" className="py-12">
       <div className="rounded-security-lg border border-security-navy-200 bg-white p-8 text-center shadow-security-card">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-security-amber-50 text-security-amber-700">
           <svg
@@ -59,6 +60,6 @@ export function BillingAccessRestricted() {
           </Link>
         </div>
       </div>
-    </main>
+    </PageShell>
   );
 }

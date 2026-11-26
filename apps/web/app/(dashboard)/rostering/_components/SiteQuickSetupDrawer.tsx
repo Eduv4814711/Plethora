@@ -185,19 +185,19 @@ export function SiteQuickSetupDrawer({
       onClick={(e) => {
         if (e.target === dialogRef.current) onClose();
       }}
-      className="m-auto w-full max-w-2xl rounded-2xl border border-security-navy-200 dark:border-security-navy-700 bg-white dark:bg-security-navy-900 p-0 text-security-navy-900 dark:text-white shadow-2xl"
+      className="m-auto w-full max-w-2xl rounded-2xl border border-security-navy-200 bg-white p-0 text-security-navy-900 shadow-2xl"
     >
-      <div className="flex items-center justify-between border-b border-security-navy-200 dark:border-security-navy-800 px-6 py-4">
+      <div className="flex items-center justify-between border-b border-security-navy-200 px-6 py-4">
         <div>
           <h2 className="text-lg font-semibold">Quick Site Setup · {siteName}</h2>
-          <p className="text-xs text-security-navy-500 dark:text-security-navy-400">
+          <p className="text-xs text-security-navy-500">
             Pick your shift style, guard counts, OB book rule, and site team in one place.
           </p>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg px-3 py-2 text-sm text-security-navy-500 hover:bg-security-navy-100 dark:hover:bg-security-navy-800 min-h-[40px]"
+          className="rounded-lg px-3 py-2 text-sm text-security-navy-500 hover:bg-security-navy-100 min-h-[40px]"
         >
           Close
         </button>
@@ -205,7 +205,7 @@ export function SiteQuickSetupDrawer({
 
       <div className="max-h-[75vh] overflow-y-auto px-6 py-5 space-y-5">
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
@@ -222,17 +222,17 @@ export function SiteQuickSetupDrawer({
                   onClick={() => handleSelectFramework(fw)}
                   className={`text-left rounded-xl border p-3 transition-colors min-h-[44px] ${
                     selected
-                      ? "border-[var(--accent-primary)] bg-amber-50/70 dark:bg-amber-950/20"
-                      : "border-security-navy-200 dark:border-security-navy-700 hover:border-security-navy-300"
+                      ? "border-[var(--accent-primary)] bg-amber-50/70"
+                      : "border-security-navy-200 hover:border-security-navy-300"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold">{fw.shortLabel}</span>
-                    <span className="text-[11px] rounded-full px-2 py-0.5 bg-security-navy-100 dark:bg-security-navy-800">
+                    <span className="text-[11px] rounded-full px-2 py-0.5 bg-security-navy-100">
                       ~{fw.avgWeeklyHoursPerGuard}h/wk
                     </span>
                   </div>
-                  <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
+                  <p className="text-xs text-security-navy-500 mt-1">
                     {fw.tagline}
                   </p>
                 </button>
@@ -242,7 +242,7 @@ export function SiteQuickSetupDrawer({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-700 p-3.5 space-y-2.5">
+          <div className="rounded-xl border border-security-navy-200 p-3.5 space-y-2.5">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-security-navy-500">
               Day Shift
             </h4>
@@ -279,7 +279,7 @@ export function SiteQuickSetupDrawer({
             </div>
           </div>
 
-          <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-700 p-3.5 space-y-2.5">
+          <div className="rounded-xl border border-security-navy-200 p-3.5 space-y-2.5">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-security-navy-500">
               Night Shift
             </h4>
@@ -375,13 +375,13 @@ export function SiteQuickSetupDrawer({
               className="input-modern max-w-xs text-xs"
             />
           </div>
-          <div className="max-h-44 overflow-y-auto rounded-xl border border-security-navy-200 dark:border-security-navy-700 divide-y divide-security-navy-100 dark:divide-security-navy-800">
+          <div className="max-h-44 overflow-y-auto rounded-xl border border-security-navy-200 divide-y divide-security-navy-100">
             {filteredGuards.map((g) => {
               const checked = selectedGuards.includes(g.id);
               return (
                 <label
                   key={g.id}
-                  className="flex items-center justify-between gap-3 px-3 py-2 text-xs hover:bg-security-navy-50 dark:hover:bg-security-navy-800/50 cursor-pointer min-h-[40px]"
+                  className="flex items-center justify-between gap-3 px-3 py-2 text-xs hover:bg-security-navy-50 cursor-pointer min-h-[40px]"
                 >
                   <span className="flex items-center gap-2.5">
                     <input
@@ -402,7 +402,7 @@ export function SiteQuickSetupDrawer({
                       </span>
                     )}
                     {g.psiraGrade && (
-                      <span className="rounded bg-security-navy-100 dark:bg-security-navy-800 px-1.5 py-0.5 text-[10px] font-semibold">
+                      <span className="rounded bg-security-navy-100 px-1.5 py-0.5 text-[10px] font-semibold">
                         Grade {g.psiraGrade}
                       </span>
                     )}
@@ -414,12 +414,12 @@ export function SiteQuickSetupDrawer({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-security-navy-200 dark:border-security-navy-800 px-6 py-4">
+      <div className="flex items-center justify-end gap-2 border-t border-security-navy-200 px-6 py-4">
         <button
           type="button"
           onClick={onClose}
           disabled={saving}
-          className="rounded-lg border border-security-navy-300 dark:border-security-navy-600 px-4 py-2 text-sm font-medium min-h-[40px]"
+          className="rounded-lg border border-security-navy-300 px-4 py-2 text-sm font-medium min-h-[40px]"
         >
           Cancel
         </button>

@@ -22,6 +22,16 @@ import {
   parseAttendanceView,
   type AttendanceView,
 } from "@/lib/attendance-navigation";
+import {
+  Button,
+  Card,
+  Field,
+  PageHeader,
+  PageShell,
+  SearchInput,
+  SkeletonBlock,
+  Tabs,
+} from "@/components/ui";
 
 const SHIFT_TYPE_OPTIONS: Array<{ value: AttendanceShiftTypeFilter; label: string }> = [
   { value: "day", label: "Day shift" },
@@ -175,11 +185,11 @@ export default function AttendancePage() {
 
   if (loading) {
     return (
-      <div className="animate-pulse space-y-4" aria-label="Loading attendance">
-        <div className="h-8 w-48 rounded bg-security-navy-100 dark:bg-security-navy-700" />
-        <div className="h-32 rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" />
-        <div className="h-72 rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" />
-      </div>
+      <PageShell width="wide" className="space-y-4" aria-label="Loading attendance">
+        <SkeletonBlock className="h-10 w-52" />
+        <SkeletonBlock className="h-32 w-full" />
+        <SkeletonBlock className="h-72 w-full" />
+      </PageShell>
     );
   }
 
@@ -190,111 +200,47 @@ export default function AttendancePage() {
     shiftType,
   });
 
+  const attendanceTabItems: Array<{ value: AttendanceView; label: string }> = [
+    { value: "today", label: "Live Today" },
+    { value: "attention", label: "Needs Attention" },
+    { value: "sites", label: "Monthly Sign-Off" },
+    ...(officeStaffCount !== 0 ? [{ value: "staff" as const, label: "Office Staff" }] : []),
+  ];
+
   return (
-    <main className="animate-fade-in space-y-5">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-security-navy-600 dark:text-security-navy-300">
-            Daily operations
-          </p>
-          <h1 className="page-title mt-1">Attendance</h1>
-          <p className="mt-1 max-w-2xl text-sm text-security-navy-600 dark:text-security-navy-400">
-            {view === "today"
-              ? "Live control room: track who clocked in today, mark absences, or swap a reliever."
-              : view === "attention"
-              ? "Quickly resolve open clock-in issues, no-shows, and sites waiting for confirmation."
-              : view === "staff"
-              ? "Mark who was at the office today. Salaried staff are recorded for leave and reporting only."
-              : "Review, confirm, and approve site timesheets for Sage payroll export."}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
-          <button
-            type="button"
-            onClick={() => setRollCallOpen(true)}
-            className="btn-primary min-h-11 text-sm flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800"
-          >
-            <span>💬</span>
-            Shift Roll-Call
-          </button>
-          <Link
-            href={`/attendance/exceptions?${exceptionParams}`}
-            className="btn-secondary min-h-11 text-sm"
-          >
-            Full exception log
-          </Link>
-        </div>
-      </header>
+    <PageShell width="wide" className="animate-fade-in">
+      <PageHeader
+        title="Attendance"
+        description={
+          view === "today"
+            ? "Live control room: track who clocked in today, mark absences, or swap a reliever."
+            : view === "attention"
+            ? "Quickly resolve open clock-in issues, no-shows, and sites waiting for confirmation."
+            : view === "staff"
+            ? "Mark who was at the office today. Salaried staff are recorded for leave and reporting only."
+            : "Review, confirm, and approve site timesheets for Sage payroll export."
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="signal" onClick={() => setRollCallOpen(true)}>
+              Shift Roll-Call
+            </Button>
+            <Link
+              href={`/attendance/exceptions?${exceptionParams}`}
+              className="btn-secondary no-underline"
+            >
+              Full exception log
+            </Link>
+          </div>
+        }
+      />
 
-      {/* Primary Attendance Tabs: Live Today | Needs Attention | Monthly Sign-Off | Office Staff */}
-      <div
-        className="flex flex-nowrap overflow-x-auto border-b border-security-navy-200 dark:border-security-navy-800 gap-1"
-        role="tablist"
-        aria-label="Attendance views"
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view === "today"}
-          onClick={() => setView("today")}
-          className={clsx(
-            "shrink-0 min-h-11 px-4 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors",
-            view === "today"
-              ? "border-[var(--accent-primary)] text-security-navy-900 dark:text-white"
-              : "border-transparent text-security-navy-500 hover:text-security-navy-800 dark:text-security-navy-400 dark:hover:text-white"
-          )}
-        >
-          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-          Live Today
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view === "attention"}
-          onClick={() => setView("attention")}
-          className={clsx(
-            "shrink-0 min-h-11 px-4 text-sm font-semibold border-b-2 transition-colors",
-            view === "attention"
-              ? "border-[var(--accent-primary)] text-security-navy-900 dark:text-white"
-              : "border-transparent text-security-navy-500 hover:text-security-navy-800 dark:text-security-navy-400 dark:hover:text-white"
-          )}
-        >
-          Needs Attention
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view === "sites"}
-          onClick={() => setView("sites")}
-          className={clsx(
-            "shrink-0 min-h-11 px-4 text-sm font-semibold border-b-2 transition-colors",
-            view === "sites"
-              ? "border-[var(--accent-primary)] text-security-navy-900 dark:text-white"
-              : "border-transparent text-security-navy-500 hover:text-security-navy-800 dark:text-security-navy-400 dark:hover:text-white"
-          )}
-        >
-          Monthly Sign-Off
-        </button>
-
-        {officeStaffCount !== 0 && (
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "staff"}
-            onClick={() => setView("staff")}
-            className={clsx(
-              "shrink-0 min-h-11 px-4 text-sm font-semibold border-b-2 transition-colors",
-              view === "staff"
-                ? "border-[var(--accent-primary)] text-security-navy-900 dark:text-white"
-                : "border-transparent text-security-navy-500 hover:text-security-navy-800 dark:text-security-navy-400 dark:hover:text-white"
-            )}
-          >
-            Office Staff
-          </button>
-        )}
-      </div>
+      <Tabs
+        ariaLabel="Attendance views"
+        value={view}
+        onChange={setView}
+        items={attendanceTabItems}
+      />
 
       {view === "today" && token && (
         <ControllerTodayWorkspace
@@ -324,94 +270,85 @@ export default function AttendancePage() {
 
       {view === "sites" && (
         <>
-      <section className="sticky top-0 z-20 rounded-security-lg border border-security-navy-100 bg-white/95 p-4 shadow-security-card backdrop-blur dark:border-security-navy-700 dark:bg-security-navy-900/95">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Choose the work to review</h2>
-            <p className="text-xs text-security-navy-500 dark:text-security-navy-400">{periodLabel || "Selected pay period"} · {dateLabel}</p>
-          </div>
-          <span className="rounded-full bg-security-navy-50 px-3 py-1 text-xs font-medium text-security-navy-700 dark:bg-security-navy-950/40 dark:text-security-navy-200">
-            Step 1 of 2 · Select a site
-          </span>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-[minmax(16rem,1fr)_auto_minmax(14rem,0.8fr)] lg:items-end">
-          <div>
-            <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">Pay period</label>
-            {token && (
-              <PayPeriodSelect
-                token={token}
-                variant="pay"
-                value={periodKey}
-                onChange={applyPayPeriod}
-                className="input-modern mt-1 w-full"
-              />
-            )}
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              <button type="button" onClick={() => shiftPayPeriod(-1)} className="btn-secondary min-h-11 px-2 text-sm">Previous</button>
-              <button
-                type="button"
-                onClick={() => {
-                  const current = payPeriodOptions.find((period) => period.isCurrent);
-                  if (current) applyPayPeriod(current);
-                }}
-                className="btn-secondary min-h-11 px-2 text-sm"
-              >
-                Current
-              </button>
-              <button type="button" onClick={() => shiftPayPeriod(1)} className="btn-secondary min-h-11 px-2 text-sm">Next</button>
+          <Card className="sticky top-0 z-20 p-4 shadow-security-card">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-display text-sm font-semibold text-security-navy-900">
+                  Choose the work to review
+                </h2>
+                <p className="text-xs text-security-navy-500">
+                  {periodLabel || "Selected pay period"} · {dateLabel}
+                </p>
+              </div>
+              <span className="text-xs font-medium text-security-navy-500">
+                Step 1 of 2 · Select a site
+              </span>
             </div>
-          </div>
 
-          <fieldset>
-            <legend className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">Shift</legend>
-            <div className="mt-1 flex flex-wrap rounded-lg border border-security-navy-100 bg-security-navy-50 p-1 dark:border-security-navy-700 dark:bg-security-navy-900">
-              {SHIFT_TYPE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setShiftType(option.value)}
-                  aria-pressed={shiftType === option.value}
-                  className={clsx(
-                    "min-h-11 rounded-md px-3 text-sm font-medium",
-                    shiftType === option.value
-                      ? "bg-security-navy-800 text-white shadow-security-card dark:bg-security-navy-600"
-                      : "text-security-navy-700 hover:bg-white dark:text-security-navy-300 dark:hover:bg-security-navy-800"
-                  )}
-                >
-                  {option.label}
-                </button>
-              ))}
+            <div className="grid gap-4 lg:grid-cols-[minmax(16rem,1fr)_auto_minmax(14rem,0.8fr)] lg:items-end">
+              <div>
+                <label className="label-text block">Pay period</label>
+                {token && (
+                  <PayPeriodSelect
+                    token={token}
+                    variant="pay"
+                    value={periodKey}
+                    onChange={applyPayPeriod}
+                    className="input-modern mt-1 w-full"
+                  />
+                )}
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <Button variant="secondary" size="sm" onClick={() => shiftPayPeriod(-1)}>
+                    Previous
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      const current = payPeriodOptions.find((period) => period.isCurrent);
+                      if (current) applyPayPeriod(current);
+                    }}
+                  >
+                    Current
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => shiftPayPeriod(1)}>
+                    Next
+                  </Button>
+                </div>
+              </div>
+
+              <div>
+                <p className="label-text mb-1.5">Shift</p>
+                <Tabs
+                  ariaLabel="Filter by shift"
+                  variant="segmented"
+                  value={shiftType}
+                  onChange={setShiftType}
+                  items={SHIFT_TYPE_OPTIONS}
+                />
+              </div>
+
+              <Field label="Find a site" id="attendance-site-search">
+                <SearchInput
+                  density="default"
+                  value={siteQuery}
+                  onChange={setSiteQuery}
+                  placeholder="Type a site name..."
+                />
+              </Field>
             </div>
-          </fieldset>
+          </Card>
 
-          <div>
-            <label htmlFor="attendance-site-search" className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
-              Find a site
-            </label>
-            <input
-              id="attendance-site-search"
-              type="search"
-              value={siteQuery}
-              onChange={(event) => setSiteQuery(event.target.value)}
-              placeholder="Type a site name…"
-              className="input-modern mt-1 min-h-11 w-full"
-              autoComplete="off"
+          {token && (
+            <AttendanceCaptureDashboard
+              token={token}
+              periodStart={format(dateRange.start, "yyyy-MM-dd")}
+              periodEnd={format(dateRange.end, "yyyy-MM-dd")}
+              shiftType={shiftType}
+              onSelectSite={openSite}
+              siteQuery={siteQuery}
             />
-          </div>
-        </div>
-      </section>
-
-      {token && (
-        <AttendanceCaptureDashboard
-          token={token}
-          periodStart={format(dateRange.start, "yyyy-MM-dd")}
-          periodEnd={format(dateRange.end, "yyyy-MM-dd")}
-          shiftType={shiftType}
-          onSelectSite={openSite}
-          siteQuery={siteQuery}
-        />
-      )}
+          )}
         </>
       )}
       {token && (
@@ -421,6 +358,6 @@ export default function AttendancePage() {
           onClose={() => setRollCallOpen(false)}
         />
       )}
-    </main>
+    </PageShell>
   );
 }

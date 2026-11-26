@@ -7,6 +7,15 @@ import type {
   RosterContinuityOverview,
 } from "./roster-api";
 
+export interface AttendanceTrendDay {
+  date: string;
+  label: string;
+  attended: number;
+  scheduled: number;
+  unconfirmed: number;
+  rate: number | null;
+}
+
 export interface DashboardWorkData {
   operationalAlerts?: OperationalAlert[];
   alertCounts?: AlertCounts;
@@ -35,7 +44,14 @@ export interface DashboardWorkData {
   pendingSiteTimesheetRows?: number;
   openCriticalIncidents?: number;
   activeSitesCount?: number;
+  activeSitesDelta?: number;
   guardsOnDuty?: number;
+  totalEmployees?: number;
+  activeEmployeesCount?: number;
+  onLeaveToday?: number;
+  totalPosts?: number;
+  activeClientsCount?: number;
+  attendanceTrend14d?: AttendanceTrendDay[];
 }
 
 export interface TodayWorkItem {

@@ -141,10 +141,10 @@ export function GuardSearchPicker({
 
       {open && (
         <div
-          className="absolute left-0 top-full z-50 mt-1 w-full min-w-[280px] overflow-hidden rounded-lg border border-security-navy-100 bg-white shadow-lg dark:border-security-navy-700 dark:bg-security-navy-900"
+          className="absolute left-0 top-full z-50 mt-1 w-full min-w-[280px] overflow-hidden rounded-lg border border-security-navy-100 bg-white shadow-lg"
           role="listbox"
         >
-          <div className="border-b border-security-navy-100 p-2 dark:border-security-navy-700">
+          <div className="border-b border-security-navy-100 p-2">
             <input
               ref={searchRef}
               type="search"
@@ -165,8 +165,8 @@ export function GuardSearchPicker({
                   onChange(null);
                   setOpen(false);
                 }}
-                className={`w-full rounded px-3 py-2 text-left text-sm hover:bg-security-navy-50 dark:hover:bg-security-navy-900 ${
-                  !effectiveId ? "bg-security-navy-50 font-medium dark:bg-security-navy-900" : ""
+                className={`w-full rounded px-3 py-2 text-left text-sm hover:bg-security-navy-50 ${
+                  !effectiveId ? "bg-security-navy-50 font-medium" : ""
                 }`}
               >
                 {clearLabel}
@@ -185,8 +185,8 @@ export function GuardSearchPicker({
                     onChange(guard.id);
                     setOpen(false);
                   }}
-                  className={`w-full rounded px-3 py-2 text-left text-sm hover:bg-security-navy-50 dark:hover:bg-security-navy-900 ${
-                    effectiveId === guard.id ? "bg-security-navy-50 font-medium dark:bg-security-navy-900" : ""
+                  className={`w-full rounded px-3 py-2 text-left text-sm hover:bg-security-navy-50 ${
+                    effectiveId === guard.id ? "bg-security-navy-50 font-medium" : ""
                   }`}
                 >
                   <div className="truncate">{guardName(guard)}</div>

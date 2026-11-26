@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button, Modal } from "@/components/ui";
 import {
   createClientContract,
   updateClientContract,
@@ -18,31 +19,31 @@ const CONTRACT_STATUS_CONFIG: Record<
 > = {
   DRAFT: {
     label: "Draft",
-    badgeClass: "bg-security-navy-100 text-security-navy-700 dark:bg-security-navy-800 dark:text-security-navy-300",
+    badgeClass: "bg-security-navy-100 text-security-navy-700",
   },
   PENDING_SIGNATURE: {
     label: "Pending Signature",
-    badgeClass: "bg-security-amber-100 text-security-amber-800 dark:bg-security-amber-900/40 dark:text-security-amber-300",
+    badgeClass: "bg-security-amber-100 text-security-amber-800",
   },
   ACTIVE: {
     label: "Active",
-    badgeClass: "bg-security-emerald-100 text-security-emerald-800 dark:bg-security-emerald-900/40 dark:text-security-emerald-300",
+    badgeClass: "bg-security-emerald-100 text-security-emerald-800",
   },
   UNDER_REVIEW: {
     label: "Under Review",
-    badgeClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
+    badgeClass: "bg-blue-100 text-blue-800",
   },
   EXPIRED: {
     label: "Expired",
-    badgeClass: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+    badgeClass: "bg-red-100 text-red-800",
   },
   TERMINATED: {
     label: "Terminated",
-    badgeClass: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+    badgeClass: "bg-gray-100 text-gray-700",
   },
   DISPUTED: {
     label: "Disputed",
-    badgeClass: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300",
+    badgeClass: "bg-purple-100 text-purple-800",
   },
 };
 
@@ -207,7 +208,7 @@ export function ClientContractsTab({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
+          <h2 className="text-base font-semibold text-security-navy-900">
             Commercial & Service Contracts
           </h2>
           <p className="text-xs text-security-navy-500">
@@ -248,13 +249,13 @@ export function ClientContractsTab({
                 key={contract.id}
                 className="card-dashboard space-y-4 p-5 transition-shadow hover:shadow-security-elevated"
               >
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-security-navy-100 pb-3">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs font-semibold text-security-navy-500">
                         {contract.contractNumber}
                       </span>
-                      <h3 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
+                      <h3 className="text-base font-semibold text-security-navy-900">
                         {contract.title}
                       </h3>
                       <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${statusCfg.badgeClass}`}>
@@ -267,7 +268,7 @@ export function ClientContractsTab({
                       )}
                     </div>
                     {contract.scopeSummary && (
-                      <p className="mt-1 text-xs text-security-navy-600 dark:text-security-navy-400">
+                      <p className="mt-1 text-xs text-security-navy-600">
                         {contract.scopeSummary}
                       </p>
                     )}
@@ -304,7 +305,7 @@ export function ClientContractsTab({
                 <div className="grid gap-3 sm:grid-cols-4 text-xs">
                   <div>
                     <span className="text-security-navy-500 block">Effective Term</span>
-                    <span className="font-mono font-medium text-security-navy-800 dark:text-security-navy-200">
+                    <span className="font-mono font-medium text-security-navy-800">
                       {contract.effectiveFrom ? new Date(contract.effectiveFrom).toLocaleDateString() : "—"}
                       {" → "}
                       {contract.effectiveTo ? new Date(contract.effectiveTo).toLocaleDateString() : "Indefinite"}
@@ -313,7 +314,7 @@ export function ClientContractsTab({
 
                   <div>
                     <span className="text-security-navy-500 block">Renewal Framework</span>
-                    <span className="font-medium text-security-navy-800 dark:text-security-navy-200">
+                    <span className="font-medium text-security-navy-800">
                       {RENEWAL_TYPE_LABELS[contract.renewalType]}
                       {contract.autoRenew ? " (Auto-renews)" : ""}
                     </span>
@@ -321,14 +322,14 @@ export function ClientContractsTab({
 
                   <div>
                     <span className="text-security-navy-500 block">Termination Notice</span>
-                    <span className="font-medium text-security-navy-800 dark:text-security-navy-200">
+                    <span className="font-medium text-security-navy-800">
                       {contract.noticePeriodDays ?? 30} Days Written Notice
                     </span>
                   </div>
 
                   <div>
                     <span className="text-security-navy-500 block">Signed Date</span>
-                    <span className="font-mono text-security-navy-800 dark:text-security-navy-200">
+                    <span className="font-mono text-security-navy-800">
                       {contract.signedDate ? new Date(contract.signedDate).toLocaleDateString() : "Pending Execution"}
                     </span>
                   </div>
@@ -341,7 +342,7 @@ export function ClientContractsTab({
                     {contract.serviceTypes.map((svc) => (
                       <span
                         key={svc}
-                        className="rounded-full bg-security-navy-100 px-2 py-0.5 text-[10px] font-medium text-security-navy-700 dark:bg-security-navy-800 dark:text-security-navy-300"
+                        className="rounded-full bg-security-navy-100 px-2 py-0.5 text-[10px] font-medium text-security-navy-700"
                       >
                         {svc}
                       </span>
@@ -350,7 +351,7 @@ export function ClientContractsTab({
                 )}
 
                 {/* Covered Sites Pills */}
-                <div className="border-t border-security-navy-100 pt-3 text-xs dark:border-security-navy-800">
+                <div className="border-t border-security-navy-100 pt-3 text-xs">
                   <span className="text-security-navy-500 font-medium mr-2">Operational Sites Covered:</span>
                   {coveredSites.length === 0 ? (
                     <span className="italic text-security-navy-400">
@@ -361,7 +362,7 @@ export function ClientContractsTab({
                       {coveredSites.map((cs) => (
                         <span
                           key={cs.id}
-                          className="rounded-security bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-800 dark:bg-blue-950/50 dark:text-blue-300"
+                          className="rounded-security bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-800"
                         >
                           📍 {cs.site.name} ({cs.site.siteStatus})
                         </span>
@@ -376,27 +377,13 @@ export function ClientContractsTab({
       )}
 
       {/* Add / Edit Contract Modal */}
-      {showContractModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-security-navy-950/60 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-2xl rounded-security-lg border border-security-navy-100 bg-white p-6 shadow-security-elevated dark:border-security-navy-700 dark:bg-security-navy-900">
-            <div className="flex items-center justify-between border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
-              <h3 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
-                {editingContractId ? "Edit Commercial Contract" : "Register Service Agreement"}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowContractModal(false)}
-                className="text-security-navy-400 hover:text-security-navy-600 dark:hover:text-security-navy-200"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveContract} className="mt-4 space-y-3 text-xs">
+      <Modal
+        open={showContractModal}
+        onClose={() => !savingContract && setShowContractModal(false)}
+        title={editingContractId ? "Edit Commercial Contract" : "Register Service Agreement"}
+        size="xl"
+      >
+        <form onSubmit={handleSaveContract} className="space-y-3 text-xs">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="label-text mb-1 block">Contract Number / Reference *</label>
@@ -492,7 +479,7 @@ export function ClientContractsTab({
               </div>
 
               <div>
-                <label className="flex items-center gap-2 font-medium text-security-navy-800 dark:text-security-navy-200">
+                <label className="flex items-center gap-2 font-medium text-security-navy-800">
                   <input
                     type="checkbox"
                     checked={autoRenew}
@@ -534,112 +521,92 @@ export function ClientContractsTab({
                 />
               </div>
 
-              <div className="flex justify-end gap-3 border-t border-security-navy-100 pt-4 dark:border-security-navy-800">
-                <button
+              <div className="flex justify-end gap-3 border-t border-security-navy-100 pt-4">
+                <Button
                   type="button"
-                  className="btn-secondary"
+                  variant="secondary"
                   onClick={() => setShowContractModal(false)}
                   disabled={savingContract}
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="btn-primary"
                   disabled={savingContract || !contractNumber.trim() || !title.trim()}
+                  loading={savingContract}
                 >
                   {savingContract ? "Saving..." : "Save Agreement"}
-                </button>
+                </Button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {/* Manage Covered Sites Modal */}
-      {activeSiteContract && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-security-navy-950/60 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-lg rounded-security-lg border border-security-navy-100 bg-white p-6 shadow-security-elevated dark:border-security-navy-700 dark:bg-security-navy-900">
-            <div className="flex items-center justify-between border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
-              <div>
-                <h3 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
-                  Manage Covered Sites
-                </h3>
-                <p className="text-xs text-security-navy-500">
-                  Agreement: {activeSiteContract.contractNumber} ({activeSiteContract.title})
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveSiteContract(null)}
-                className="text-security-navy-400 hover:text-security-navy-600 dark:hover:text-security-navy-200"
-              >
-                ✕
-              </button>
-            </div>
+      <Modal
+        open={Boolean(activeSiteContract)}
+        onClose={() => !savingSites && setActiveSiteContract(null)}
+        title="Manage Covered Sites"
+        description={
+          activeSiteContract
+            ? `Agreement: ${activeSiteContract.contractNumber} (${activeSiteContract.title})`
+            : undefined
+        }
+        size="md"
+      >
+        <div className="space-y-3 text-xs">
+          <p className="text-security-navy-600">
+            Select which of this client&apos;s operational sites are governed under this agreement:
+          </p>
 
-            <div className="mt-4 space-y-3 text-xs">
-              <p className="text-security-navy-600 dark:text-security-navy-300">
-                Select which of this client&apos;s operational sites are governed under this agreement:
-              </p>
-
-              {client.sites.length === 0 ? (
-                <p className="rounded-security border border-dashed border-security-navy-200 p-4 text-center text-security-navy-500">
-                  No sites currently linked to this client. Attach sites on the Sites tab first.
-                </p>
-              ) : (
-                <div className="max-h-60 space-y-1.5 overflow-y-auto rounded-security border border-security-navy-100 p-2 dark:border-security-navy-800">
-                  {client.sites.map((site) => (
-                    <label
-                      key={site.id}
-                      className="flex items-center gap-2 rounded p-1.5 hover:bg-security-navy-50 dark:hover:bg-security-navy-800/60"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedSiteIds.includes(site.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedSiteIds([...selectedSiteIds, site.id]);
-                          } else {
-                            setSelectedSiteIds(selectedSiteIds.filter((id) => id !== site.id));
-                          }
-                        }}
-                      />
-                      <span className="font-medium text-security-navy-800 dark:text-security-navy-200">
-                        {site.name}
-                      </span>
-                      <span className="text-[11px] text-security-navy-500">({site.siteStatus})</span>
-                    </label>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex justify-end gap-3 border-t border-security-navy-100 pt-4 dark:border-security-navy-800">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setActiveSiteContract(null)}
-                  disabled={savingSites}
+          {client.sites.length === 0 ? (
+            <p className="rounded-security border border-dashed border-security-navy-200 p-4 text-center text-security-navy-500">
+              No sites currently linked to this client. Attach sites on the Sites tab first.
+            </p>
+          ) : (
+            <div className="max-h-60 space-y-1.5 overflow-y-auto rounded-security border border-security-navy-100 p-2">
+              {client.sites.map((site) => (
+                <label
+                  key={site.id}
+                  className="flex items-center gap-2 rounded p-1.5 hover:bg-security-navy-50"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={handleSaveCoveredSites}
-                  disabled={savingSites || client.sites.length === 0}
-                >
-                  {savingSites ? "Saving..." : `Update Covered Sites (${selectedSiteIds.length})`}
-                </button>
-              </div>
+                  <input
+                    type="checkbox"
+                    checked={selectedSiteIds.includes(site.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedSiteIds([...selectedSiteIds, site.id]);
+                      } else {
+                        setSelectedSiteIds(selectedSiteIds.filter((id) => id !== site.id));
+                      }
+                    }}
+                  />
+                  <span className="font-medium text-security-navy-800">{site.name}</span>
+                  <span className="text-[11px] text-security-navy-500">({site.siteStatus})</span>
+                </label>
+              ))}
             </div>
+          )}
+
+          <div className="flex justify-end gap-3 border-t border-security-navy-100 pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setActiveSiteContract(null)}
+              disabled={savingSites}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveCoveredSites}
+              disabled={savingSites || client.sites.length === 0}
+              loading={savingSites}
+            >
+              {savingSites ? "Saving..." : `Update Covered Sites (${selectedSiteIds.length})`}
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

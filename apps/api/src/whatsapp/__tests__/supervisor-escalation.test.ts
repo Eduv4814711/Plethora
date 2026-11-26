@@ -4,7 +4,7 @@ import {
   dispatchSupervisorEscalation,
 } from "../services/supervisor-escalation.service.js";
 import { prisma } from "../../lib/prisma.js";
-import { sendText } from "../services/send.service.js";
+import { sendTextWithTemplateFallback } from "../services/send.service.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { operationalEventBus } from "../../lib/events.js";
 
@@ -29,7 +29,8 @@ vi.mock("../../lib/prisma.js", () => ({
 }));
 
 vi.mock("../services/send.service.js", () => ({
-  sendText: vi.fn().mockResolvedValue({ messages: [{ id: "wam-1" }] }),
+  sendTextWithTemplateFallback: vi.fn().mockResolvedValue({ success: true, messageId: "wam-1" }),
+  templateBodyParameters: vi.fn().mockReturnValue([]),
 }));
 
 vi.mock("../../lib/audit.js", () => ({
@@ -177,18 +178,21 @@ describe("Supervisor Escalation Service", () => {
       expect(escalationResult.refCode).toBe("SUP-TEST-001");
 
       // Verify WhatsApp send
-      expect(sendText).toHaveBeenCalledTimes(1);
-      expect(sendText).toHaveBeenCalledWith(
+      expect(sendTextWithTemplateFallback).toHaveBeenCalledTimes(1);
+      expect(sendTextWithTemplateFallback).toHaveBeenCalledWith(
         "27821112222",
-        expect.stringContaining("PLETHORA — SUPERVISOR ESCALATION")
+        expect.any(String),
+        expect.any(Object)
       );
-      expect(sendText).toHaveBeenCalledWith(
+      expect(sendTextWithTemplateFallback).toHaveBeenCalledWith(
         "27821112222",
-        expect.stringContaining("Perimeter breach detected at zone 4")
+        expect.stringContaining("Perimeter breach detected at zone 4"),
+        expect.any(Object)
       );
-      expect(sendText).toHaveBeenCalledWith(
+      expect(sendTextWithTemplateFallback).toHaveBeenCalledWith(
         "27821112222",
-        expect.stringContaining("Sandton City Main Gate")
+        expect.stringContaining("Sandton City Main Gate"),
+        expect.any(Object)
       );
 
       // Verify DB message record
@@ -241,7 +245,7 @@ describe("Supervisor Escalation Service", () => {
 
       expect(escalationResult.dispatched).toBe(false);
       expect(escalationResult.reason).toContain("No supervisor phone configured");
-      expect(sendText).not.toHaveBeenCalled();
+      expect(sendTextWithTemplateFallback).not.toHaveBeenCalled();
 
       // Operational event bus must still have received the broadcast
       expect(busSpy).toHaveBeenCalledWith(

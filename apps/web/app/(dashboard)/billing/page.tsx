@@ -18,6 +18,7 @@ import { AgingBar } from "./_components/aging-bar";
 import { ArRiskBadge, computeArRisk } from "./_components/ar-risk-badge";
 import { StatusBadge } from "./_components/status-badge";
 import { BillingAccessRestricted } from "./_components/billing-access-restricted";
+import { AlertBanner, Button, Field, Input, Modal, PageHeader, PageShell, SubNav } from "@/components/ui";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 const IconInvoice = () => (
@@ -207,19 +208,12 @@ export default function BillingHubPage() {
   const liveSiteTotal = !isNaN(parsedLiveRate) && parsedLiveRate > 0 ? parsedLiveRate * liveGuards : 0;
 
   return (
-    <main className="animate-fade-in space-y-6 pb-16">
-      {/* ── Page header ── */}
-      <header className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="section-title">Finance</p>
-            <h1 className="page-title mt-0.5">Client Billing</h1>
-            <p className="mt-1 text-sm text-security-navy-500">
-              Accounts receivable, invoicing, site billing rates and client statements.
-            </p>
-          </div>
-
-          {canCreate && (
+    <PageShell width="wide" className="animate-fade-in pb-16">
+      <PageHeader
+        title="Client Billing"
+        description="Accounts receivable, invoicing, site billing rates and client statements."
+        actions={
+          canCreate ? (
             <div className="flex flex-wrap items-center gap-2">
               <Link href="/billing/invoices?new=1" className="btn-primary min-h-10 gap-1.5">
                 <IconInvoice />
@@ -230,23 +224,12 @@ export default function BillingHubPage() {
                 New Quote
               </Link>
             </div>
-          )}
-        </div>
+          ) : undefined
+        }
+      />
 
-        {/* Sub-navigation */}
-        <nav className="flex gap-1 overflow-x-auto" aria-label="Billing sections">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="inline-flex items-center rounded-security border border-security-navy-200 bg-white px-3.5 py-2 text-xs font-semibold text-security-navy-700 shadow-security-card transition-all hover:border-security-navy-300 hover:bg-security-navy-50 aria-[current=page]:border-security-navy-900 aria-[current=page]:bg-security-navy-900 aria-[current=page]:text-white"
-              aria-current="page"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </header>
+      {/* Sub-navigation */}
+      <SubNav items={NAV} pathname="/billing" ariaLabel="Billing sections" />
 
       {error && (
         <div
@@ -587,108 +570,83 @@ export default function BillingHubPage() {
       )}
 
       {/* ── Rate Configuration Modal ── */}
-      {editingSite && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-security-navy-900/40 backdrop-blur-sm p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) setEditingSite(null); }}
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Configure billing rate for ${editingSite.siteName}`}
-        >
-          <div className="w-full max-w-md rounded-security-lg border border-security-navy-100 bg-white shadow-security-elevated">
-            <div className="border-b border-security-navy-100 px-5 py-4">
-              <p className="section-title">Site Billing Rate</p>
-              <h2 className="mt-0.5 text-base font-semibold text-security-navy-900">
-                {editingSite.siteName}
-              </h2>
-              <p className="text-xs text-security-navy-500">{editingSite.clientName}</p>
+      <Modal
+        open={Boolean(editingSite)}
+        onClose={() => {
+          if (!savingRate) setEditingSite(null);
+        }}
+        title={editingSite?.siteName ?? "Site Billing Rate"}
+        description={editingSite ? `Site Billing Rate · ${editingSite.clientName}` : undefined}
+        size="md"
+      >
+        {editingSite && (
+          <form onSubmit={handleSaveRate} className="space-y-4">
+            {rateModalError && <AlertBanner variant="error">{rateModalError}</AlertBanner>}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field
+                label="Rate per guard (per month)"
+                id="rate-per-guard-input"
+                helperText={
+                  parsedLiveRate > 0
+                    ? `${editingSite.billableGuardCount} guards × ${formatCurrency(parsedLiveRate, { currency })} = ${formatCurrency(liveSiteTotal, { currency })}/mo`
+                    : undefined
+                }
+              >
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={rateInput}
+                  onChange={(e) => setRateInput(e.target.value)}
+                  placeholder="0.00"
+                  required
+                  autoFocus
+                />
+              </Field>
+
+              <Field label="Effective from" id="rate-effective-from-input">
+                <Input
+                  type="date"
+                  value={effectiveFromInput}
+                  onChange={(e) => setEffectiveFromInput(e.target.value)}
+                  required
+                />
+              </Field>
+
+              <Field label="Effective to (optional)" id="rate-effective-to-input">
+                <Input
+                  type="date"
+                  value={effectiveToInput}
+                  onChange={(e) => setEffectiveToInput(e.target.value)}
+                />
+              </Field>
+
+              <Field label="Notes (optional)" id="rate-notes-input">
+                <Input
+                  type="text"
+                  value={notesInput}
+                  onChange={(e) => setNotesInput(e.target.value)}
+                  placeholder="e.g. Contract renewal rate"
+                />
+              </Field>
             </div>
 
-            <form onSubmit={handleSaveRate} className="space-y-4 p-5">
-              {rateModalError && (
-                <p className="rounded-security border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {rateModalError}
-                </p>
-              )}
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="label-text mb-1.5 block">
-                    Rate per guard (per month)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className="input-modern w-full"
-                    value={rateInput}
-                    onChange={(e) => setRateInput(e.target.value)}
-                    placeholder="0.00"
-                    required
-                    autoFocus
-                    id="rate-per-guard-input"
-                  />
-                  {parsedLiveRate > 0 && (
-                    <p className="mt-1 text-xs text-security-navy-500">
-                      {editingSite.billableGuardCount} guards × {formatCurrency(parsedLiveRate, { currency })} ={" "}
-                      <strong>{formatCurrency(liveSiteTotal, { currency })}/mo</strong>
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="label-text mb-1.5 block">Effective from</label>
-                  <input
-                    type="date"
-                    className="input-modern w-full"
-                    value={effectiveFromInput}
-                    onChange={(e) => setEffectiveFromInput(e.target.value)}
-                    required
-                    id="rate-effective-from-input"
-                  />
-                </div>
-
-                <div>
-                  <label className="label-text mb-1.5 block">Effective to (optional)</label>
-                  <input
-                    type="date"
-                    className="input-modern w-full"
-                    value={effectiveToInput}
-                    onChange={(e) => setEffectiveToInput(e.target.value)}
-                    id="rate-effective-to-input"
-                  />
-                </div>
-
-                <div>
-                  <label className="label-text mb-1.5 block">Notes (optional)</label>
-                  <input
-                    type="text"
-                    className="input-modern w-full"
-                    value={notesInput}
-                    onChange={(e) => setNotesInput(e.target.value)}
-                    placeholder="e.g. Contract renewal rate"
-                    id="rate-notes-input"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <button type="submit" className="btn-primary flex-1" disabled={savingRate}>
-                  {savingRate ? "Saving…" : "Save Rate"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setEditingSite(null)}
-                  disabled={savingRate}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </main>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setEditingSite(null)}
+                disabled={savingRate}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" loading={savingRate}>
+                Save Rate
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+    </PageShell>
   );
 }

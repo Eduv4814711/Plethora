@@ -54,7 +54,7 @@ function DutyRibbon() {
           </div>
         ))}
       </div>
-      <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 pl-[6.75rem] font-mono text-[0.625rem] uppercase tracking-[0.14em] text-white/60">
+      <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 pl-[6.75rem] text-xs font-medium text-white/65">
         <span className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-security-amber-500 animate-signal-pulse motion-reduce:animate-none" />
           On duty
@@ -75,34 +75,29 @@ function DutyRibbon() {
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[1.05fr_minmax(28rem,0.95fr)]">
-      {/* No ambient glow behind this panel: the ribbon is the one thing here
-          worth looking at, and a blurred gradient would only compete with it. */}
       <aside className="surface-chrome relative hidden flex-col justify-between overflow-hidden p-12 lg:flex xl:p-16">
         <img src="/plethora-logo-header.svg" alt="Plethora" className="relative h-9 w-auto self-start object-contain" />
 
         <div className="relative max-w-lg">
-          <p className="font-mono text-[0.6875rem] uppercase tracking-[0.18em] text-security-amber-400">
+          <p className="text-xs font-medium text-security-amber-400">
             Tonight, 18:00 — 06:00
           </p>
-          {/* Deliberately a <p>, not an <h1>: the page's real heading is the
-              form beside it, and two h1s would leave a screen reader guessing
-              which one names the page. */}
-          <p className="mt-5 font-display text-[2.5rem] font-semibold leading-[1.08] tracking-[-0.03em] text-white xl:text-[3rem]">
+          <p className="mt-3 font-display text-[2.5rem] font-semibold leading-[1.08] tracking-[-0.03em] text-white xl:text-[3rem]">
             Every post covered,
             <br />
             every hour accounted for.
           </p>
           <p className="mt-5 max-w-md text-[0.9375rem] leading-relaxed text-white/65">
-            Rostering, attendance, payroll and incidents for security operations — one board, one record, from
-            the gate to the payslip.
+            Rostering, attendance, compliance and billing for security operations — one board, one record, from
+            the gate to Sage payroll export and client billing.
           </p>
           <div className="mt-12">
             <DutyRibbon />
           </div>
         </div>
 
-        <p className="relative font-mono text-[0.625rem] uppercase tracking-[0.16em] text-white/55">
-          Plethora — workforce operations
+        <p className="relative text-xs font-medium text-white/55">
+          Plethora — Workforce Operations
         </p>
       </aside>
 

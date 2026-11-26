@@ -1,7 +1,7 @@
 import type { NotificationChannel, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { hasCapability, normalizeCapabilities } from "../../lib/capabilities.js";
-import { sendText } from "../../whatsapp/services/send.service.js";
+import { sendTextWithTemplateFallback, templateBodyParameters } from "../../whatsapp/services/send.service.js";
 import { normalizeWhatsAppPhone } from "../../lib/phone.js";
 
 export type CreateNotificationInput = {
@@ -45,7 +45,7 @@ export async function createNotification(input: CreateNotificationInput) {
     });
 
     if (input.channel === "WHATSAPP") {
-      void dispatchWhatsAppNotification(input.userId, input.message).catch(() => undefined);
+      void dispatchWhatsAppNotification(input.userId, input.title, input.message).catch(() => undefined);
     }
 
     return { notification, created: true as const };
@@ -70,7 +70,7 @@ function isMissingTableError(err: unknown): boolean {
   );
 }
 
-async function dispatchWhatsAppNotification(userId: string, message: string) {
+async function dispatchWhatsAppNotification(userId: string, title: string, message: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { email: true, companyId: true },
@@ -88,7 +88,13 @@ async function dispatchWhatsAppNotification(userId: string, message: string) {
   if (!phone) return;
   const digits = normalizeWhatsAppPhone(phone);
   if (!digits) return;
-  await sendText(digits, message.slice(0, 1000));
+  const delivery = await sendTextWithTemplateFallback(digits, message.slice(0, 1000), {
+    name: "plethora_notification",
+    components: templateBodyParameters([title, message]),
+  });
+  if (!delivery.success) {
+    console.warn("[WhatsApp Notification] Delivery failed", { userId, error: delivery.error });
+  }
 }
 
 export async function listNotificationsForUser(

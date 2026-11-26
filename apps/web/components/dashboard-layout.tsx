@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useId, useState, useRef, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { SearchDropdown } from "@/components/search-dropdown";
@@ -13,14 +13,11 @@ import {
   MODULE_ICON_FALLBACK,
   MODULE_CATEGORIES,
   MODULE_CATEGORY_ORDER,
-  MODULE_DESCRIPTIONS,
   getModuleCategory,
+  type ModuleCategoryKey,
 } from "@/lib/module-presentation";
-import { useDashboardModules } from "@/lib/dashboard-modules";
 import {
   NAV_ITEMS,
-  MAIN_NAV_HREFS,
-  MORE_NAV_HREFS,
   canAccessRoute,
   getDefaultRouteForUser,
   hasAnyModuleView,
@@ -37,16 +34,21 @@ const SUBROUTE_LABELS: Record<string, string> = {
   "/billing/quotes": "Quotes",
 };
 
-/**
- * The console frame: a graphite header over the bright work surface. Modules
- * are reached from the launcher, from search, or from the drawer on small
- * screens — the desktop keeps its full width for the data.
- */
+const SIDEBAR_STORAGE_KEY = "plethora:sidebar-collapsed";
 
 function NavIcon({ href }: { href: string }) {
   return <>{MODULE_ICONS[href] ?? MODULE_ICON_FALLBACK}</>;
 }
 
+interface SidebarNavItem {
+  href: string;
+  label: string;
+}
+
+/**
+ * Single unified navigation frame: one persistent left sidebar on desktop and
+ * the exact same semantic navigation tree in a slide-over drawer on mobile.
+ */
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -57,22 +59,32 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [modulesFlyoutOpen, setModulesFlyoutOpen] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const profilePopoverId = useId();
+  const profilePopoverRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
-  const modulesFlyoutRef = useRef<HTMLDivElement>(null);
 
-  const availableHrefs = useMemo(() => {
-    if (!user) return [];
-    return [
-      ...(canAccessRoute("/", user) ? ["/overview"] : []),
-      ...NAV_ITEMS.filter((item) => item.href !== "/" && canAccessRoute(item.href, user)).map(
-        (item) => item.href
-      ),
-    ];
-  }, [user]);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1") {
+        setSidebarCollapsed(true);
+      }
+    } catch {
+      // Ignore storage access errors
+    }
+  }, []);
 
-  const { pinned } = useDashboardModules(user?.id ?? "anonymous", availableHrefs);
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? "1" : "0");
+      } catch {
+        // Ignore storage write errors
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!user || !pathname) return;
@@ -89,7 +101,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMobileNavOpen(false);
-    setModulesFlyoutOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -102,27 +113,68 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }, [mobileNavOpen]);
 
   useEffect(() => {
-    if (!mobileNavOpen && !modulesFlyoutOpen) return;
+    if (!mobileNavOpen) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         setMobileNavOpen(false);
-        setModulesFlyoutOpen(false);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mobileNavOpen, modulesFlyoutOpen]);
+  }, [mobileNavOpen]);
 
   useEffect(() => {
     function handlePointerDown(e: PointerEvent) {
       const t = e.target as Node;
-      if (profileRef.current && !profileRef.current.contains(t)) setProfileOpen(false);
       if (searchRef.current && !searchRef.current.contains(t)) setSearchOpen(false);
-      if (modulesFlyoutRef.current && !modulesFlyoutRef.current.contains(t)) setModulesFlyoutOpen(false);
     }
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, []);
+
+  const groupedNav = useMemo(() => {
+    if (!user) return { primary: [], admin: [] as SidebarNavItem[], all: [] as SidebarNavItem[] };
+
+    const rawAccessible: SidebarNavItem[] = [
+      ...(canAccessRoute("/", user)
+        ? [
+            { href: "/", label: "Dashboard" },
+            { href: "/overview", label: "Live Analytics" },
+          ]
+        : []),
+      ...NAV_ITEMS.filter((item) => item.href !== "/" && canAccessRoute(item.href, user)),
+      ...(canAccessRoute("/settings", user) ? [{ href: "/settings", label: "Settings" }] : []),
+    ];
+
+    const seen = new Set<string>();
+    const accessible = rawAccessible.filter((item) => {
+      if (seen.has(item.href)) return false;
+      seen.add(item.href);
+      return true;
+    });
+
+    const byCategory = new Map<ModuleCategoryKey, SidebarNavItem[]>();
+    for (const key of MODULE_CATEGORY_ORDER) {
+      byCategory.set(key, []);
+    }
+
+    for (const item of accessible) {
+      const cat = getModuleCategory(item.href);
+      byCategory.get(cat)?.push(item);
+    }
+
+    const primary = MODULE_CATEGORY_ORDER.filter((key) => key !== "administration")
+      .map((key) => ({
+        key,
+        label: MODULE_CATEGORIES[key].label,
+        items: byCategory.get(key) ?? [],
+      }))
+      .filter((group) => group.items.length > 0);
+
+    const admin = byCategory.get("administration") ?? [];
+
+    return { primary, admin, all: accessible };
+  }, [user]);
 
   if (loading || settingsLoading) {
     return (
@@ -132,7 +184,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             className="flex h-16 w-16 items-center justify-center rounded-security-lg border border-security-navy-100 bg-white p-3 shadow-security-card"
             aria-hidden
           >
-            {/* Same asset as app/icon.svg (tab favicon) */}
             <img
               src="/icon.svg"
               alt=""
@@ -143,8 +194,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               fetchPriority="high"
             />
           </div>
-          {/* A determinate-looking bar rather than a spinner: it reads as the
-              product waking up, not as something stuck. */}
           <div className="h-0.5 w-24 overflow-hidden rounded-full bg-security-navy-100">
             <div className="h-full w-1/2 animate-signal-pulse rounded-full bg-security-amber-500 motion-reduce:animate-none" />
           </div>
@@ -176,40 +225,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const allNavItems = NAV_ITEMS.filter((item) => canAccessRoute(item.href, user));
+  const navItemByHref = new Map(groupedNav.all.map((item) => [item.href, item]));
 
-  const mainNavItems = allNavItems.filter((item) => MAIN_NAV_HREFS.includes(item.href));
-  const moreNavItems = allNavItems.filter((item) => MORE_NAV_HREFS.includes(item.href));
-  const canAccessSettings = canAccessRoute("/settings", user);
-
-  // `/` is the launcher; its charts live at /overview, which the drawer lists
-  // as its own entry.
-  const navItems = [
-    ...(canAccessRoute("/", user) ? [{ href: "/overview", label: "Overview" }] : []),
-    ...mainNavItems.filter((item) => item.href !== "/"),
-    ...moreNavItems,
-  ];
-  const navItemByHref = new Map(navItems.map((item) => [item.href, item]));
-
-  // Desktop quick-links: show user's pinned modules first, filled up to 4 with core operational modules
-  const defaultCoreHrefs = ["/overview", "/rostering", "/attendance", "/payroll-exports", "/billing", "/employees", "/sites"];
-  const quickLinkHrefs: string[] = [];
-  for (const href of [...pinned, ...defaultCoreHrefs]) {
-    if (quickLinkHrefs.length >= 4) break;
-    if (navItemByHref.has(href) && !quickLinkHrefs.includes(href)) {
-      quickLinkHrefs.push(href);
-    }
-  }
-  const quickNavItems = quickLinkHrefs
-    .map((href) => navItemByHref.get(href))
-    .filter((item): item is { href: string; label: string } => Boolean(item));
-
-  // Build semantic breadcrumb items when inside a module (`pathname !== "/"`)
+  // Build semantic breadcrumb items
   const breadcrumbs: { href: string; label: string }[] = [];
-  if (pathname && pathname !== "/") {
-    breadcrumbs.push({ href: "/", label: "Command Center" });
+  if (pathname === "/") {
+    breadcrumbs.push({ href: "/", label: "Dashboard" });
+  } else if (pathname) {
+    breadcrumbs.push({ href: "/", label: "Dashboard" });
     if (pathname === "/overview") {
-      breadcrumbs.push({ href: "/overview", label: "Overview" });
+      breadcrumbs.push({ href: "/overview", label: "Live Analytics" });
     } else if (pathname === "/settings" || pathname.startsWith("/settings/")) {
       breadcrumbs.push({ href: "/settings", label: "Settings" });
       if (pathname === "/settings/migrate") {
@@ -253,21 +278,112 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }
 
   const hasAccess = canAccessRoute(pathname, user);
-  const isLauncherPage = pathname === "/";
+  const isHomePage = pathname === "/";
   const isOverviewPage = pathname === "/overview";
   const isWhatsAppPage = pathname === "/whatsapp" || pathname.startsWith("/whatsapp/");
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
+
   const accessDisplay = user.isOwner
     ? "Company owner"
     : user.jobTitle?.trim() || (user.accountType === "client" ? "Client" : "Staff");
 
-  const iconButton =
-    "inline-flex h-9 w-9 items-center justify-center rounded-security text-white/75 transition-colors hover:bg-white/10 hover:text-white touch-manipulation";
+  const renderNavLinks = (collapsed: boolean, onNavigate?: () => void) => (
+    <div className="flex flex-1 flex-col justify-between overflow-y-auto overscroll-y-contain px-2.5 py-3">
+      <div className="space-y-4">
+        {groupedNav.primary.map((group) => (
+          <div key={group.key}>
+            {!collapsed && (
+              <p className="mb-1 px-2.5 text-[11px] font-medium text-white/45">
+                {group.label}
+              </p>
+            )}
+            <ul className="space-y-0.5">
+              {group.items.map((item) => {
+                const active = isActive(item.href);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      title={collapsed ? item.label : undefined}
+                      aria-current={active ? "page" : undefined}
+                      className={clsx(
+                        "group flex items-center gap-2.5 rounded-security py-2 text-[13px] transition-colors [&_svg]:h-4 [&_svg]:w-4",
+                        collapsed ? "justify-center px-2" : "px-2.5",
+                        active
+                          ? "bg-gradient-to-r from-security-amber-500/20 to-security-amber-500/5 font-semibold text-white shadow-[inset_3px_0_0_#f97a08]"
+                          : "font-medium text-white/70 hover:bg-white/[0.06] hover:text-white"
+                      )}
+                    >
+                      <span
+                        className={clsx(
+                          "shrink-0 transition-colors",
+                          active ? "text-security-amber-400" : "text-white/55 group-hover:text-white/85"
+                        )}
+                        aria-hidden="true"
+                      >
+                        <NavIcon href={item.href} />
+                      </span>
+                      {!collapsed && <span className="truncate">{item.label}</span>}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      {groupedNav.admin.length > 0 && (
+        <div className="mt-4 border-t border-white/10 pt-3">
+          {!collapsed && (
+            <p className="mb-1 px-2.5 text-[11px] font-medium text-white/45">
+              Admin
+            </p>
+          )}
+          <ul className="space-y-0.5">
+            {groupedNav.admin.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    onClick={onNavigate}
+                    title={collapsed ? item.label : undefined}
+                    aria-current={active ? "page" : undefined}
+                    className={clsx(
+                      "group flex items-center gap-2.5 rounded-security py-2 text-[13px] transition-colors [&_svg]:h-4 [&_svg]:w-4",
+                      collapsed ? "justify-center px-2" : "px-2.5",
+                      active
+                        ? "bg-white/12 font-semibold text-white shadow-[inset_3px_0_0_#f97a08]"
+                        : "font-medium text-white/70 hover:bg-white/[0.06] hover:text-white"
+                    )}
+                  >
+                    <span
+                      className={clsx(
+                        "shrink-0 transition-colors",
+                        active ? "text-security-amber-400" : "text-white/55 group-hover:text-white/85"
+                      )}
+                      aria-hidden="true"
+                    >
+                      <NavIcon href={item.href} />
+                    </span>
+                    {!collapsed && <span className="truncate">{item.label}</span>}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 
   return (
-    <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[var(--bg-canvas)]">
+    <div className="flex h-[100dvh] min-h-0 overflow-hidden bg-[var(--bg-canvas)]">
+      {/* ── Mobile Slide-Over Navigation Drawer ── */}
       {mobileNavOpen && (
         <>
           <button
@@ -276,23 +392,30 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             aria-label="Close navigation"
             onClick={() => setMobileNavOpen(false)}
           />
-          <div
+          <aside
             id="dashboard-mobile-nav"
-            className="surface-chrome fixed bottom-0 left-0 top-0 z-[70] flex w-[min(20.5rem,88vw)] animate-slide-up flex-col shadow-security-elevated lg:hidden touch-manipulation motion-reduce:animate-none pt-[max(0.5rem,env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)]"
+            className="surface-chrome fixed bottom-0 left-0 top-0 z-[70] flex w-[min(18.5rem,86vw)] animate-slide-up flex-col shadow-security-elevated lg:hidden touch-manipulation motion-reduce:animate-none pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
             role="dialog"
             aria-modal="true"
-            aria-label="Main navigation"
+            aria-label="Primary navigation"
             onPointerDown={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
-              <div className="min-w-0">
-                <p className="font-mono text-[0.625rem] uppercase tracking-[0.16em] text-white/60">Modules</p>
-                <p className="min-w-0 truncate text-sm font-semibold text-white/95">{companyName}</p>
-              </div>
+            <div className="flex h-13 items-center justify-between gap-2 border-b border-white/10 px-4">
+              <Link
+                href="/"
+                onClick={() => setMobileNavOpen(false)}
+                className="flex min-w-0 items-center gap-2.5"
+              >
+                <img
+                  src="/plethora-logo-header.svg"
+                  alt="Plethora"
+                  className="h-6 w-auto object-contain"
+                />
+              </Link>
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(false)}
-                className={clsx(iconButton, "h-11 w-11 shrink-0")}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-security text-white/75 transition-colors hover:bg-white/10 hover:text-white"
                 aria-label="Close menu"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -300,100 +423,114 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 </svg>
               </button>
             </div>
-            <nav className="flex-1 overflow-y-auto overscroll-y-contain px-2 py-3">
-              {[{ href: "/", label: "All modules" }, ...navItems].map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileNavOpen(false)}
-                  className={clsx(
-                    "spine mb-0.5 flex items-center gap-3 rounded-security py-3 pl-4 pr-3 text-[0.9375rem] font-medium transition-colors [&_svg]:h-5 [&_svg]:w-5",
-                    isActive(item.href)
-                      ? "spine-live bg-white/10 text-white"
-                      : "spine-idle before:bg-transparent text-white/75 hover:bg-white/5 hover:text-white"
-                  )}
-                  aria-current={isActive(item.href) ? "page" : undefined}
-                >
-                  <span
-                    className={clsx("shrink-0", isActive(item.href) ? "text-security-amber-400" : "text-white/60")}
-                    aria-hidden
-                  >
-                    <NavIcon href={item.href} />
-                  </span>
-                  {item.label}
-                </Link>
-              ))}
-              {canAccessSettings && (
-                <Link
-                  href="/settings"
-                  onClick={() => setMobileNavOpen(false)}
-                  className={clsx(
-                    "spine mb-0.5 mt-2 flex items-center gap-3 rounded-security border-t border-white/10 py-3 pl-4 pr-3 text-[0.9375rem] font-medium transition-colors [&_svg]:h-5 [&_svg]:w-5",
-                    isActive("/settings")
-                      ? "spine-live bg-white/10 text-white"
-                      : "spine-idle before:bg-transparent text-white/75 hover:bg-white/5 hover:text-white"
-                  )}
-                >
-                  <span
-                    className={clsx("shrink-0", isActive("/settings") ? "text-security-amber-400" : "text-white/60")}
-                    aria-hidden
-                  >
-                    <NavIcon href="/settings" />
-                  </span>
-                  Settings
-                </Link>
-              )}
+            <div className="border-b border-white/10 px-4 py-2">
+              <p className="truncate text-xs font-medium text-white/70">{companyName}</p>
+            </div>
+            <nav aria-label="Primary" className="flex min-h-0 flex-1 flex-col">
+              {renderNavLinks(false, () => setMobileNavOpen(false))}
             </nav>
-          </div>
+          </aside>
         </>
       )}
 
-      {/* Brand header — fixed so it stays visible while main scrolls. */}
-      <header className="surface-chrome fixed left-0 right-0 top-0 z-[45] flex h-14 items-center justify-between gap-2 border-b border-white/[0.08] px-3 sm:px-5 backdrop-blur-md pt-[env(safe-area-inset-top,0px)]">
-        <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
-          <button
-            type="button"
-            onClick={() => setMobileNavOpen(true)}
-            className={clsx(iconButton, "shrink-0 lg:hidden")}
-            aria-expanded={mobileNavOpen}
-            aria-controls="dashboard-mobile-nav"
-            aria-label="Open navigation menu"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
+      {/* ── Desktop Persistent Navigation Sidebar ── */}
+      <aside
+        className={clsx(
+          "surface-chrome hidden shrink-0 flex-col border-r border-white/[0.08] transition-[width] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none lg:flex",
+          sidebarCollapsed ? "w-[64px]" : "w-[228px]"
+        )}
+      >
+        <div
+          className={clsx(
+            "flex h-13 shrink-0 items-center border-b border-white/10",
+            sidebarCollapsed ? "justify-center px-2" : "justify-between px-4"
+          )}
+        >
           <Link
             href="/"
-            className="flex min-w-0 shrink-0 items-center overflow-hidden rounded-security px-0.5 py-0.5"
-            aria-label="Command Center (All modules)"
+            className="flex min-w-0 items-center overflow-hidden rounded-security py-0.5"
+            aria-label="Plethora Dashboard"
           >
-            <img
-              src="/plethora-logo-header.svg"
-              alt="Plethora"
-              className="h-7 w-auto object-contain object-left sm:h-8"
-            />
+            {sidebarCollapsed ? (
+              <img
+                src="/icon.svg"
+                alt="Plethora"
+                className="h-7 w-7 object-contain"
+              />
+            ) : (
+              <img
+                src="/plethora-logo-header.svg"
+                alt="Plethora"
+                className="h-7 w-auto object-contain object-left"
+              />
+            )}
           </Link>
-          {/* Company identity badge */}
-          <span className="hidden min-w-0 items-center border-l border-white/15 pl-3 xl:inline-flex">
-            <span className="truncate rounded border border-white/10 bg-white/[0.06] px-2 py-0.5 text-xs font-semibold tracking-wide text-white/90">
-              {companyName}
-            </span>
-          </span>
+        </div>
 
-          {/* Semantic Breadcrumbs when inside a module */}
-          {breadcrumbs.length > 1 && (
-            <nav
-              aria-label="Breadcrumbs"
-              className="hidden min-w-0 items-center border-l border-white/15 pl-3 md:flex"
+        {!sidebarCollapsed && (
+          <div className="border-b border-white/[0.07] px-3 py-2.5">
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5">
+              <svg className="h-3.5 w-3.5 shrink-0 text-white/55" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+              </svg>
+              <p className="truncate text-xs font-medium text-white/80" title={companyName}>
+                {companyName}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <nav aria-label="Primary" className="flex min-h-0 flex-1 flex-col">
+          {renderNavLinks(sidebarCollapsed)}
+        </nav>
+      </aside>
+
+      {/* ── Main Content Column ── */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Slim Single-Row Top Bar */}
+        <header className="relative z-30 flex h-13 shrink-0 items-center justify-between gap-3 border-b border-security-navy-100 bg-white px-3 sm:px-5 pt-[env(safe-area-inset-top,0px)]">
+          <div className="flex min-w-0 items-center gap-2">
+            {/* Mobile menu trigger */}
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-security text-security-navy-600 transition-colors hover:bg-security-navy-50 hover:text-security-navy-900 lg:hidden"
+              aria-expanded={mobileNavOpen}
+              aria-controls="dashboard-mobile-nav"
+              aria-label="Open navigation menu"
             >
-              <ol className="flex flex-wrap items-center gap-1.5 text-xs">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
+            {/* Desktop sidebar collapse toggle */}
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-security text-security-navy-500 transition-colors hover:bg-security-navy-50 hover:text-security-navy-900 lg:inline-flex"
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+              </svg>
+            </button>
+
+            {/* Mobile brand logo */}
+            <Link href="/" className="flex shrink-0 items-center lg:hidden" aria-label="Plethora Dashboard">
+              <img src="/icon.svg" alt="Plethora" className="h-6 w-6 object-contain" />
+            </Link>
+
+            {/* Clean Breadcrumb Trail */}
+            <nav aria-label="Breadcrumbs" className="hidden min-w-0 items-center sm:flex">
+              <ol className="flex items-center gap-1.5 text-xs">
                 {breadcrumbs.map((crumb, idx) => {
                   const isLast = idx === breadcrumbs.length - 1;
                   return (
-                    <li key={crumb.href} className="flex items-center gap-1.5 min-w-0">
+                    <li key={crumb.href} className="flex min-w-0 items-center gap-1.5">
                       {idx > 0 && (
-                        <span className="select-none text-white/40" aria-hidden="true">
+                        <span className="select-none text-security-navy-300" aria-hidden="true">
                           /
                         </span>
                       )}
@@ -401,10 +538,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         href={crumb.href}
                         aria-current={isLast ? "page" : undefined}
                         className={clsx(
-                          "truncate rounded px-1.5 py-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-security-amber-400",
+                          "truncate rounded px-1.5 py-0.5 no-underline transition-colors",
                           isLast
-                            ? "bg-white/10 font-semibold text-white"
-                            : "font-medium text-white/70 underline-offset-2 hover:bg-white/5 hover:text-white hover:underline"
+                            ? "font-semibold text-security-navy-900"
+                            : "font-medium text-security-navy-500 hover:bg-security-navy-50 hover:text-security-navy-800"
                         )}
                       >
                         {crumb.label}
@@ -414,281 +551,129 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 })}
               </ol>
             </nav>
-          )}
-
-          {/* Desktop Quick-Nav & All Modules Flyout */}
-          {navItems.length > 0 && (
-            <div className="hidden items-center gap-1 border-l border-white/15 pl-3 lg:flex">
-              <div ref={modulesFlyoutRef} className="relative">
-                <button
-                  type="button"
-                  onClick={() => setModulesFlyoutOpen((o) => !o)}
-                  aria-expanded={modulesFlyoutOpen}
-                  aria-controls="header-modules-flyout"
-                  className={clsx(
-                    "inline-flex h-8 items-center gap-1.5 rounded-security border px-2.5 text-xs font-semibold transition-colors",
-                    modulesFlyoutOpen
-                      ? "border-security-amber-400/60 bg-white/15 text-white"
-                      : "border-white/15 bg-white/[0.06] text-white/85 hover:border-white/25 hover:bg-white/10 hover:text-white"
-                  )}
-                >
-                  <svg className="h-3.5 w-3.5 text-security-amber-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                  </svg>
-                  <span>Modules</span>
-                  <svg className={clsx("h-3 w-3 opacity-70 transition-transform", modulesFlyoutOpen && "rotate-180")} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {modulesFlyoutOpen && (
-                  <div
-                    id="header-modules-flyout"
-                    className="absolute left-0 top-full z-[80] mt-2 w-[min(38rem,calc(100vw-2rem))] max-h-[80dvh] animate-slide-up overflow-y-auto rounded-security-lg border border-security-navy-100 bg-white p-4 shadow-security-elevated motion-reduce:animate-none"
-                  >
-                    <div className="mb-3 flex items-center justify-between border-b border-security-navy-100 pb-2.5">
-                      <div>
-                        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-security-navy-500">
-                          Quick Navigation
-                        </p>
-                        <p className="text-xs font-semibold text-security-navy-900">
-                          Jump directly to any module
-                        </p>
-                      </div>
-                      <Link
-                        href="/"
-                        onClick={() => setModulesFlyoutOpen(false)}
-                        aria-current={pathname === "/" ? "page" : undefined}
-                        className="inline-flex items-center gap-1.5 rounded-security border border-security-navy-200 bg-security-navy-50 px-2.5 py-1 text-xs font-semibold text-security-navy-900 transition hover:border-security-amber-400 hover:bg-security-amber-50"
-                      >
-                        <span>Command Center (/)</span>
-                        <span aria-hidden="true">→</span>
-                      </Link>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      {MODULE_CATEGORY_ORDER.map((catKey) => {
-                        const groupItems = navItems.filter(
-                          (item) => getModuleCategory(item.href) === catKey
-                        );
-                        if (groupItems.length === 0) return null;
-                        const catInfo = MODULE_CATEGORIES[catKey];
-
-                        return (
-                          <div key={catKey}>
-                            <p className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-security-navy-500">
-                              {catInfo.label}
-                            </p>
-                            <ul className="space-y-1">
-                              {groupItems.map((item) => {
-                                const active = isActive(item.href);
-                                return (
-                                  <li key={item.href}>
-                                    <Link
-                                      href={item.href}
-                                      onClick={() => setModulesFlyoutOpen(false)}
-                                      aria-current={active ? "page" : undefined}
-                                      className={clsx(
-                                        "flex items-center gap-2.5 rounded-security px-2.5 py-1.5 text-xs transition-colors",
-                                        active
-                                          ? "bg-security-navy-900 font-semibold text-white"
-                                          : "text-security-navy-800 hover:bg-security-navy-50"
-                                      )}
-                                    >
-                                      <span
-                                        className={clsx(
-                                          "flex h-6 w-6 shrink-0 items-center justify-center rounded [&_svg]:h-4 [&_svg]:w-4",
-                                          active
-                                            ? "bg-white/15 text-security-amber-400"
-                                            : "bg-security-navy-50 text-security-navy-600"
-                                        )}
-                                        aria-hidden="true"
-                                      >
-                                        <NavIcon href={item.href} />
-                                      </span>
-                                      <span className="min-w-0 flex-1">
-                                        <span className="block truncate font-semibold">
-                                          {item.label}
-                                        </span>
-                                        {MODULE_DESCRIPTIONS[item.href] && (
-                                          <span
-                                            className={clsx(
-                                              "block truncate text-[10px]",
-                                              active ? "text-white/75" : "text-security-navy-500"
-                                            )}
-                                          >
-                                            {MODULE_DESCRIPTIONS[item.href]}
-                                          </span>
-                                        )}
-                                      </span>
-                                    </Link>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Pinned / Core Quick-Links */}
-              <nav aria-label="Pinned modules" className="hidden items-center gap-1 xl:flex">
-                {quickNavItems.map((item) => {
-                  const active = isActive(item.href);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      aria-current={active ? "page" : undefined}
-                      className={clsx(
-                        "inline-flex h-8 items-center gap-1.5 rounded-security px-2.5 text-xs font-medium transition-colors",
-                        active
-                          ? "bg-white/15 font-semibold text-white shadow-sm ring-1 ring-security-amber-400/50"
-                          : "text-white/75 hover:bg-white/[0.08] hover:text-white"
-                      )}
-                    >
-                      <span>{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
-          )}
-        </div>
-
-        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-          <div ref={searchRef} className="relative flex items-center">
-            {hasAnyModuleView(user) && (
-              <>
-                {/* Desktop keeps the field on screen: hunting for a guard by
-                    name is the most common thing anyone does in here, and it
-                    should not cost a click to start. */}
-                <div className="hidden lg:block">
-                  <SearchDropdown />
-                </div>
-                <div className="lg:hidden">
-                  {searchOpen ? (
-                    <div className="flex max-w-[calc(100vw-6.5rem)] items-center gap-1 sm:gap-2">
-                      <SearchDropdown onClose={() => setSearchOpen(false)} />
-                      <button
-                        type="button"
-                        onClick={() => setSearchOpen(false)}
-                        className={clsx(iconButton, "h-11 w-11 shrink-0")}
-                        aria-label="Close search"
-                      >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setSearchOpen(true)}
-                      className={clsx(iconButton, "h-11 w-11")}
-                      title="Search"
-                      aria-label="Search"
-                    >
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
           </div>
 
-          <NotificationBell />
+          <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+            <div ref={searchRef} className="relative flex items-center">
+              {hasAnyModuleView(user) && (
+                <>
+                  <div className="hidden md:block">
+                    <SearchDropdown />
+                  </div>
+                  <div className="md:hidden">
+                    {searchOpen ? (
+                      <div className="flex max-w-[calc(100vw-6.5rem)] items-center gap-1">
+                        <SearchDropdown onClose={() => setSearchOpen(false)} />
+                        <button
+                          type="button"
+                          onClick={() => setSearchOpen(false)}
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-security text-security-navy-500 hover:bg-security-navy-50"
+                          aria-label="Close search"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSearchOpen(true)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-security text-security-navy-500 hover:bg-security-navy-50 hover:text-security-navy-900"
+                        title="Search"
+                        aria-label="Search"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
 
-          {canAccessSettings && (
-            <Link
-              href="/settings"
-              className={clsx(iconButton, isActive("/settings") && "bg-white/10 text-white")}
-              title="Settings"
-              aria-label="Settings"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </Link>
-          )}
+            <NotificationBell />
 
-          <div ref={profileRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setProfileOpen((o) => !o)}
-              className="flex h-9 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] py-1 pl-1 pr-2.5 text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.1] hover:text-white touch-manipulation sm:pr-3"
-              title={user.name ?? "Profile"}
-              aria-expanded={profileOpen}
-              aria-label={user.name ? `Profile, ${user.name}` : "Profile"}
-            >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-security-amber-500 font-display text-xs font-bold text-security-navy-950 shadow-sm">
-                {user.name?.charAt(0)?.toUpperCase() ?? "U"}
-              </span>
-              <span className="hidden max-w-[8rem] truncate text-xs font-medium sm:inline md:max-w-[10rem]">
-                {user.name}
-              </span>
-              <svg className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {profileOpen && (
-              <div className="absolute right-0 top-full z-50 mt-2 min-w-[240px] animate-slide-up overflow-hidden rounded-security-lg border border-security-navy-100 bg-white py-1.5 shadow-security-elevated motion-reduce:animate-none">
-                <div className="border-b border-security-navy-100 px-4 py-3">
+            <div className="relative">
+              <button
+                type="button"
+                popoverTarget={profilePopoverId}
+                className="flex h-9 shrink-0 items-center gap-2 rounded-full border border-security-navy-200/80 bg-white py-0.5 pl-1 pr-2 text-security-navy-700 transition-colors hover:border-security-navy-300 hover:bg-security-navy-50 sm:pr-2.5"
+                title={user.name ?? "Profile"}
+                aria-expanded={profileOpen}
+                aria-controls={profilePopoverId}
+                aria-label={user.name ? `Profile, ${user.name}` : "Profile"}
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-security-navy-900 font-display text-[11px] font-bold text-white">
+                  {user.name?.charAt(0)?.toUpperCase() ?? "U"}
+                </span>
+                <span className="hidden max-w-[8rem] truncate text-xs font-medium sm:inline">
+                  {user.name}
+                </span>
+                <svg className="hidden h-3 w-3 shrink-0 opacity-60 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <div
+                ref={profilePopoverRef}
+                id={profilePopoverId}
+                popover="auto"
+                onToggle={(e) => {
+                  const nextState = (e.nativeEvent as ToggleEvent).newState;
+                  setProfileOpen(nextState === "open");
+                }}
+                className="header-popover min-w-[220px] overflow-hidden rounded-security-lg border border-security-navy-100 bg-white py-1.5 text-left text-security-navy-900 shadow-security-elevated"
+              >
+                <div className="border-b border-security-navy-100 px-4 py-2.5">
                   <p className="text-sm font-semibold text-security-navy-900">{user.name}</p>
                   <p className="mt-0.5 text-xs text-security-navy-500">{accessDisplay}</p>
                 </div>
+                {canAccessRoute("/settings", user) && (
+                  <Link
+                    href="/settings"
+                    onClick={() => profilePopoverRef.current?.hidePopover?.()}
+                    className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm font-medium text-security-navy-700 no-underline transition-colors hover:bg-security-navy-50"
+                  >
+                    Settings
+                  </Link>
+                )}
                 <button
+                  type="button"
                   onClick={() => {
-                    setProfileOpen(false);
+                    profilePopoverRef.current?.hidePopover?.();
                     logout();
                   }}
-                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-security-navy-700 transition-colors hover:bg-security-navy-50"
+                  className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm font-medium text-security-navy-700 transition-colors hover:bg-security-navy-50"
                 >
-                  <svg className="h-4 w-4 text-security-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
                   Sign out
                 </button>
               </div>
-            )}
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main
-        id="dashboard-main"
-        className={clsx(
-          "flex min-h-0 flex-1 flex-col box-border bg-[var(--bg-canvas)]",
-          isLauncherPage
-            ? "pt-[calc(env(safe-area-inset-top,0px)+3.5rem+0.5rem)] pb-3 px-3 sm:px-5 lg:px-6 overflow-y-auto overscroll-y-contain h-[100dvh]"
-            : clsx(
-                /* Reserve space for the fixed header: safe area + the 3.5rem row. */
-                "pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1rem)] pb-5 pl-4 pr-4 sm:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] sm:pb-6 sm:pl-6 sm:pr-6 md:pb-8 md:pl-8 md:pr-8 lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+2rem)] lg:pb-10 lg:pl-8 lg:pr-8 xl:pl-10 xl:pr-10",
-                isOverviewPage &&
-                  "lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.25rem)] lg:pb-4 xl:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] xl:pb-5 [@media(max-height:860px)]:lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+0.75rem)] [@media(max-height:860px)]:lg:pb-3",
-                "overscroll-y-contain",
-                isOverviewPage
-                  ? "overflow-y-auto"
-                  : isWhatsAppPage
-                    ? "overflow-hidden"
-                    : "overflow-y-auto"
-              )
-        )}
-      >
-        {hasAccess ? (
-          isOverviewPage || isLauncherPage ? (
-            <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
-          ) : (
-            children
-          )
-        ) : null}
-      </main>
+        <main
+          id="dashboard-main"
+          className={clsx(
+            "flex min-h-0 flex-1 flex-col box-border bg-[var(--bg-canvas)] overscroll-y-contain",
+            isHomePage
+              ? "overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-6"
+              : clsx(
+                  "px-4 py-4 sm:px-6 sm:py-6 lg:px-8",
+                  isWhatsAppPage ? "overflow-hidden" : "overflow-y-auto"
+                )
+          )}
+        >
+          {hasAccess ? (
+            isOverviewPage || isHomePage ? (
+              <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
+            ) : (
+              children
+            )
+          ) : null}
+        </main>
+      </div>
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
 } from "@/lib/msr-api";
 import { authFetch } from "@/lib/api";
 import { clsx } from "clsx";
+import { AlertBanner, Button, EmptyState, PageHeader, PageShell, SearchInput, SkeletonBlock, TableShell, Toolbar } from "@/components/ui";
 
 export default function ComplianceReportPage() {
   const { token, user } = useAuth();
@@ -141,44 +142,30 @@ export default function ComplianceReportPage() {
   };
 
   return (
-    <div className="animate-fade-in space-y-6 text-security-navy-900">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href="/employees"
-              className="text-xs font-bold uppercase tracking-wider text-security-navy-500 hover:text-security-navy-900 transition-colors"
+    <PageShell width="wide" className="animate-fade-in">
+      <div className="space-y-3">
+        <Link
+          href="/employees"
+          className="inline-flex items-center text-xs font-medium text-security-navy-600 hover:text-security-navy-900"
+        >
+          ← Back to Team
+        </Link>
+        <PageHeader
+          title="Compliance & Certificate Management"
+          description="Monitor PSiRA credentials, statutory contracts, firearm competencies, and expiring qualifications across your workforce."
+          actions={
+            <Button
+              variant="secondary"
+              onClick={handleExportCsv}
+              disabled={report.length === 0}
             >
-              ← Back to Team
-            </Link>
-          </div>
-          <h1 className="page-title">Compliance & Certificate Management</h1>
-          <p className="text-sm text-security-navy-600 mt-1">
-            Monitor PSiRA credentials, statutory contracts, firearm competencies, and expiring qualifications across your workforce.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            disabled={report.length === 0}
-            className="btn-secondary h-11 flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Export Compliance CSV
-          </button>
-        </div>
+              Export Compliance CSV
+            </Button>
+          }
+        />
       </div>
 
-      {error && (
-        <div className="p-4 rounded-security border border-red-200 bg-red-50 text-red-700 text-sm" role="alert">
-          {error}
-        </div>
-      )}
+      {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
       {/* KPI Overview Summary */}
       {summary && (
@@ -303,14 +290,15 @@ export default function ComplianceReportPage() {
       )}
 
       {/* Filter Toolbar */}
-      <div className="p-4 rounded-security-lg bg-white border-2 border-security-navy-100 shadow-security-card flex flex-wrap items-center gap-3">
-        <input
-          type="search"
-          placeholder="Search by name, ID, PSiRA registration..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="input-compact min-w-[200px] flex-1 max-w-sm"
-        />
+      <Toolbar>
+        <div className="min-w-[200px] flex-1 max-w-sm">
+          <SearchInput
+            placeholder="Search by name, ID, PSiRA registration..."
+            value={search}
+            onChange={setSearch}
+            ariaLabel="Search employees"
+          />
+        </div>
 
         <select
           value={complianceFilter}
@@ -378,8 +366,10 @@ export default function ComplianceReportPage() {
         </select>
 
         {(complianceFilter !== "ALL" || expiryFilter !== "ALL" || statusFilter !== "all" || groupFilter !== "ALL" || gradeFilter !== "ALL" || search.trim()) && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => {
               setComplianceFilter("ALL");
               setExpiryFilter("ALL");
@@ -388,17 +378,17 @@ export default function ComplianceReportPage() {
               setGradeFilter("ALL");
               setSearch("");
             }}
-            className="text-xs font-semibold text-security-navy-600 hover:text-security-navy-900 underline ml-auto"
+            className="ml-auto"
           >
-            Clear Filters
-          </button>
+            Clear filters
+          </Button>
         )}
-      </div>
+      </Toolbar>
 
       {/* Compliance Matrix Table */}
-      <div className="rounded-security-lg border-2 border-security-navy-100 bg-white overflow-hidden shadow-security-card">
-        <div className="p-4 border-b border-security-navy-100 flex items-center justify-between bg-security-navy-50">
-          <h2 className="text-sm font-bold text-security-navy-900">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-sm font-semibold text-security-navy-900">
             Personnel Compliance Audit List ({total} Records)
           </h2>
           <span className="text-xs text-security-navy-600">
@@ -407,19 +397,17 @@ export default function ComplianceReportPage() {
         </div>
 
         {loading ? (
-          <div className="p-12 text-center text-security-navy-500 animate-pulse">
-            Loading compliance report…
-          </div>
+          <SkeletonBlock className="h-56" />
         ) : report.length === 0 ? (
-          <div className="p-12 text-center text-security-navy-500">
-            <p className="font-semibold text-security-navy-800">No personnel match your filter criteria.</p>
-            <p className="text-xs text-security-navy-500 mt-1">Try broadening your search or filter options.</p>
-          </div>
+          <EmptyState
+            title="No personnel match your filter criteria."
+            description="Try broadening your search or filter options."
+          />
         ) : (
-          <div className="overflow-x-auto">
+          <TableShell>
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-security-navy-50/70 border-b-2 border-security-navy-100 text-[11px] font-bold uppercase tracking-wider text-security-navy-600">
+                <tr>
                   <th className="py-3 px-4">Employee</th>
                   <th className="py-3 px-3">Role & Type</th>
                   <th className="py-3 px-3">PSiRA Details</th>
@@ -539,10 +527,10 @@ export default function ComplianceReportPage() {
                 })}
               </tbody>
             </table>
-          </div>
+          </TableShell>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }
 

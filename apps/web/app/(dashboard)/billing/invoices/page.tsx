@@ -24,7 +24,15 @@ import { StatusBadge } from "../_components/status-badge";
 import { computeTotalsPreview, DocumentTotals } from "../_components/document-totals";
 import { emptyLine, LineItemsEditor, type EditableLine } from "../_components/line-items-editor";
 import { BillingAccessRestricted } from "../_components/billing-access-restricted";
+import { AlertBanner, Button, EmptyState, PageHeader, PageShell, SkeletonBlock, SubNav, TableShell } from "@/components/ui";
 import { clsx } from "clsx";
+
+const BILLING_NAV = [
+  { href: "/billing", label: "Dashboard", exact: true },
+  { href: "/billing/invoices", label: "Invoices" },
+  { href: "/billing/quotes", label: "Quotes" },
+  { href: "/billing/clients", label: "Clients & Statements" },
+];
 
 const STATUSES: Array<InvoiceStatus | "all"> = [
   "all", "draft", "issued", "partially_paid", "paid", "overdue", "cancelled",
@@ -246,33 +254,32 @@ export default function InvoicesPage() {
   const resetFilters = () => { setStatus("all"); setSearch(""); setClientFilter(""); setSiteFilter(""); setFromDate(""); setToDate(""); };
 
   return (
-    <main className="animate-fade-in space-y-5 pb-16">
-      {/* Header */}
-      <header className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <Link href="/billing" className="section-title hover:underline">
-              ← Client Billing
-            </Link>
-            <h1 className="page-title mt-0.5">Invoices</h1>
-            <p className="mt-1 text-sm text-security-navy-500">
-              Create, issue, and track all client invoices.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {canExport && invoices.length > 0 && (
-              <button type="button" onClick={() => exportInvoicesToCsv(invoices)} className="btn-secondary min-h-10">
-                Export CSV
-              </button>
-            )}
-            {canCreate && (
-              <button type="button" onClick={() => setShowForm((o) => !o)} className="btn-primary min-h-10">
-                {showForm ? "Close" : "New Invoice"}
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
+    <PageShell width="wide" className="animate-fade-in pb-16">
+      <div className="space-y-1">
+        <Link href="/billing" className="text-xs font-medium text-security-navy-600 hover:underline">
+          ← Client Billing
+        </Link>
+        <PageHeader
+          title="Invoices"
+          description="Create, issue, and track all client invoices."
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              {canExport && invoices.length > 0 && (
+                <Button type="button" variant="secondary" size="sm" onClick={() => exportInvoicesToCsv(invoices)}>
+                  Export CSV
+                </Button>
+              )}
+              {canCreate && (
+                <Button type="button" size="sm" onClick={() => setShowForm((o) => !o)}>
+                  {showForm ? "Close" : "New Invoice"}
+                </Button>
+              )}
+            </div>
+          }
+        />
+      </div>
+
+      <SubNav items={BILLING_NAV} pathname="/billing/invoices" ariaLabel="Billing sections" />
 
       {/* Summary bar */}
       {!loading && invoices.length > 0 && (
@@ -314,16 +321,8 @@ export default function InvoicesPage() {
         </section>
       )}
 
-      {actionSuccess && (
-        <div className="rounded-security-lg border border-security-emerald-200 bg-security-emerald-50 px-3 py-2 text-sm text-security-emerald-800" role="status">
-          {actionSuccess}
-        </div>
-      )}
-      {error && (
-        <div className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
-          {error}
-        </div>
-      )}
+      {actionSuccess && <AlertBanner variant="success">{actionSuccess}</AlertBanner>}
+      {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
       {/* New Invoice Form */}
       {showForm && canCreate && (
@@ -563,30 +562,33 @@ export default function InvoicesPage() {
       {/* Invoice table */}
       {loading ? (
         <div className="space-y-2">
-          {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 animate-pulse rounded-security-lg bg-security-navy-100" />)}
+          {[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-16" />)}
         </div>
       ) : invoices.length === 0 ? (
-        <div className="rounded-security-lg border border-security-navy-100 bg-white px-4 py-12 text-center shadow-security-card">
-          <p className="text-sm text-security-navy-500">No invoices match your filters.</p>
-          {hasActiveFilters && (
-            <button type="button" onClick={resetFilters} className="mt-2 text-sm font-semibold text-security-amber-700 hover:underline">
-              Clear filters
-            </button>
-          )}
-        </div>
+        <EmptyState
+          title="No invoices match your filters."
+          description={hasActiveFilters ? "Try clearing your active search or status filters." : "Create your first client invoice above."}
+          action={
+            hasActiveFilters ? (
+              <Button type="button" variant="secondary" size="sm" onClick={resetFilters}>
+                Clear filters
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
-        <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 bg-white shadow-security-card">
+        <TableShell>
           <table className="min-w-full divide-y divide-security-navy-50 text-sm">
-            <thead className="bg-security-navy-50">
-              <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
-                <th className="px-4 py-3">Invoice</th>
-                <th className="px-4 py-3">Client</th>
-                <th className="px-4 py-3 hidden sm:table-cell">Date</th>
-                <th className="px-4 py-3 hidden sm:table-cell">Due</th>
+            <thead>
+              <tr>
+                <th className="px-4 py-3 text-left">Invoice</th>
+                <th className="px-4 py-3 text-left">Client</th>
+                <th className="px-4 py-3 text-left hidden sm:table-cell">Date</th>
+                <th className="px-4 py-3 text-left hidden sm:table-cell">Due</th>
                 <th className="px-4 py-3 text-right">Total</th>
                 <th className="px-4 py-3 text-right hidden md:table-cell">Paid</th>
                 <th className="px-4 py-3 text-right">Balance</th>
-                <th className="px-4 py-3 hidden md:table-cell">Status</th>
+                <th className="px-4 py-3 text-left hidden md:table-cell">Status</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -711,8 +713,8 @@ export default function InvoicesPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </TableShell>
       )}
-    </main>
+    </PageShell>
   );
 }

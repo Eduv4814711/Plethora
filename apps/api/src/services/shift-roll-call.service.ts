@@ -2,7 +2,7 @@ import { prisma } from "../lib/prisma.js";
 import { format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { normalizeWhatsAppPhone } from "../lib/phone.js";
-import { sendText } from "../whatsapp/services/send.service.js";
+import { sendTextWithTemplateFallback, templateBodyParameters } from "../whatsapp/services/send.service.js";
 import { createAuditLog } from "../lib/audit.js";
 import { operationalEventBus } from "../lib/events.js";
 
@@ -314,10 +314,25 @@ export async function dispatchShiftRollCall(
   }
 
   let sentCount = 0;
+  let templateCount = 0;
   for (const phone of recipients) {
     try {
-      await sendText(phone, message);
+      const delivery = await sendTextWithTemplateFallback(phone, message, {
+        name: "plethora_roll_call_update",
+        components: templateBodyParameters([
+          summary.companyName,
+          `${summary.dateStr} | ${summary.shiftLabel}`,
+          `${summary.coveragePercentage}%`,
+          String(summary.totalVerified),
+          `${summary.totalFlagged} flagged, ${summary.totalAbsent} absent across ${summary.totalSites} sites`,
+        ]),
+      });
+      if (!delivery.success) {
+        console.error(`[Shift Roll-Call Send Failed to ${phone}]`, delivery.error);
+        continue;
+      }
       sentCount += 1;
+      if (delivery.usedTemplate) templateCount += 1;
 
       // Log outbound message in WhatsAppMessage if an employee record matches
       if (prisma.whatsAppMessage?.create) {
@@ -333,9 +348,9 @@ export async function dispatchShiftRollCall(
             data: {
               companyId,
               employeeId: emp.id,
-              whatsappMessageId: `rollcall_${Date.now()}_${phone}`,
+              whatsappMessageId: delivery.messageId ?? `rollcall_${Date.now()}_${phone}`,
               direction: "outbound",
-              type: "text",
+              type: delivery.usedTemplate ? "template" : "text",
               text: message,
             },
           }).catch(() => undefined);
@@ -351,6 +366,7 @@ export async function dispatchShiftRollCall(
     summary,
     recipients,
     sentCount,
+    templateCount,
     timestamp: new Date().toISOString(),
   });
 
@@ -368,6 +384,7 @@ export async function dispatchShiftRollCall(
       coveragePercentage: summary.coveragePercentage,
       recipients,
       sentCount,
+      templateCount,
     },
   }).catch(() => undefined);
 

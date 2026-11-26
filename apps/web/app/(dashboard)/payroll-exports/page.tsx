@@ -26,7 +26,7 @@ import {
   type PayrollExportProfile,
   type PayrollExportProvider,
 } from "@/lib/payroll-export-api";
-import { AlertBanner, Badge, Button, Card, EmptyState, PageHeader, useConfirmDialog } from "@/components/ui";
+import { AlertBanner, Badge, Button, Card, EmptyState, Modal, PageHeader, PageShell, SkeletonBlock, TableShell, Tabs, useConfirmDialog } from "@/components/ui";
 
 type TabKey = "cycle" | "history" | "profiles";
 
@@ -431,7 +431,7 @@ export default function PayrollExportsPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <PageShell>
       {confirmDialog}
 
       <PageHeader
@@ -456,33 +456,19 @@ export default function PayrollExportsPage() {
       {error && <AlertBanner variant="error">{error}</AlertBanner>}
       {notice && <AlertBanner variant="success">{notice}</AlertBanner>}
 
-      <div className="flex gap-1 border-b border-security-navy-100">
-        {(
-          [
-            { id: "cycle", label: "Export Cycle (26th–25th)" },
-            { id: "history", label: `Export History (${batches.length})` },
-            { id: "profiles", label: `Profiles & Sage Mapping (${profiles.length})` },
-          ] as const
-        ).map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setTab(item.id)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              tab === item.id
-                ? "border-security-amber-500 text-security-navy-900 bg-white"
-                : "border-transparent text-security-navy-500 hover:text-security-navy-900"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        ariaLabel="Payroll export sections"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { value: "cycle", label: "Export Cycle (26th–25th)" },
+          { value: "history", label: "Export History", count: batches.length },
+          { value: "profiles", label: "Profiles & Sage Mapping", count: profiles.length },
+        ]}
+      />
 
       {loadingInit ? (
-        <Card className="p-8 text-center text-sm text-security-navy-500">
-          Loading cycles and export profiles...
-        </Card>
+        <SkeletonBlock className="h-32" />
       ) : null}
 
       {/* TAB 1: EXPORT CYCLE */}
@@ -739,9 +725,9 @@ export default function PayrollExportsPage() {
                 </div>
               )}
 
-              <div className="overflow-x-auto">
+              <TableShell>
                 <table className="min-w-full divide-y divide-security-navy-100 text-xs">
-                  <thead className="bg-security-navy-50 text-security-navy-600 uppercase">
+                  <thead>
                     <tr>
                       <th className="px-3 py-2 text-left">Employee</th>
                       <th className="px-3 py-2 text-left">Sage Code</th>
@@ -795,7 +781,7 @@ export default function PayrollExportsPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </TableShell>
             </Card>
           )}
         </div>
@@ -810,20 +796,19 @@ export default function PayrollExportsPage() {
               description="Create a snapshot on the Export Cycle tab to build an immutable export batch."
             />
           ) : (
-            <Card className="p-0 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-security-navy-100 text-sm">
-                  <thead className="bg-security-navy-50 text-xs uppercase text-security-navy-600">
-                    <tr>
-                      <th className="px-4 py-2.5 text-left">Period</th>
-                      <th className="px-4 py-2.5 text-left">Profile</th>
-                      <th className="px-4 py-2.5 text-left">Status</th>
-                      <th className="px-4 py-2.5 text-right">Employees</th>
-                      <th className="px-4 py-2.5 text-right">Total Worked Hrs</th>
-                      <th className="px-4 py-2.5 text-left">Checksum</th>
-                      <th className="px-4 py-2.5 text-right">Actions</th>
-                    </tr>
-                  </thead>
+            <TableShell>
+              <table className="min-w-full divide-y divide-security-navy-100 text-sm">
+                <thead>
+                  <tr>
+                    <th className="px-4 py-2.5 text-left">Period</th>
+                    <th className="px-4 py-2.5 text-left">Profile</th>
+                    <th className="px-4 py-2.5 text-left">Status</th>
+                    <th className="px-4 py-2.5 text-right">Employees</th>
+                    <th className="px-4 py-2.5 text-right">Total Worked Hrs</th>
+                    <th className="px-4 py-2.5 text-left">Checksum</th>
+                    <th className="px-4 py-2.5 text-right">Actions</th>
+                  </tr>
+                </thead>
                   <tbody className="divide-y divide-security-navy-100 bg-white">
                     {batches.map((b) => {
                       const totalWorked =
@@ -911,8 +896,7 @@ export default function PayrollExportsPage() {
                     })}
                   </tbody>
                 </table>
-              </div>
-            </Card>
+              </TableShell>
           )}
         </div>
       )}
@@ -983,22 +967,22 @@ export default function PayrollExportsPage() {
       )}
 
       {/* LOCK MODAL */}
-      {lockModalBatch && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <Card className="w-full max-w-lg p-6 space-y-4">
-            <h3 className="text-base font-semibold text-security-navy-900">
-              Lock Payroll Export Batch
-            </h3>
-            <p className="text-sm text-security-navy-600">
-              Locking freezes approved site timesheets and marks approved leave requests in this period as exported. Only one active locked/exported batch is allowed per cycle.
-            </p>
+      <Modal
+        open={Boolean(lockModalBatch)}
+        onClose={() => !busyAction?.startsWith("lock:") && setLockModalBatch(null)}
+        title="Lock Payroll Export Batch"
+        description="Locking freezes approved site timesheets and marks approved leave requests in this period as exported. Only one active locked/exported batch is allowed per cycle."
+        size="md"
+      >
+        {lockModalBatch && (
+          <div className="space-y-4">
             {lockModalBatch.hasBlockers && (
               <div className="space-y-2">
                 <AlertBanner variant="warning">
                   Some readiness warnings remain open: {lockModalBatch.blockers.join("; ")}
                 </AlertBanner>
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-security-navy-700 mb-1">
+                  <label className="block text-xs font-semibold text-security-navy-700 mb-1">
                     Override Reason (Required to proceed)
                   </label>
                   <textarea
@@ -1020,26 +1004,27 @@ export default function PayrollExportsPage() {
                 size="sm"
                 onClick={() => void handleConfirmLock()}
                 disabled={busyAction?.startsWith("lock:")}
+                loading={Boolean(busyAction?.startsWith("lock:"))}
               >
                 {busyAction?.startsWith("lock:") ? "Locking..." : "Confirm Lock"}
               </Button>
             </div>
-          </Card>
-        </div>
-      )}
+          </div>
+        )}
+      </Modal>
 
       {/* VOID MODAL */}
-      {voidModalBatch && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <Card className="w-full max-w-lg p-6 space-y-4">
-            <h3 className="text-base font-semibold text-security-navy-900">
-              Void Export Batch ({voidModalBatch.periodKey})
-            </h3>
-            <p className="text-sm text-security-navy-600">
-              Voiding releases linked leave requests so you can generate a replacement snapshot for this cycle.
-            </p>
+      <Modal
+        open={Boolean(voidModalBatch)}
+        onClose={() => !busyAction?.startsWith("void:") && setVoidModalBatch(null)}
+        title={voidModalBatch ? `Void Export Batch (${voidModalBatch.periodKey})` : "Void Export Batch"}
+        description="Voiding releases linked leave requests so you can generate a replacement snapshot for this cycle."
+        size="md"
+      >
+        {voidModalBatch && (
+          <div className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold uppercase text-security-navy-700 mb-1">
+              <label className="block text-xs font-semibold text-security-navy-700 mb-1">
                 Mandatory Void Reason
               </label>
               <textarea
@@ -1059,34 +1044,34 @@ export default function PayrollExportsPage() {
                 size="sm"
                 onClick={() => void handleConfirmVoid()}
                 disabled={busyAction?.startsWith("void:")}
+                loading={Boolean(busyAction?.startsWith("void:"))}
               >
                 Confirm Void
               </Button>
             </div>
-          </Card>
-        </div>
-      )}
+          </div>
+        )}
+      </Modal>
 
       {/* BATCH DETAIL MODAL */}
-      {selectedBatchDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <Card className="w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 border-b border-security-navy-100 flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-security-navy-900">
-                  Batch {selectedBatchDetail.periodKey} · {selectedBatchDetail.profile.name}
-                </h3>
-                <p className="text-xs text-security-navy-500 font-mono">
-                  Checksum: {selectedBatchDetail.checksumSha256}
-                </p>
-              </div>
-              <Button variant="secondary" size="sm" onClick={() => setSelectedBatchDetail(null)}>
-                Close
-              </Button>
-            </div>
-            <div className="overflow-auto flex-1">
+      <Modal
+        open={Boolean(selectedBatchDetail)}
+        onClose={() => setSelectedBatchDetail(null)}
+        title={
+          selectedBatchDetail
+            ? `Batch ${selectedBatchDetail.periodKey} · ${selectedBatchDetail.profile.name}`
+            : "Batch Detail"
+        }
+        description={
+          selectedBatchDetail ? `Checksum: ${selectedBatchDetail.checksumSha256}` : undefined
+        }
+        size="xl"
+      >
+        {selectedBatchDetail && (
+          <div className="max-h-[65vh] overflow-auto">
+            <TableShell>
               <table className="min-w-full divide-y divide-security-navy-100 text-xs">
-                <thead className="bg-security-navy-50 uppercase text-security-navy-600">
+                <thead>
                   <tr>
                     <th className="px-3 py-2 text-left">Employee</th>
                     <th className="px-3 py-2 text-left">Sage Code</th>
@@ -1127,29 +1112,19 @@ export default function PayrollExportsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
-          </Card>
-        </div>
-      )}
+            </TableShell>
+          </div>
+        )}
+      </Modal>
 
       {/* PROFILE MODAL */}
-      {showProfileForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold text-security-navy-900">
-                  {editingProfile ? "Edit Export Profile" : "Create Export Profile"}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowProfileForm(false)}
-                  className="text-sm text-security-navy-500"
-                >
-                  ✕
-                </button>
-              </div>
-
+      <Modal
+        open={showProfileForm}
+        onClose={() => busyAction !== "save-profile" && setShowProfileForm(false)}
+        title={editingProfile ? "Edit Export Profile" : "Create Export Profile"}
+        size="xl"
+      >
+        <form onSubmit={handleSaveProfile} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-security-navy-700 mb-1">
@@ -1236,7 +1211,7 @@ export default function PayrollExportsPage() {
               </div>
 
               <div className="border-t border-security-navy-100 pt-3">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-security-navy-600 mb-2">
+                <h4 className="text-xs font-semibold text-security-navy-600 mb-2">
                   Sage / External Transaction Code Mapping
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -1268,14 +1243,18 @@ export default function PayrollExportsPage() {
                 >
                   Cancel
                 </Button>
-                <Button variant="primary" size="sm" type="submit" disabled={busyAction === "save-profile"}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="submit"
+                  disabled={busyAction === "save-profile"}
+                  loading={busyAction === "save-profile"}
+                >
                   {busyAction === "save-profile" ? "Saving..." : "Save Profile"}
                 </Button>
               </div>
-            </form>
-          </Card>
-        </div>
-      )}
-    </div>
+        </form>
+      </Modal>
+    </PageShell>
   );
 }

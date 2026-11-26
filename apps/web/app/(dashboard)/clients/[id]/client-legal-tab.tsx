@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button, Modal } from "@/components/ui";
 import {
   createClientRelatedParty,
   updateClientRelatedParty,
@@ -188,7 +189,7 @@ export function ClientLegalTab({
       {/* Corporate Legal Master Record Form */}
       <form onSubmit={handleSaveIdentity} className="card-dashboard space-y-6 p-6">
         <div>
-          <h2 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
+          <h2 className="text-base font-semibold text-security-navy-900">
             Legal Entity Identity & Master Record
           </h2>
           <p className="text-xs text-security-navy-500">
@@ -371,7 +372,7 @@ export function ClientLegalTab({
           </div>
 
           <div className="sm:col-span-3 flex items-center justify-between pt-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-security-navy-800 dark:text-security-navy-200">
+            <label className="flex items-center gap-2 text-sm font-medium text-security-navy-800">
               <input
                 type="checkbox"
                 checked={isActive}
@@ -392,9 +393,9 @@ export function ClientLegalTab({
 
       {/* Related Parties & Authorised Representatives Section */}
       <div className="card-dashboard space-y-4 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-security-navy-100 pb-3">
           <div>
-            <h2 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
+            <h2 className="text-base font-semibold text-security-navy-900">
               Directors, Beneficial Owners & Authorised Representatives
             </h2>
             <p className="text-xs text-security-navy-500">
@@ -413,7 +414,7 @@ export function ClientLegalTab({
         </div>
 
         {relatedParties.length === 0 ? (
-          <div className="rounded-security border border-dashed border-security-navy-200 p-8 text-center text-xs text-security-navy-500 dark:border-security-navy-700">
+          <div className="rounded-security border border-dashed border-security-navy-200 p-8 text-center text-xs text-security-navy-500">
             No directors or authorised representatives recorded yet.
             {canEdit && (
               <div className="mt-2">
@@ -428,9 +429,9 @@ export function ClientLegalTab({
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-security border border-security-navy-100 dark:border-security-navy-800">
-            <table className="min-w-full divide-y divide-security-navy-100 text-xs dark:divide-security-navy-800">
-              <thead className="bg-security-navy-50 dark:bg-security-navy-900">
+          <div className="overflow-x-auto rounded-security border border-security-navy-100">
+            <table className="min-w-full divide-y divide-security-navy-100 text-xs">
+              <thead className="bg-security-navy-50">
                 <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-security-navy-500">
                   <th className="px-4 py-2.5">Representative</th>
                   <th className="px-4 py-2.5">Role</th>
@@ -440,14 +441,14 @@ export function ClientLegalTab({
                   {canEdit && <th className="px-4 py-2.5 text-right">Actions</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
+              <tbody className="divide-y divide-security-navy-100">
                 {relatedParties.map((party) => (
-                  <tr key={party.id} className="hover:bg-security-navy-50/50 dark:hover:bg-security-navy-800/40">
-                    <td className="px-4 py-3 font-medium text-security-navy-900 dark:text-security-navy-100">
+                  <tr key={party.id} className="hover:bg-security-navy-50/50">
+                    <td className="px-4 py-3 font-medium text-security-navy-900">
                       {party.fullName}
                       {party.notes && <div className="text-[11px] text-security-navy-500">{party.notes}</div>}
                     </td>
-                    <td className="px-4 py-3 text-security-navy-700 dark:text-security-navy-300">
+                    <td className="px-4 py-3 text-security-navy-700">
                       {RELATIONSHIP_TYPE_LABELS[party.relationshipType]}
                     </td>
                     <td className="px-4 py-3 font-mono">
@@ -457,14 +458,14 @@ export function ClientLegalTab({
                     </td>
                     <td className="px-4 py-3">
                       {party.isAuthorisedSignatory ? (
-                        <span className="rounded-full bg-security-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-security-emerald-800 dark:bg-security-emerald-950/60 dark:text-security-emerald-300">
+                        <span className="rounded-full bg-security-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-security-emerald-800">
                           Authorised Signatory
                         </span>
                       ) : (
                         <span className="text-security-navy-400">Standard</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-mono text-security-navy-600 dark:text-security-navy-400">
+                    <td className="px-4 py-3 font-mono text-security-navy-600">
                       {party.authorityReference || "—"}
                     </td>
                     {canEdit && (
@@ -472,7 +473,7 @@ export function ClientLegalTab({
                         <button
                           type="button"
                           onClick={() => openEditParty(party)}
-                          className="font-medium text-security-navy-700 hover:underline dark:text-security-navy-300"
+                          className="font-medium text-security-navy-700 hover:underline"
                         >
                           Edit
                         </button>
@@ -494,27 +495,13 @@ export function ClientLegalTab({
       </div>
 
       {/* Add / Edit Representative Modal */}
-      {showPartyModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-security-navy-950/60 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-lg rounded-security-lg border border-security-navy-100 bg-white p-6 shadow-security-elevated dark:border-security-navy-700 dark:bg-security-navy-900">
-            <div className="flex items-center justify-between border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
-              <h3 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
-                {editingPartyId ? "Edit Representative" : "Add Director / Representative"}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowPartyModal(false)}
-                className="text-security-navy-400 hover:text-security-navy-600 dark:hover:text-security-navy-200"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveParty} className="mt-4 space-y-4 text-xs">
+      <Modal
+        open={showPartyModal}
+        onClose={() => !savingParty && setShowPartyModal(false)}
+        title={editingPartyId ? "Edit Representative" : "Add Director / Representative"}
+        size="md"
+      >
+        <form onSubmit={handleSaveParty} className="space-y-4 text-xs">
               <div>
                 <label className="label-text mb-1 block">Full Name *</label>
                 <input
@@ -568,7 +555,7 @@ export function ClientLegalTab({
               </div>
 
               <div>
-                <label className="flex items-center gap-2 font-medium text-security-navy-800 dark:text-security-navy-200">
+                <label className="flex items-center gap-2 font-medium text-security-navy-800">
                   <input
                     type="checkbox"
                     checked={partyIsSignatory}
@@ -589,23 +576,25 @@ export function ClientLegalTab({
                 />
               </div>
 
-              <div className="flex justify-end gap-3 border-t border-security-navy-100 pt-4 dark:border-security-navy-800">
-                <button
+              <div className="flex justify-end gap-3 border-t border-security-navy-100 pt-4">
+                <Button
                   type="button"
-                  className="btn-secondary"
+                  variant="secondary"
                   onClick={() => setShowPartyModal(false)}
                   disabled={savingParty}
                 >
                   Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={savingParty || !partyName.trim()}>
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={savingParty || !partyName.trim()}
+                  loading={savingParty}
+                >
                   {savingParty ? "Saving..." : "Save Representative"}
-                </button>
+                </Button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }

@@ -153,14 +153,14 @@ export function ClientPrivacyTab({
   };
 
   if (loading) {
-    return <div className="h-48 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-800" />;
+    return <div className="h-48 animate-pulse rounded-security-lg bg-security-navy-100" />;
   }
 
   return (
     <form onSubmit={handleSave} className="space-y-6">
       <div className="card-dashboard space-y-6 p-6">
         <div>
-          <h2 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
+          <h2 className="text-base font-semibold text-security-navy-900">
             POPIA Data Processing & Responsible Party Governance
           </h2>
           <p className="text-xs text-security-navy-500">
@@ -212,8 +212,8 @@ export function ClientPrivacyTab({
         </div>
 
         {/* Section 21 Operator Agreement Status */}
-        <div className="rounded-security border border-security-navy-100 bg-security-navy-50/50 p-4 dark:border-security-navy-800 dark:bg-security-navy-900/40">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-security-navy-700 dark:text-security-navy-300">
+        <div className="rounded-security border border-security-navy-100 bg-security-navy-50/50 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-security-navy-700">
             POPIA Section 21 Mandate (Operator Agreement)
           </h3>
           <p className="mt-0.5 text-[11px] text-security-navy-500">
@@ -263,8 +263,8 @@ export function ClientPrivacyTab({
                   key={purpose}
                   className={`flex items-center gap-2 rounded-security border p-2.5 text-xs transition-colors ${
                     checked
-                      ? "border-security-amber-200 bg-security-amber-50/40 text-security-navy-900 dark:border-security-amber-800/40 dark:bg-security-amber-950/20 dark:text-security-navy-100"
-                      : "border-security-navy-100 bg-white text-security-navy-600 dark:border-security-navy-800 dark:bg-security-navy-900 dark:text-security-navy-400"
+                      ? "border-security-amber-200 bg-security-amber-50/40 text-security-navy-900"
+                      : "border-security-navy-100 bg-white text-security-navy-600"
                   }`}
                 >
                   <input
@@ -293,8 +293,8 @@ export function ClientPrivacyTab({
                   key={cat}
                   className={`flex items-center gap-2 rounded-security border p-2.5 text-xs transition-colors ${
                     checked
-                      ? "border-blue-200 bg-blue-50/40 text-security-navy-900 dark:border-blue-800/40 dark:bg-blue-950/20 dark:text-security-navy-100"
-                      : "border-security-navy-100 bg-white text-security-navy-600 dark:border-security-navy-800 dark:bg-security-navy-900 dark:text-security-navy-400"
+                      ? "border-blue-200 bg-blue-50/40 text-security-navy-900"
+                      : "border-security-navy-100 bg-white text-security-navy-600"
                   }`}
                 >
                   <input
@@ -335,7 +335,7 @@ export function ClientPrivacyTab({
           </div>
 
           <div className="sm:col-span-2 space-y-2">
-            <label className="flex items-center gap-2 font-medium text-security-navy-800 dark:text-security-navy-200">
+            <label className="flex items-center gap-2 font-medium text-security-navy-800">
               <input
                 type="checkbox"
                 checked={crossBorderTransfer}
@@ -357,7 +357,7 @@ export function ClientPrivacyTab({
           </div>
 
           <div className="sm:col-span-2 flex flex-wrap items-center gap-4 pt-1">
-            <label className="flex items-center gap-2 font-medium text-security-navy-800 dark:text-security-navy-200">
+            <label className="flex items-center gap-2 font-medium text-security-navy-800">
               <input
                 type="checkbox"
                 checked={privacyNoticeDistributed}
@@ -382,7 +382,7 @@ export function ClientPrivacyTab({
         </div>
 
         {canEdit && (
-          <div className="flex justify-end border-t border-security-navy-100 pt-4 dark:border-security-navy-800">
+          <div className="flex justify-end border-t border-security-navy-100 pt-4">
             <button type="submit" className="btn-primary text-xs" disabled={saving}>
               {saving ? "Saving Profile..." : "Save POPIA Profile"}
             </button>

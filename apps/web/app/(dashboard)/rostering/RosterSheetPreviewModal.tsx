@@ -1,14 +1,8 @@
 "use client";
 
-import { createPortal } from "react-dom";
 import type { ShiftSheetRow } from "@/lib/shift-sheet-matrix";
+import { Button, Modal } from "@/components/ui";
 import { ShiftRosterSheet } from "./ShiftRosterSheet";
-
-const DASHBOARD_MAIN_ID = "dashboard-main";
-
-function getModalContainer(): Element {
-  return document.getElementById(DASHBOARD_MAIN_ID) ?? document.body;
-}
 
 export function RosterSheetPreviewModal({
   open,
@@ -37,41 +31,35 @@ export function RosterSheetPreviewModal({
   rosterDayShiftGuardsRequired?: number | null;
   rosterNightShiftGuardsRequired?: number | null;
 }) {
-  if (!open) return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm sm:items-center">
-      <div className="card-wireframe my-4 w-full max-w-[1400px] shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-security-navy-100 px-4 py-3 dark:border-security-navy-700 sm:px-6">
-          <div>
-            <h3 className="text-lg font-semibold text-security-navy-900 dark:text-security-navy-100">Roster preview</h3>
-            <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mt-0.5">
-              {siteName} · {periodLabel}
-            </p>
-          </div>
-          <button type="button" onClick={onClose} className="btn-secondary">
-            Close
-          </button>
-        </div>
-        <div className="max-h-[calc(100dvh-8rem)] overflow-auto p-4 sm:p-6">
-          <ShiftRosterSheet
-            siteName={siteName}
-            periodLabel={periodLabel}
-            days={days}
-            rows={rows}
-            sites={[{ id: "preview", name: siteName }]}
-            selectedSiteId="preview"
-            onSiteTabChange={() => {}}
-            rosterSiteRules={rosterSiteRules}
-            rosterSheetNotes={rosterSheetNotes}
-            rosterDayShiftGender={rosterDayShiftGender}
-            rosterNightShiftGender={rosterNightShiftGender}
-            rosterDayShiftGuardsRequired={rosterDayShiftGuardsRequired}
-            rosterNightShiftGuardsRequired={rosterNightShiftGuardsRequired}
-          />
-        </div>
-      </div>
-    </div>,
-    getModalContainer()
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Roster preview"
+      description={`${siteName} · ${periodLabel}`}
+      size="xl"
+      className="max-w-[1400px]"
+      footer={
+        <Button variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
+      <ShiftRosterSheet
+        siteName={siteName}
+        periodLabel={periodLabel}
+        days={days}
+        rows={rows}
+        sites={[{ id: "preview", name: siteName }]}
+        selectedSiteId="preview"
+        onSiteTabChange={() => {}}
+        rosterSiteRules={rosterSiteRules}
+        rosterSheetNotes={rosterSheetNotes}
+        rosterDayShiftGender={rosterDayShiftGender}
+        rosterNightShiftGender={rosterNightShiftGender}
+        rosterDayShiftGuardsRequired={rosterDayShiftGuardsRequired}
+        rosterNightShiftGuardsRequired={rosterNightShiftGuardsRequired}
+      />
+    </Modal>
   );
 }

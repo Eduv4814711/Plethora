@@ -16,7 +16,15 @@ import {
 import { currencyFromSettings, formatCurrency } from "@/lib/currency";
 import { ArRiskBadge, computeArRisk } from "../_components/ar-risk-badge";
 import { BillingAccessRestricted } from "../_components/billing-access-restricted";
+import { AlertBanner, Button, EmptyState, Modal, PageHeader, PageShell, SearchInput, SkeletonBlock, SubNav } from "@/components/ui";
 import { clsx } from "clsx";
+
+const BILLING_NAV = [
+  { href: "/billing", label: "Dashboard", exact: true },
+  { href: "/billing/invoices", label: "Invoices" },
+  { href: "/billing/quotes", label: "Quotes" },
+  { href: "/billing/clients", label: "Clients & Statements" },
+];
 
 function getLast30DaysRange() {
   const to = new Date().toISOString().slice(0, 10);
@@ -154,17 +162,25 @@ export default function BillingClientsPage() {
   const liveSiteTotal = !isNaN(parsedLiveRate) && parsedLiveRate > 0 ? parsedLiveRate * liveGuards : 0;
 
   return (
-    <main className="animate-fade-in space-y-6 pb-16">
-      {/* Header */}
-      <header className="space-y-1">
-        <Link href="/billing" className="section-title hover:underline">← Client Billing</Link>
-        <h1 className="page-title mt-0.5">Clients & Statements</h1>
-        <p className="text-sm text-security-navy-500">Account balances, AR aging, site billing rates, and statement generation.</p>
-      </header>
+    <PageShell width="wide" className="animate-fade-in pb-16">
+      <div className="space-y-1">
+        <Link href="/billing" className="text-xs font-medium text-security-navy-600 hover:underline">← Client Billing</Link>
+        <PageHeader
+          title="Clients & Statements"
+          description="Account balances, AR aging, site billing rates, and statement generation."
+          actions={
+            canExport && clients.length > 0 ? (
+              <Button type="button" variant="secondary" size="sm" onClick={() => exportClientsBalancesToCsv(clients)}>
+                Export CSV
+              </Button>
+            ) : undefined
+          }
+        />
+      </div>
 
-      {error && (
-        <div className="rounded-security-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>
-      )}
+      <SubNav items={BILLING_NAV} pathname="/billing/clients" ariaLabel="Billing sections" />
+
+      {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
       {/* KPI strip */}
       {!loading && (
@@ -186,14 +202,14 @@ export default function BillingClientsPage() {
 
       {/* Search + filter */}
       <div className="flex flex-wrap items-center gap-3">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search clients or sites…"
-          className="input-modern w-full max-w-sm"
-          id="client-search"
-          aria-label="Search clients or sites"
-        />
+        <div className="w-full max-w-sm">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search clients or sites…"
+            ariaLabel="Search clients or sites"
+          />
+        </div>
         <div className="flex gap-1.5">
           {(["all", "overdue", "current"] as const).map((f) => (
             <button key={f} type="button" onClick={() => setRiskFilter(f)} aria-pressed={riskFilter === f}
@@ -204,22 +220,16 @@ export default function BillingClientsPage() {
             </button>
           ))}
         </div>
-        {canExport && clients.length > 0 && (
-          <button type="button" onClick={() => exportClientsBalancesToCsv(clients)} className="btn-secondary min-h-9 text-xs ml-auto">
-            Export CSV
-          </button>
-        )}
       </div>
 
       {/* Client table */}
       {loading ? (
-        <div className="space-y-3">{[1, 2, 3].map((i) => <div key={i} className="h-28 animate-pulse rounded-security-lg bg-security-navy-100" />)}</div>
+        <div className="space-y-3">{[1, 2, 3].map((i) => <SkeletonBlock key={i} className="h-28" />)}</div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-security-lg border border-security-navy-100 bg-white px-4 py-12 text-center shadow-security-card">
-          <p className="text-sm text-security-navy-500">
-            {clients.length === 0 ? "No clients with billing data yet." : "No clients match that search."}
-          </p>
-        </div>
+        <EmptyState
+          title={clients.length === 0 ? "No clients with billing data yet." : "No clients match that search."}
+          description={clients.length === 0 ? "Client accounts with active sites will appear here." : "Try clearing your search or status filter."}
+        />
       ) : (
         <div className="space-y-2">
           {filtered.map((client) => {
@@ -332,21 +342,18 @@ export default function BillingClientsPage() {
       )}
 
       {/* Rate edit modal */}
-      {editingSite && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-security-navy-900/50 backdrop-blur-sm p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) setEditingSite(null); }}
-          role="dialog" aria-modal="true"
-        >
-          <div className="w-full max-w-lg rounded-security-lg border border-security-navy-100 bg-white shadow-security-elevated">
-            <div className="border-b border-security-navy-100 px-5 py-4">
-              <p className="section-title">{editingSite.clientName}</p>
-              <h2 className="mt-0.5 text-base font-semibold text-security-navy-900">Rate: {editingSite.siteName}</h2>
-            </div>
+      <Modal
+        open={Boolean(editingSite)}
+        onClose={() => !savingRate && setEditingSite(null)}
+        title={editingSite ? `Rate: ${editingSite.siteName}` : "Rate"}
+        description={editingSite?.clientName}
+        size="md"
+      >
+        {editingSite && (
+          <div className="space-y-4">
+            {rateError && <AlertBanner variant="error">{rateError}</AlertBanner>}
 
-            {rateError && <p className="mx-5 mt-3 rounded-security border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{rateError}</p>}
-
-            <form onSubmit={handleSaveRate} className="space-y-4 p-5">
+            <form onSubmit={handleSaveRate} className="space-y-4">
               <div className="rounded-security bg-security-navy-50 px-3 py-2 text-sm text-security-navy-700">
                 Active guards: <strong>{editingSite.billableGuardCount}</strong>
               </div>
@@ -378,13 +385,17 @@ export default function BillingClientsPage() {
               </label>
 
               <div className="flex gap-2">
-                <button type="submit" disabled={savingRate || !canEdit} className="btn-primary flex-1">{savingRate ? "Saving…" : "Save Rate"}</button>
-                <button type="button" onClick={() => setEditingSite(null)} disabled={savingRate} className="btn-secondary">Cancel</button>
+                <Button type="submit" disabled={savingRate || !canEdit} loading={savingRate} className="flex-1">
+                  {savingRate ? "Saving…" : "Save Rate"}
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setEditingSite(null)} disabled={savingRate}>
+                  Cancel
+                </Button>
               </div>
             </form>
           </div>
-        </div>
-      )}
-    </main>
+        )}
+      </Modal>
+    </PageShell>
   );
 }

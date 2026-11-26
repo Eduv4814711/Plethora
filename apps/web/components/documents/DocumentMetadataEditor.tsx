@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Input, Select, Textarea, AlertBanner } from "@/components/ui";
+import { Button, Input, Modal, Select, Textarea, AlertBanner } from "@/components/ui";
 import type { ManagedDocument } from "@/lib/msr-api";
 import { updateDocument } from "@/lib/msr-api";
 
@@ -114,37 +114,14 @@ export function DocumentMetadataEditor({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[90] flex animate-fade-in items-center justify-center bg-security-navy-900/50 p-4 backdrop-blur-[3px]"
-      role="presentation"
+    <Modal
+      open={open}
+      onClose={() => !loading && onClose()}
+      title="Edit Document Properties"
+      description="Update categorization, dates, and compliance metadata."
+      size="md"
     >
-      <div
-        className="w-full max-w-lg animate-slide-up rounded-security-lg border border-security-navy-200 bg-white p-6 shadow-security-elevated motion-reduce:animate-none flex flex-col max-h-[90vh]"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-metadata-title"
-      >
-        <div className="flex items-center justify-between border-b border-security-navy-100 pb-3">
-          <div>
-            <h2 id="edit-metadata-title" className="text-lg font-bold text-security-navy-900">
-              Edit Document Properties
-            </h2>
-            <p className="text-xs text-security-navy-500 mt-0.5">
-              Update categorization, dates, and compliance metadata.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-            className="text-security-navy-400 hover:text-security-navy-700 p-1 rounded text-base leading-none"
-            aria-label="Close modal"
-          >
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="py-4 overflow-y-auto flex-1 space-y-4 text-xs">
+      <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           {error && (
             <AlertBanner variant="error" className="mb-3">
               {error}
@@ -293,7 +270,6 @@ export function DocumentMetadataEditor({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

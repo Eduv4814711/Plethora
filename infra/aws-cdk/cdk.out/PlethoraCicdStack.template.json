@@ -92,7 +92,18 @@
        },
        "Effect": "Allow",
        "Principal": {
-        "Federated": "arn:aws:iam::779391599178:oidc-provider/token.actions.githubusercontent.com"
+        "Federated": {
+         "Fn::Join": [
+          "",
+          [
+           "arn:aws:iam::",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":oidc-provider/token.actions.githubusercontent.com"
+          ]
+         ]
+        }
        }
       }
      ],
@@ -187,7 +198,11 @@
            {
             "Ref": "AWS::Partition"
            },
-           ":logs:af-south-1:779391599178:log-group:/aws/codebuild/",
+           ":logs:us-east-1:",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":log-group:/aws/codebuild/",
            {
             "Ref": "PlethoraPrVerifyProject22471069"
            }
@@ -202,7 +217,11 @@
            {
             "Ref": "AWS::Partition"
            },
-           ":logs:af-south-1:779391599178:log-group:/aws/codebuild/",
+           ":logs:us-east-1:",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":log-group:/aws/codebuild/",
            {
             "Ref": "PlethoraPrVerifyProject22471069"
            },
@@ -229,7 +248,11 @@
           {
            "Ref": "AWS::Partition"
           },
-          ":codebuild:af-south-1:779391599178:report-group/",
+          ":codebuild:us-east-1:",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":report-group/",
           {
            "Ref": "PlethoraPrVerifyProject22471069"
           },
@@ -418,7 +441,11 @@
            {
             "Ref": "AWS::Partition"
            },
-           ":logs:af-south-1:779391599178:log-group:/aws/codebuild/",
+           ":logs:us-east-1:",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":log-group:/aws/codebuild/",
            {
             "Ref": "PlethoraMainDeployProject08DB2B2F"
            }
@@ -433,7 +460,11 @@
            {
             "Ref": "AWS::Partition"
            },
-           ":logs:af-south-1:779391599178:log-group:/aws/codebuild/",
+           ":logs:us-east-1:",
+           {
+            "Ref": "AWS::AccountId"
+           },
+           ":log-group:/aws/codebuild/",
            {
             "Ref": "PlethoraMainDeployProject08DB2B2F"
            },
@@ -460,7 +491,11 @@
           {
            "Ref": "AWS::Partition"
           },
-          ":codebuild:af-south-1:779391599178:report-group/",
+          ":codebuild:us-east-1:",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":report-group/",
           {
            "Ref": "PlethoraMainDeployProject08DB2B2F"
           },

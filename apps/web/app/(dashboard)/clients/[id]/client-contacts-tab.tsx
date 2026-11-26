@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button, Modal } from "@/components/ui";
 import {
   createClientContact,
   updateClientContact,
@@ -16,43 +17,43 @@ const CONTACT_TYPE_CONFIG: Record<
 > = {
   PRIMARY: {
     label: "Primary",
-    badgeClass: "bg-security-amber-100 text-security-amber-800 dark:bg-security-amber-900/40 dark:text-security-amber-300",
+    badgeClass: "bg-security-amber-100 text-security-amber-800",
   },
   OPERATIONS: {
     label: "Operations",
-    badgeClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
+    badgeClass: "bg-blue-100 text-blue-800",
   },
   BILLING: {
     label: "Billing / Accounts",
-    badgeClass: "bg-security-emerald-100 text-security-emerald-800 dark:bg-security-emerald-900/40 dark:text-security-emerald-300",
+    badgeClass: "bg-security-emerald-100 text-security-emerald-800",
   },
   EMERGENCY: {
     label: "Emergency (24/7)",
-    badgeClass: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+    badgeClass: "bg-red-100 text-red-800",
   },
   PROCUREMENT: {
     label: "Procurement",
-    badgeClass: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300",
+    badgeClass: "bg-purple-100 text-purple-800",
   },
   LEGAL: {
     label: "Legal / Compliance",
-    badgeClass: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300",
+    badgeClass: "bg-indigo-100 text-indigo-800",
   },
   INFORMATION_OFFICER: {
     label: "Information Officer (POPIA)",
-    badgeClass: "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300",
+    badgeClass: "bg-teal-100 text-teal-800",
   },
   AUTHORISED_SIGNATORY: {
     label: "Authorised Signatory",
-    badgeClass: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    badgeClass: "bg-amber-100 text-amber-800",
   },
   REPORT_RECIPIENT: {
     label: "Report Recipient",
-    badgeClass: "bg-security-navy-100 text-security-navy-700 dark:bg-security-navy-800 dark:text-security-navy-300",
+    badgeClass: "bg-security-navy-100 text-security-navy-700",
   },
   OTHER: {
     label: "Other",
-    badgeClass: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+    badgeClass: "bg-gray-100 text-gray-700",
   },
 };
 
@@ -176,7 +177,7 @@ export function ClientContactsTab({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
+          <h2 className="text-base font-semibold text-security-navy-900">
             Client Contact Directory
           </h2>
           <p className="text-xs text-security-navy-500">
@@ -191,8 +192,8 @@ export function ClientContactsTab({
       </div>
 
       {/* Backwards compatibility notice */}
-      <div className="rounded-security border border-security-navy-100 bg-security-navy-50/70 p-3 text-xs text-security-navy-600 dark:border-security-navy-800 dark:bg-security-navy-900/40 dark:text-security-navy-300">
-        <span className="font-semibold text-security-navy-800 dark:text-security-navy-200">
+      <div className="rounded-security border border-security-navy-100 bg-security-navy-50/70 p-3 text-xs text-security-navy-600">
+        <span className="font-semibold text-security-navy-800">
           Backwards Compatibility Synchronisation:
         </span>{" "}
         The contact designated as <strong>Primary</strong> is automatically reflected on the client master record
@@ -211,10 +212,10 @@ export function ClientContactsTab({
           )}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-security-lg border border-security-navy-100 bg-white shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900">
+        <div className="overflow-hidden rounded-security-lg border border-security-navy-100 bg-white shadow-security-card">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-security-navy-100 text-xs dark:divide-security-navy-800">
-              <thead className="bg-security-navy-50 dark:bg-security-navy-900/80">
+            <table className="min-w-full divide-y divide-security-navy-100 text-xs">
+              <thead className="bg-security-navy-50">
                 <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-security-navy-500">
                   <th className="px-4 py-3">Contact Name</th>
                   <th className="px-4 py-3">Role / Department</th>
@@ -225,19 +226,19 @@ export function ClientContactsTab({
                   {canEdit && <th className="px-4 py-3 text-right">Actions</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
+              <tbody className="divide-y divide-security-navy-100">
                 {contacts.map((ct) => {
                   const typeCfg = CONTACT_TYPE_CONFIG[ct.contactType] || CONTACT_TYPE_CONFIG.OTHER;
                   return (
                     <tr
                       key={ct.id}
-                      className="hover:bg-security-navy-50/50 dark:hover:bg-security-navy-800/40"
+                      className="hover:bg-security-navy-50/50"
                     >
-                      <td className="px-4 py-3 font-medium text-security-navy-900 dark:text-security-navy-100">
+                      <td className="px-4 py-3 font-medium text-security-navy-900">
                         {ct.firstName} {ct.lastName || ""}
                         {ct.notes && <div className="text-[11px] text-security-navy-500">{ct.notes}</div>}
                       </td>
-                      <td className="px-4 py-3 text-security-navy-600 dark:text-security-navy-400">
+                      <td className="px-4 py-3 text-security-navy-600">
                         {ct.jobTitle || "—"}
                         {ct.department ? ` (${ct.department})` : ""}
                       </td>
@@ -246,10 +247,10 @@ export function ClientContactsTab({
                           {typeCfg.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-mono text-security-navy-700 dark:text-security-navy-300">
+                      <td className="px-4 py-3 font-mono text-security-navy-700">
                         {ct.mobile || "—"}
                       </td>
-                      <td className="px-4 py-3 font-mono text-security-navy-700 dark:text-security-navy-300">
+                      <td className="px-4 py-3 font-mono text-security-navy-700">
                         {ct.email || "—"}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -274,7 +275,7 @@ export function ClientContactsTab({
                           <button
                             type="button"
                             onClick={() => openEdit(ct)}
-                            className="font-medium text-security-navy-700 hover:underline dark:text-security-navy-300"
+                            className="font-medium text-security-navy-700 hover:underline"
                           >
                             Edit
                           </button>
@@ -297,27 +298,13 @@ export function ClientContactsTab({
       )}
 
       {/* Add / Edit Contact Modal */}
-      {showModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-security-navy-950/60 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-lg rounded-security-lg border border-security-navy-100 bg-white p-6 shadow-security-elevated dark:border-security-navy-700 dark:bg-security-navy-900">
-            <div className="flex items-center justify-between border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
-              <h3 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
-                {editingId ? "Edit Contact" : "Add Client Contact"}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="text-security-navy-400 hover:text-security-navy-600 dark:hover:text-security-navy-200"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSave} className="mt-4 space-y-3 text-xs">
+      <Modal
+        open={showModal}
+        onClose={() => !saving && setShowModal(false)}
+        title={editingId ? "Edit Contact" : "Add Client Contact"}
+        size="md"
+      >
+        <form onSubmit={handleSave} className="space-y-3 text-xs">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="label-text mb-1 block">First Name *</label>
@@ -399,7 +386,7 @@ export function ClientContactsTab({
               </div>
 
               <div>
-                <label className="flex items-center gap-2 font-medium text-security-navy-800 dark:text-security-navy-200">
+                <label className="flex items-center gap-2 font-medium text-security-navy-800">
                   <input
                     type="checkbox"
                     checked={isPrimary}
@@ -420,23 +407,21 @@ export function ClientContactsTab({
                 />
               </div>
 
-              <div className="flex justify-end gap-3 border-t border-security-navy-100 pt-4 dark:border-security-navy-800">
-                <button
+              <div className="flex justify-end gap-3 border-t border-security-navy-100 pt-4">
+                <Button
                   type="button"
-                  className="btn-secondary"
+                  variant="secondary"
                   onClick={() => setShowModal(false)}
                   disabled={saving}
                 >
                   Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={saving || !firstName.trim()}>
+                </Button>
+                <Button type="submit" disabled={saving || !firstName.trim()} loading={saving}>
                   {saving ? "Saving..." : "Save Contact"}
-                </button>
+                </Button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }

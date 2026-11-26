@@ -212,6 +212,11 @@ export function useDashboardOperationalSummary() {
     return statuses;
   }, [dashboard, captureOverview, rosterOverview, canAttendance, canRostering]);
 
+  const rosterAttentionCount = useMemo(() => {
+    const sitesAttention = rosterOverview?.sites.filter((s) => s.state === "needs_attention").length ?? 0;
+    return sitesAttention || (rosterOverview?.summary?.needsAttention ?? 0);
+  }, [rosterOverview]);
+
   return {
     dashboard,
     captureOverview,
@@ -223,6 +228,15 @@ export function useDashboardOperationalSummary() {
     moduleStatus,
     guardsOnDuty: dashboard?.guardsOnDuty ?? 0,
     activeSitesCount: dashboard?.activeSitesCount ?? 0,
+    activeSitesDelta: dashboard?.activeSitesDelta ?? 0,
+    totalEmployees: dashboard?.totalEmployees ?? 0,
+    activeEmployeesCount: dashboard?.activeEmployeesCount ?? 0,
+    onLeaveToday: dashboard?.onLeaveToday ?? 0,
+    totalPosts: dashboard?.totalPosts ?? 0,
+    activeClientsCount: dashboard?.activeClientsCount ?? 0,
+    attendanceTrend14d: dashboard?.attendanceTrend14d ?? [],
+    pendingSiteTimesheetRows: dashboard?.pendingSiteTimesheetRows ?? 0,
+    rosterAttentionCount,
     refresh,
   };
 }

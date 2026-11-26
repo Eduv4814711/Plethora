@@ -163,7 +163,7 @@ export function SmartRosterWizard({
   return (
     <div className="space-y-5">
       {/* Stepper Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-security-navy-200 bg-white p-4">
         <div className="flex flex-wrap items-center gap-2">
           {[
             { n: 1 as const, label: "1. Shift Style" },
@@ -182,7 +182,7 @@ export function SmartRosterWizard({
                   current
                     ? "bg-[var(--accent-primary)] text-white"
                     : unlocked
-                      ? "bg-security-navy-100 dark:bg-security-navy-800 text-security-navy-700 dark:text-security-navy-200 hover:bg-security-navy-200"
+                      ? "bg-security-navy-100 text-security-navy-700 hover:bg-security-navy-200"
                       : "opacity-45 cursor-not-allowed bg-security-navy-50 text-security-navy-400"
                 }`}
               >
@@ -191,30 +191,30 @@ export function SmartRosterWizard({
             );
           })}
         </div>
-        <div className="text-xs text-security-navy-500 dark:text-security-navy-400">
+        <div className="text-xs text-security-navy-500">
           {siteName} · {startDate} to {endDate}
         </div>
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
       {/* STEP 1: Pick Operating Framework */}
       {step === 1 && (
-        <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-5 space-y-4">
+        <div className="rounded-xl border border-security-navy-200 bg-white p-5 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="text-base font-semibold text-security-navy-900 dark:text-white">
+              <h3 className="text-base font-semibold text-security-navy-900">
                 How does this site operate?
               </h3>
-              <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-0.5">
+              <p className="text-xs text-security-navy-500 mt-0.5">
                 Pick a South African security schedule template. Our optimizer enforces 12h rest, 36h weekly rest, and PSIRA rules automatically.
               </p>
             </div>
-            <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-3 py-2 text-xs text-emerald-900 dark:text-emerald-100">
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-900">
               Recommended for zero overtime: <strong>{recommendedGuardsCount} guards</strong>
             </div>
           </div>
@@ -229,25 +229,25 @@ export function SmartRosterWizard({
                   onClick={() => setFrameworkId(fw.id)}
                   className={`text-left rounded-xl border p-4 transition-all min-h-[112px] flex flex-col justify-between ${
                     selected
-                      ? "border-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)]/25 bg-amber-50/60 dark:bg-amber-950/20"
-                      : "border-security-navy-200 dark:border-security-navy-700 hover:border-security-navy-400"
+                      ? "border-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)]/25 bg-amber-50/60"
+                      : "border-security-navy-200 hover:border-security-navy-400"
                   }`}
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-security-navy-900 dark:text-white">
+                      <span className="text-sm font-semibold text-security-navy-900">
                         {fw.name}
                       </span>
                     </div>
-                    <p className="text-xs text-security-navy-600 dark:text-security-navy-300 mt-1.5">
+                    <p className="text-xs text-security-navy-600 mt-1.5">
                       {fw.tagline}
                     </p>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] text-security-navy-500 dark:text-security-navy-400">
-                    <span className="rounded bg-security-navy-100 dark:bg-security-navy-800 px-2 py-0.5 font-medium">
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] text-security-navy-500">
+                    <span className="rounded bg-security-navy-100 px-2 py-0.5 font-medium">
                       ~{fw.avgWeeklyHoursPerGuard}h/wk
                     </span>
-                    <span className="rounded bg-security-navy-100 dark:bg-security-navy-800 px-2 py-0.5">
+                    <span className="rounded bg-security-navy-100 px-2 py-0.5">
                       {fw.bestFor}
                     </span>
                   </div>
@@ -270,17 +270,17 @@ export function SmartRosterWizard({
 
       {/* STEP 2: Pick Guards & Preferences */}
       {step === 2 && (
-        <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 p-5 space-y-5">
+        <div className="rounded-xl border border-security-navy-200 bg-white p-5 space-y-5">
           <div>
-            <h3 className="text-base font-semibold text-security-navy-900 dark:text-white">
+            <h3 className="text-base font-semibold text-security-navy-900">
               Select Guards &amp; Scheduling Preferences
             </h3>
-            <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-0.5">
+            <p className="text-xs text-security-navy-500 mt-0.5">
               Guards already working at another site or on approved leave are automatically protected from double-booking.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-xl border border-security-navy-200 dark:border-security-navy-700 p-4 bg-security-navy-50/50 dark:bg-security-navy-800/30">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-xl border border-security-navy-200 p-4 bg-security-navy-50/50">
             <label className="flex items-start gap-2.5 text-xs cursor-pointer">
               <input
                 type="checkbox"
@@ -289,7 +289,7 @@ export function SmartRosterWizard({
                 className="mt-0.5 rounded border-security-navy-300"
               />
               <span>
-                <strong className="block text-security-navy-900 dark:text-white">
+                <strong className="block text-security-navy-900">
                   Use Reliever Pool first before Overtime
                 </strong>
                 Draws company relievers up to 48h/week before paying 1.5x overtime.
@@ -304,7 +304,7 @@ export function SmartRosterWizard({
                 className="mt-0.5 rounded border-security-navy-300"
               />
               <span>
-                <strong className="block text-security-navy-900 dark:text-white">
+                <strong className="block text-security-navy-900">
                   Keep Guards on Dedicated Day or Night
                 </strong>
                 Avoids flipping guards back and forth between day and night shifts.
@@ -319,7 +319,7 @@ export function SmartRosterWizard({
                 className="mt-0.5 rounded border-security-navy-300"
               />
               <span>
-                <strong className="block text-security-navy-900 dark:text-white">
+                <strong className="block text-security-navy-900">
                   Allow Overtime (&gt;48h/wk) to Fill Gaps
                 </strong>
                 If off, solver keeps overtime at 0h and highlights open gaps for relievers.
@@ -329,7 +329,7 @@ export function SmartRosterWizard({
 
           <div className="space-y-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
+              <div className="text-xs font-semibold text-security-navy-700">
                 Available Guards ({selectedGuardIds.length} chosen · leaves empty to use site team)
               </div>
               <input
@@ -341,14 +341,14 @@ export function SmartRosterWizard({
               />
             </div>
 
-            <div className="max-h-64 overflow-y-auto rounded-xl border border-security-navy-200 dark:border-security-navy-700 divide-y divide-security-navy-100 dark:divide-security-navy-800">
+            <div className="max-h-64 overflow-y-auto rounded-xl border border-security-navy-200 divide-y divide-security-navy-100">
               {candidateList.map((g) => {
                 const checked = selectedGuardIds.includes(g.id);
                 const isSiteMember = siteGuards.some((sg) => sg.id === g.id);
                 return (
                   <label
                     key={g.id}
-                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs hover:bg-security-navy-50 dark:hover:bg-security-navy-800/40 cursor-pointer min-h-[44px]"
+                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs hover:bg-security-navy-50 cursor-pointer min-h-[44px]"
                   >
                     <span className="flex items-center gap-3">
                       <input
@@ -357,7 +357,7 @@ export function SmartRosterWizard({
                         onChange={() => toggleGuard(g.id)}
                         className="rounded border-security-navy-300"
                       />
-                      <span className="font-medium text-security-navy-900 dark:text-white">
+                      <span className="font-medium text-security-navy-900">
                         {g.firstName} {g.lastName}
                       </span>
                       <span className="text-security-navy-500">({g.employeeNumber})</span>
@@ -374,7 +374,7 @@ export function SmartRosterWizard({
                         </span>
                       )}
                       {g.psiraGrade && (
-                        <span className="rounded bg-security-navy-100 dark:bg-security-navy-800 px-2 py-0.5 text-[10px] font-semibold">
+                        <span className="rounded bg-security-navy-100 px-2 py-0.5 text-[10px] font-semibold">
                           Grade {g.psiraGrade}
                         </span>
                       )}
@@ -389,7 +389,7 @@ export function SmartRosterWizard({
             <button
               type="button"
               onClick={() => setStep(1)}
-              className="rounded-lg border border-security-navy-300 dark:border-security-navy-600 px-4 py-2 text-xs font-semibold min-h-[44px]"
+              className="rounded-lg border border-security-navy-300 px-4 py-2 text-xs font-semibold min-h-[44px]"
             >
               Back
             </button>
@@ -425,18 +425,18 @@ export function SmartRosterWizard({
           />
 
           {preview.unfilledSlots.length > 0 && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/20 p-4 space-y-2">
-              <h4 className="text-sm font-semibold text-amber-950 dark:text-amber-100">
+            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 space-y-2">
+              <h4 className="text-sm font-semibold text-amber-950">
                 {preview.unfilledSlots.length} Shift Gap{preview.unfilledSlots.length === 1 ? "" : "s"} Left Open (Zero-Overtime Protection)
               </h4>
-              <p className="text-xs text-amber-800 dark:text-amber-200">
+              <p className="text-xs text-amber-800">
                 To fill these automatically, either assign another guard / reliever in Step 2 or enable &ldquo;Allow Overtime&rdquo; and re-run.
               </p>
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {preview.unfilledSlots.slice(0, 10).map((u, idx) => (
                   <span
                     key={`${u.dateKey}-${u.shiftType}-${idx}`}
-                    className="rounded-md bg-white dark:bg-security-navy-900 border border-amber-300 dark:border-amber-700 px-2.5 py-1 text-xs font-medium"
+                    className="rounded-md bg-white border border-amber-300 px-2.5 py-1 text-xs font-medium"
                   >
                     {u.dateKey} · {u.shiftType === "night" ? "Night" : "Day"} (-{u.shortfall})
                   </span>
@@ -446,13 +446,13 @@ export function SmartRosterWizard({
           )}
 
           {/* Guard Hours & SA Compliance Summary Table */}
-          <div className="rounded-xl border border-security-navy-200 dark:border-security-navy-800 bg-white dark:bg-security-navy-900 overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-security-navy-200 dark:border-security-navy-800 px-4 py-3">
+          <div className="rounded-xl border border-security-navy-200 bg-white overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-security-navy-200 px-4 py-3">
               <div>
-                <h4 className="text-sm font-semibold text-security-navy-900 dark:text-white">
+                <h4 className="text-sm font-semibold text-security-navy-900">
                   Guard Workload &amp; South African Labour Summary
                 </h4>
-                <p className="text-xs text-security-navy-500 dark:text-security-navy-400">
+                <p className="text-xs text-security-navy-500">
                   Shows projected ordinary hours (&lt;=48h/wk), overtime, Sundays, and night allowances before publishing.
                 </p>
               </div>
@@ -463,7 +463,7 @@ export function SmartRosterWizard({
 
             <div role="region" tabIndex={0} aria-label="Guard workload preview table" className="overflow-x-auto">
               <table className="min-w-full text-xs">
-                <thead className="bg-security-navy-50 dark:bg-security-navy-950 text-security-navy-600 dark:text-security-navy-300 border-b border-security-navy-200 dark:border-security-navy-800">
+                <thead className="bg-security-navy-50 text-security-navy-600 border-b border-security-navy-200">
                   <tr>
                     <th scope="col" className="px-4 py-2.5 text-left font-semibold">Guard</th>
                     <th scope="col" className="px-3 py-2.5 text-right font-semibold">Shifts (D / N)</th>
@@ -474,19 +474,19 @@ export function SmartRosterWizard({
                     <th scope="col" className="px-4 py-2.5 text-left font-semibold">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
+                <tbody className="divide-y divide-security-navy-100">
                   {preview.guardSummaries.map((g) => {
                     const warnCount = g.restWarnings.length + g.credentialWarnings.length;
                     return (
                       <tr key={g.guardId}>
-                        <th scope="row" className="px-4 py-2.5 text-left font-medium text-security-navy-900 dark:text-white">
+                        <th scope="row" className="px-4 py-2.5 text-left font-medium text-security-navy-900">
                           {g.guardName} <span className="text-security-navy-500 font-normal">({g.employeeNumber})</span>
                         </th>
                         <td className="px-3 py-2.5 text-right tabular-nums">
                           {g.totalShifts} <span className="text-security-navy-500">({g.dayShifts}/{g.nightShifts})</span>
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums">{g.ordinaryHours}</td>
-                        <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${g.overtimeHours > 0 ? "text-amber-700 dark:text-amber-300" : ""}`}>
+                        <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${g.overtimeHours > 0 ? "text-amber-700" : ""}`}>
                           {g.overtimeHours}
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums">{g.sundayHours}</td>
@@ -497,7 +497,7 @@ export function SmartRosterWizard({
                               SA Compliant
                             </span>
                           ) : (
-                            <span className="text-amber-700 dark:text-amber-300">
+                            <span className="text-amber-700">
                               {[...g.restWarnings, ...g.credentialWarnings][0]}
                             </span>
                           )}
@@ -514,7 +514,7 @@ export function SmartRosterWizard({
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="rounded-lg border border-security-navy-300 dark:border-security-navy-600 px-4 py-2 text-xs font-semibold min-h-[44px]"
+              className="rounded-lg border border-security-navy-300 px-4 py-2 text-xs font-semibold min-h-[44px]"
             >
               Adjust Guards &amp; Re-run
             </button>

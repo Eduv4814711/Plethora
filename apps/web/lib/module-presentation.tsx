@@ -37,6 +37,9 @@ export const MODULE_ICON_FALLBACK: ReactNode = p(
 );
 
 export const MODULE_ICONS: Record<string, ReactNode> = {
+  "/": p(
+    "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+  ),
   "/overview": p(
     "M3 13h4v8H3v-8zm7-9h4v17h-4V4zm7 5h4v12h-4V9z"
   ),
@@ -114,7 +117,7 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
   "/settings/migrate": "Bulk import and export",
 };
 
-export type ModuleCategoryKey = "operations" | "finance" | "management" | "administration";
+export type ModuleCategoryKey = "home" | "operations" | "finance" | "governance" | "administration";
 
 export interface ModuleCategoryInfo {
   key: ModuleCategoryKey;
@@ -123,60 +126,68 @@ export interface ModuleCategoryInfo {
 }
 
 export const MODULE_CATEGORIES: Record<ModuleCategoryKey, ModuleCategoryInfo> = {
+  home: {
+    key: "home",
+    label: "Home",
+    tagline: "Daily pulse & live analytics",
+  },
   operations: {
     key: "operations",
     label: "Operations",
-    tagline: "Active shifts, guards, posts & site coverage",
+    tagline: "Shifts, attendance, guards & sites",
   },
   finance: {
     key: "finance",
-    label: "People & Finance",
-    tagline: "Leave balances, Sage payroll exports & client billing",
+    label: "Finance",
+    tagline: "Sage payroll exports, client billing & accounts",
   },
-  management: {
-    key: "management",
-    label: "Management",
-    tagline: "Client accounts, reports & approvals",
+  governance: {
+    key: "governance",
+    label: "Governance",
+    tagline: "Compliance, incidents, approvals & comms",
   },
   administration: {
     key: "administration",
-    label: "Administration",
-    tagline: "Compliance registers, documents & credentials",
+    label: "Admin",
+    tagline: "Audit log, import/export & settings",
   },
 };
 
 export const MODULE_CATEGORY_ORDER: ModuleCategoryKey[] = [
+  "home",
   "operations",
   "finance",
-  "management",
+  "governance",
   "administration",
 ];
 
 export const MODULE_CATEGORY_MAP: Record<string, ModuleCategoryKey> = {
-  "/overview": "operations",
-  "/employees": "operations",
-  "/sites": "operations",
+  "/": "home",
+  "/overview": "home",
+
   "/rostering": "operations",
   "/attendance": "operations",
-  "/incidents": "operations",
-  "/whatsapp": "operations",
+  "/employees": "operations",
+  "/employees/leave": "operations",
+  "/sites": "operations",
 
-  "/employees/leave": "finance",
   "/payroll-exports": "finance",
   "/billing": "finance",
+  "/clients": "finance",
 
-  "/clients": "management",
-  "/reports": "management",
-  "/approvals": "management",
+  "/compliance": "governance",
+  "/incidents": "governance",
+  "/approvals": "governance",
+  "/whatsapp": "governance",
+  "/documents": "governance",
+  "/reports": "governance",
 
-  "/compliance": "administration",
-  "/documents": "administration",
   "/audit": "administration",
-  "/settings": "administration",
   "/settings/migrate": "administration",
+  "/settings": "administration",
 };
 
 export function getModuleCategory(href: string): ModuleCategoryKey {
-  return MODULE_CATEGORY_MAP[href] ?? "administration";
+  return MODULE_CATEGORY_MAP[href] ?? "governance";
 }
 

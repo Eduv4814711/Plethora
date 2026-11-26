@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Button, Modal } from "@/components/ui";
 import {
   listDocuments,
   uploadDocument,
@@ -187,19 +188,19 @@ export function ClientDocumentsTab({
       {/* Real-time Compliance Evaluation Engine Card */}
       {compliance && (
         <div className="card-dashboard space-y-4 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-security-navy-100 pb-3">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
+                <h2 className="text-base font-semibold text-security-navy-900">
                   Compliance & Governance Readiness Evaluation
                 </h2>
                 <span
                   className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                     compliance.overallStatus === "COMPLETE"
-                      ? "bg-security-emerald-100 text-security-emerald-800 dark:bg-security-emerald-950/60 dark:text-security-emerald-300"
+                      ? "bg-security-emerald-100 text-security-emerald-800"
                       : compliance.overallStatus === "ATTENTION"
-                      ? "bg-security-amber-100 text-security-amber-800 dark:bg-security-amber-900/40 dark:text-security-amber-300"
-                      : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+                      ? "bg-security-amber-100 text-security-amber-800"
+                      : "bg-red-100 text-red-800"
                   }`}
                 >
                   {compliance.overallStatus}
@@ -211,7 +212,7 @@ export function ClientDocumentsTab({
             </div>
 
             <div className="text-right text-xs">
-              <span className="font-semibold text-security-navy-800 dark:text-security-navy-200">
+              <span className="font-semibold text-security-navy-800">
                 {compliance.summary.complete} of {compliance.summary.total - compliance.summary.notApplicable} checks passed
               </span>
               <div className="text-[11px] text-security-navy-500">
@@ -223,17 +224,17 @@ export function ClientDocumentsTab({
           <div className="grid gap-3 sm:grid-cols-2">
             {compliance.checks.map((chk) => {
               const statusColors = {
-                COMPLETE: "border-security-emerald-200 bg-security-emerald-50/50 text-security-emerald-900 dark:border-security-emerald-900/50 dark:bg-security-emerald-950/30 dark:text-security-emerald-300",
-                ATTENTION: "border-security-amber-200 bg-security-amber-50/50 text-security-amber-900 dark:border-security-amber-900/50 dark:bg-security-amber-950/30 dark:text-security-amber-300",
-                MISSING: "border-red-200 bg-red-50/50 text-red-900 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300",
-                NOT_APPLICABLE: "border-security-navy-100 bg-security-navy-50/50 text-security-navy-600 dark:border-security-navy-800 dark:bg-security-navy-900/30 dark:text-security-navy-400",
+                COMPLETE: "border-security-emerald-200 bg-security-emerald-50/50 text-security-emerald-900",
+                ATTENTION: "border-security-amber-200 bg-security-amber-50/50 text-security-amber-900",
+                MISSING: "border-red-200 bg-red-50/50 text-red-900",
+                NOT_APPLICABLE: "border-security-navy-100 bg-security-navy-50/50 text-security-navy-600",
               }[chk.status];
 
               const reqColors = {
-                STATUTORY: "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300",
-                CONTRACTUAL: "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300",
-                RECOMMENDED: "bg-security-navy-100 text-security-navy-700 dark:bg-security-navy-800 dark:text-security-navy-300",
-                OPTIONAL: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+                STATUTORY: "bg-purple-100 text-purple-800",
+                CONTRACTUAL: "bg-blue-100 text-blue-800",
+                RECOMMENDED: "bg-security-navy-100 text-security-navy-700",
+                OPTIONAL: "bg-gray-100 text-gray-700",
               }[chk.requirementLevel];
 
               return (
@@ -259,7 +260,7 @@ export function ClientDocumentsTab({
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
+            <h2 className="text-base font-semibold text-security-navy-900">
               Supporting Legal & Compliance Documents
             </h2>
             <p className="text-xs text-security-navy-500">
@@ -278,7 +279,7 @@ export function ClientDocumentsTab({
         </div>
 
         {/* Category & Contract Filter Strip */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
+        <div className="flex flex-wrap items-center gap-2 border-b border-security-navy-100 pb-3">
           <div className="flex flex-wrap gap-1.5 flex-1">
             {CLIENT_DOCUMENT_CATEGORIES.map((cat) => (
               <button
@@ -287,8 +288,8 @@ export function ClientDocumentsTab({
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                   selectedCategory === cat.id
-                    ? "bg-security-navy-900 text-white dark:bg-security-navy-100 dark:text-security-navy-900"
-                    : "bg-security-navy-100 text-security-navy-700 hover:bg-security-navy-200 dark:bg-security-navy-800 dark:text-security-navy-300"
+                    ? "bg-security-navy-900 text-white"
+                    : "bg-security-navy-100 text-security-navy-700 hover:bg-security-navy-200"
                 }`}
               >
                 {cat.label}
@@ -315,7 +316,7 @@ export function ClientDocumentsTab({
 
         {/* Documents Table */}
         {loading ? (
-          <div className="h-40 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-800" />
+          <div className="h-40 animate-pulse rounded-security-lg bg-security-navy-100" />
         ) : documents.length === 0 ? (
           <div className="card-dashboard p-8 text-center text-xs text-security-navy-500">
             No documents found for this category.
@@ -332,10 +333,10 @@ export function ClientDocumentsTab({
             )}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-security-lg border border-security-navy-100 bg-white shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900">
+          <div className="overflow-hidden rounded-security-lg border border-security-navy-100 bg-white shadow-security-card">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-security-navy-100 text-xs dark:divide-security-navy-800">
-                <thead className="bg-security-navy-50 dark:bg-security-navy-900/80">
+              <table className="min-w-full divide-y divide-security-navy-100 text-xs">
+                <thead className="bg-security-navy-50">
                   <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-security-navy-500">
                     <th className="px-4 py-3">Document Title</th>
                     <th className="px-4 py-3">Category & Type</th>
@@ -345,7 +346,7 @@ export function ClientDocumentsTab({
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
+                <tbody className="divide-y divide-security-navy-100">
                   {documents.map((doc) => {
                     const isVerified = doc.verificationStatus === "VERIFIED";
                     const isRejected = doc.verificationStatus === "REJECTED";
@@ -353,10 +354,10 @@ export function ClientDocumentsTab({
                     return (
                       <tr
                         key={doc.id}
-                        className="hover:bg-security-navy-50/50 dark:hover:bg-security-navy-800/40"
+                        className="hover:bg-security-navy-50/50"
                       >
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5 font-medium text-security-navy-900 dark:text-security-navy-100">
+                          <div className="flex items-center gap-1.5 font-medium text-security-navy-900">
                             {doc.isSensitive && (
                               <span title="Confidential / Sensitive Record" className="text-security-amber-600">
                                 🔒
@@ -368,7 +369,7 @@ export function ClientDocumentsTab({
                         </td>
 
                         <td className="px-4 py-3">
-                          <div className="font-medium text-security-navy-700 dark:text-security-navy-300">
+                          <div className="font-medium text-security-navy-700">
                             {doc.category}
                           </div>
                           <div className="text-[11px] font-mono text-security-navy-500">
@@ -376,30 +377,30 @@ export function ClientDocumentsTab({
                           </div>
                         </td>
 
-                        <td className="px-4 py-3 font-mono text-security-navy-600 dark:text-security-navy-400">
+                        <td className="px-4 py-3 font-mono text-security-navy-600">
                           {doc.clientContract ? doc.clientContract.contractNumber : "—"}
                         </td>
 
                         <td className="px-4 py-3">
                           {isVerified ? (
-                            <span className="rounded-full bg-security-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-security-emerald-800 dark:bg-security-emerald-950/60 dark:text-security-emerald-300">
+                            <span className="rounded-full bg-security-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-security-emerald-800">
                               ✓ Verified
                             </span>
                           ) : isRejected ? (
                             <span
                               title={doc.rejectionReason || "Rejected"}
-                              className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 dark:bg-red-950/60 dark:text-red-300"
+                              className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800"
                             >
                               ✕ Rejected
                             </span>
                           ) : (
-                            <span className="rounded-full bg-security-amber-100 px-2 py-0.5 text-[10px] font-semibold text-security-amber-800 dark:bg-security-amber-900/40 dark:text-security-amber-300">
+                            <span className="rounded-full bg-security-amber-100 px-2 py-0.5 text-[10px] font-semibold text-security-amber-800">
                               Pending Verification
                             </span>
                           )}
                         </td>
 
-                        <td className="px-4 py-3 font-mono text-security-navy-600 dark:text-security-navy-400">
+                        <td className="px-4 py-3 font-mono text-security-navy-600">
                           {doc.expiryDate ? new Date(doc.expiryDate).toLocaleDateString() : "No Expiry"}
                         </td>
 
@@ -418,7 +419,7 @@ export function ClientDocumentsTab({
                             <button
                               type="button"
                               onClick={() => handleVerify(doc.id)}
-                              className="font-medium text-security-emerald-700 hover:underline dark:text-security-emerald-400"
+                              className="font-medium text-security-emerald-700 hover:underline"
                             >
                               Verify
                             </button>
@@ -444,27 +445,13 @@ export function ClientDocumentsTab({
       </div>
 
       {/* Upload Document Modal */}
-      {showUploadModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-security-navy-950/60 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-lg rounded-security-lg border border-security-navy-100 bg-white p-6 shadow-security-elevated dark:border-security-navy-700 dark:bg-security-navy-900">
-            <div className="flex items-center justify-between border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
-              <h3 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
-                Upload Client Document
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowUploadModal(false)}
-                className="text-security-navy-400 hover:text-security-navy-600 dark:hover:text-security-navy-200"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleUpload} className="mt-4 space-y-3 text-xs">
+      <Modal
+        open={showUploadModal}
+        onClose={() => !uploading && setShowUploadModal(false)}
+        title="Upload Client Document"
+        size="md"
+      >
+        <form onSubmit={handleUpload} className="space-y-3 text-xs">
               <div>
                 <label className="label-text mb-1 block">File *</label>
                 <input
@@ -547,7 +534,7 @@ export function ClientDocumentsTab({
               </div>
 
               <div>
-                <label className="flex items-center gap-2 font-medium text-security-navy-800 dark:text-security-navy-200">
+                <label className="flex items-center gap-2 font-medium text-security-navy-800">
                   <input
                     type="checkbox"
                     checked={isSensitive}
@@ -557,74 +544,64 @@ export function ClientDocumentsTab({
                 </label>
               </div>
 
-              <div className="flex justify-end gap-3 border-t border-security-navy-100 pt-4 dark:border-security-navy-800">
-                <button
+              <div className="flex justify-end gap-3 border-t border-security-navy-100 pt-4">
+                <Button
                   type="button"
-                  className="btn-secondary"
+                  variant="secondary"
                   onClick={() => setShowUploadModal(false)}
                   disabled={uploading}
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="btn-primary"
                   disabled={uploading || !file || !docTitle.trim()}
+                  loading={uploading}
                 >
                   {uploading ? "Uploading..." : "Upload Document"}
-                </button>
+                </Button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {/* Reject Reason Modal */}
-      {rejectingDocId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-security-navy-950/60 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-md rounded-security-lg border border-security-navy-100 bg-white p-6 shadow-security-elevated dark:border-security-navy-700 dark:bg-security-navy-900">
-            <h3 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
-              Reject Compliance Document
-            </h3>
-            <p className="mt-1 text-xs text-security-navy-500">
-              Provide a clear reason for the audit log so the client/operations team can remediate.
-            </p>
+      <Modal
+        open={Boolean(rejectingDocId)}
+        onClose={() => !rejecting && setRejectingDocId(null)}
+        title="Reject Compliance Document"
+        description="Provide a clear reason for the audit log so the client/operations team can remediate."
+        size="sm"
+      >
+        <form onSubmit={handleReject} className="space-y-3 text-xs">
+          <textarea
+            rows={3}
+            className="input-modern w-full"
+            placeholder="e.g. Illegible signature, expired CIPC filing..."
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            required
+          />
 
-            <form onSubmit={handleReject} className="mt-4 space-y-3 text-xs">
-              <textarea
-                rows={3}
-                className="input-modern w-full"
-                placeholder="e.g. Illegible signature, expired CIPC filing..."
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                required
-              />
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setRejectingDocId(null)}
-                  disabled={rejecting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn-primary bg-red-600 hover:bg-red-700"
-                  disabled={rejecting || !rejectionReason.trim()}
-                >
-                  {rejecting ? "Rejecting..." : "Confirm Rejection"}
-                </button>
-              </div>
-            </form>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setRejectingDocId(null)}
+              disabled={rejecting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={rejecting || !rejectionReason.trim()}
+              loading={rejecting}
+            >
+              {rejecting ? "Rejecting..." : "Confirm Rejection"}
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }

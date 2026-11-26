@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { AlertBanner, Button, Field, Input } from "@/components/ui";
 
 function LoginForm() {
   const { user, login, error, setError } = useAuth();
@@ -46,45 +47,39 @@ function LoginForm() {
         className="mb-8 h-16 w-auto object-contain object-left lg:hidden"
       />
 
-      <p className="eyebrow">Sign in</p>
-      <h1 className="page-title mt-2">Welcome back</h1>
-      <p className="mt-2 text-sm text-security-navy-500">
+      <h1 className="page-title">Welcome back</h1>
+      <p className="mt-1.5 text-sm text-security-navy-500">
         Use the email address your company owner set you up with.
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-5" autoComplete="off">
-        <div className="space-y-1.5">
-          <label htmlFor="email" className="label-text block">
-            Email
-          </label>
-          <input
-            id="email"
+      <form onSubmit={handleSubmit} className="mt-7 space-y-5" autoComplete="off">
+        <Field label="Email" id="email">
+          <Input
             name="plethora-login-email"
             type="email"
             inputMode="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="input-modern"
             placeholder="you@company.com"
             autoComplete="off"
             spellCheck={false}
           />
-        </div>
+        </Field>
 
         <div className="space-y-1.5">
           <label htmlFor="password" className="label-text block">
             Password
           </label>
           <div className="relative">
-            <input
+            <Input
               id="password"
               name="plethora-login-password"
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="input-modern pr-12"
+              className="pr-12"
               autoComplete="off"
             />
             <button
@@ -108,11 +103,10 @@ function LoginForm() {
         </div>
 
         {error && (
-          <div className="spine spine-bad space-y-2 rounded-security bg-red-50 py-3 pl-5 pr-4 text-sm text-red-900" role="alert">
-            <p className="font-semibold">{error}</p>
+          <AlertBanner variant="error" title={error}>
             {process.env.NODE_ENV !== "production" &&
               (error === "Login failed" || error.includes("connect") || error.includes("server") || error.includes("404")) && (
-                <p className="text-xs leading-relaxed text-red-800/80">
+                <p className="mt-1 text-xs leading-relaxed text-red-800/80">
                   Start both servers with{" "}
                   <code className="rounded bg-red-100 px-1.5 py-0.5 font-mono text-[0.6875rem]">npm run dev:all</code> — web on
                   port 3000, API on 3001. First run also needs{" "}
@@ -120,18 +114,12 @@ function LoginForm() {
                   <code className="rounded bg-red-100 px-1.5 py-0.5 font-mono text-[0.6875rem]">npm run db:seed</code>.
                 </p>
               )}
-          </div>
+          </AlertBanner>
         )}
 
-        <button type="submit" disabled={submitting} className="btn-amber min-h-12 w-full text-[0.9375rem]">
-          {submitting ? (
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.3" />
-              <path d="M21 12a9 9 0 00-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-            </svg>
-          ) : null}
+        <Button type="submit" variant="signal" size="lg" loading={submitting} className="min-h-12 w-full">
           Sign in
-        </button>
+        </Button>
       </form>
 
       <p className="mt-8 border-t border-security-navy-100 pt-6 text-sm text-security-navy-500">

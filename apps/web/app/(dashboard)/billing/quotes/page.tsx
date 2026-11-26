@@ -24,7 +24,15 @@ import { StatusBadge } from "../_components/status-badge";
 import { computeTotalsPreview, DocumentTotals } from "../_components/document-totals";
 import { emptyLine, LineItemsEditor, type EditableLine } from "../_components/line-items-editor";
 import { BillingAccessRestricted } from "../_components/billing-access-restricted";
+import { AlertBanner, Button, EmptyState, PageHeader, PageShell, SkeletonBlock, SubNav, TableShell } from "@/components/ui";
 import { clsx } from "clsx";
+
+const BILLING_NAV = [
+  { href: "/billing", label: "Dashboard", exact: true },
+  { href: "/billing/invoices", label: "Invoices" },
+  { href: "/billing/quotes", label: "Quotes" },
+  { href: "/billing/clients", label: "Clients & Statements" },
+];
 
 const STATUSES: Array<QuoteStatus | "all"> = [
   "all", "draft", "issued", "accepted", "declined", "expired", "cancelled",
@@ -255,25 +263,26 @@ export default function QuotesPage() {
   };
 
   return (
-    <main className="animate-fade-in space-y-5 pb-16">
-      {/* Header */}
-      <header className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <Link href="/billing" className="section-title hover:underline">← Client Billing</Link>
-            <h1 className="page-title mt-0.5">Quotes</h1>
-            <p className="mt-1 text-sm text-security-navy-500">Create and manage client quotes. Convert accepted quotes to invoices.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {canExport && quotes.length > 0 && (
-              <button type="button" onClick={() => exportQuotesToCsv(quotes)} className="btn-secondary min-h-10">Export CSV</button>
-            )}
-            {canCreate && (
-              <button type="button" onClick={() => setShowForm((o) => !o)} className="btn-primary min-h-10">{showForm ? "Close" : "New Quote"}</button>
-            )}
-          </div>
-        </div>
-      </header>
+    <PageShell width="wide" className="animate-fade-in pb-16">
+      <div className="space-y-1">
+        <Link href="/billing" className="text-xs font-medium text-security-navy-600 hover:underline">← Client Billing</Link>
+        <PageHeader
+          title="Quotes"
+          description="Create and manage client quotes. Convert accepted quotes to invoices."
+          actions={
+            <div className="flex items-center gap-2">
+              {canExport && quotes.length > 0 && (
+                <Button type="button" variant="secondary" size="sm" onClick={() => exportQuotesToCsv(quotes)}>Export CSV</Button>
+              )}
+              {canCreate && (
+                <Button type="button" size="sm" onClick={() => setShowForm((o) => !o)}>{showForm ? "Close" : "New Quote"}</Button>
+              )}
+            </div>
+          }
+        />
+      </div>
+
+      <SubNav items={BILLING_NAV} pathname="/billing/quotes" ariaLabel="Billing sections" />
 
       {/* Pipeline funnel */}
       {!loading && quotes.length > 0 && (
@@ -319,8 +328,8 @@ export default function QuotesPage() {
         </div>
       )}
 
-      {actionSuccess && <div className="rounded-security-lg border border-security-emerald-200 bg-security-emerald-50 px-3 py-2 text-sm text-security-emerald-800" role="status">{actionSuccess}</div>}
-      {error && <div className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{error}</div>}
+      {actionSuccess && <AlertBanner variant="success">{actionSuccess}</AlertBanner>}
+      {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
       {/* New Quote form */}
       {showForm && canCreate && (
@@ -649,15 +658,16 @@ export default function QuotesPage() {
 
       {/* Quotes table */}
       {loading ? (
-        <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-14 animate-pulse rounded-security-lg bg-security-navy-100" />)}</div>
+        <div className="space-y-2">{[1, 2, 3].map((i) => <SkeletonBlock key={i} className="h-14" />)}</div>
       ) : quotes.length === 0 ? (
-        <div className="rounded-security-lg border border-security-navy-100 bg-white px-4 py-12 text-center shadow-security-card">
-          <p className="text-sm text-security-navy-500">No quotes match your filters.</p>
-        </div>
+        <EmptyState
+          title="No quotes match your filters."
+          description={hasActiveFilters ? "Try clearing your filters." : "Create your first client quote above."}
+        />
       ) : (
-        <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 bg-white shadow-security-card">
+        <TableShell>
           <table className="min-w-full divide-y divide-security-navy-50 text-sm">
-            <thead className="bg-security-navy-50">
+            <thead>
               <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
                 <th className="px-4 py-3">Quote</th>
                 <th className="px-4 py-3">Client</th>
@@ -738,8 +748,8 @@ export default function QuotesPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </TableShell>
       )}
-    </main>
+    </PageShell>
   );
 }

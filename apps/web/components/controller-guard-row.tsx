@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Spinner } from "@/components/ui";
+import { AlertBanner, Badge, Button, Field, Input, Modal, SearchInput, Spinner, Textarea } from "@/components/ui";
 import {
   type GuardAttendanceItem,
   type ControllerAttendanceStatus,
@@ -54,14 +54,14 @@ function statusBadge(status: ControllerAttendanceStatus) {
 function methodBadge(method: string) {
   if (method === "whatsapp") {
     return (
-      <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+      <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
         WhatsApp
       </span>
     );
   }
   if (method === "manual") {
     return (
-      <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
+      <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-blue-700">
         Manual
       </span>
     );
@@ -242,10 +242,10 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
     <div
       className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-lg border transition-all ${
         guard.needsAction
-          ? "border-amber-300 bg-amber-50/40 dark:border-amber-700/60 dark:bg-amber-950/20"
+          ? "border-amber-300 bg-amber-50/40"
           : isCompleted
-          ? "border-security-navy-100 bg-white opacity-85 hover:opacity-100 dark:border-security-navy-800 dark:bg-security-navy-900"
-          : "border-security-navy-100 bg-white dark:border-security-navy-800 dark:bg-security-navy-900"
+          ? "border-security-navy-100 bg-white opacity-85 hover:opacity-100"
+          : "border-security-navy-100 bg-white"
       }`}
     >
       <div className="flex items-start gap-3 min-w-0">
@@ -254,37 +254,37 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-security-navy-950 text-sm dark:text-security-navy-50">
+            <span className="font-semibold text-security-navy-950 text-sm">
               {guard.guardName}
             </span>
             {guard.isReplacement && (
-              <span className="inline-flex items-center gap-1 rounded bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/40 dark:text-purple-300">
+              <span className="inline-flex items-center gap-1 rounded bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">
                 🔄 Replacement {guard.originalGuardName ? `for ${guard.originalGuardName}` : ""}
               </span>
             )}
             {guard.postName && (
-              <span className="text-xs text-security-navy-500 bg-security-navy-50 px-2 py-0.5 rounded dark:bg-security-navy-800">
+              <span className="text-xs text-security-navy-500 bg-security-navy-50 px-2 py-0.5 rounded">
                 {guard.postName}
               </span>
             )}
             {methodBadge(guard.captureMethod)}
           </div>
-          <div className="mt-1 flex items-center gap-3 text-xs text-security-navy-600 dark:text-security-navy-400 flex-wrap">
+          <div className="mt-1 flex items-center gap-3 text-xs text-security-navy-600 flex-wrap">
             <span>
               Sched: <strong>{guard.scheduledStartTime} – {guard.scheduledEndTime}</strong>
             </span>
             {guard.clockInTime && (
               <span>
-                In: <strong className="text-emerald-700 dark:text-emerald-400">{guard.clockInTime}</strong>
+                In: <strong className="text-emerald-700">{guard.clockInTime}</strong>
               </span>
             )}
             {guard.clockOutTime && (
               <span>
-                Out: <strong className="text-security-navy-800 dark:text-security-navy-200">{guard.clockOutTime}</strong>
+                Out: <strong className="text-security-navy-800">{guard.clockOutTime}</strong>
               </span>
             )}
             {guard.late && (
-              <span className="text-amber-700 dark:text-amber-400 font-medium">
+              <span className="text-amber-700 font-medium">
                 ({guard.minutesLate}m late)
               </span>
             )}
@@ -293,7 +293,7 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
             )}
           </div>
           {guard.exceptionDescription && (
-            <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+            <p className="mt-1 text-xs text-red-600">
               ⚠ {guard.exceptionDescription}
             </p>
           )}
@@ -332,7 +332,7 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
                 setErrorMsg(null);
                 setAbsentModalOpen(true);
               }}
-              className="text-red-700 hover:bg-red-50 dark:text-red-400 min-h-9 text-xs"
+              className="text-red-700 hover:bg-red-50 min-h-9 text-xs"
             >
               Absent
             </Button>
@@ -381,323 +381,254 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
       </div>
 
       {/* Replacement Guard Modal */}
-      {replaceModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-security-lg border border-security-navy-200 bg-white p-6 shadow-xl dark:border-security-navy-700 dark:bg-security-navy-900">
-            <div className="flex items-center justify-between border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
-              <div>
-                <h3 className="text-base font-bold text-security-navy-950 dark:text-security-navy-50">
-                  Assign Replacement Guard
-                </h3>
-                <p className="mt-0.5 text-xs text-security-navy-500 dark:text-security-navy-400">
-                  Replacing <strong>{guard.guardName}</strong> for shift ({guard.scheduledStartTime} – {guard.scheduledEndTime})
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setReplaceModalOpen(false)}
-                className="text-security-navy-400 hover:text-security-navy-700 text-lg leading-none p-1"
-              >
-                ✕
-              </button>
-            </div>
+      <Modal
+        open={replaceModalOpen}
+        onClose={() => setReplaceModalOpen(false)}
+        title="Assign Replacement Guard"
+        description={`Replacing ${guard.guardName} for shift (${guard.scheduledStartTime} – ${guard.scheduledEndTime})`}
+        size="md"
+      >
+        <form onSubmit={handleReplaceSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="label-text block">
+              Search &amp; Select Replacement Guard <span className="text-red-500">*</span>
+            </label>
+            <SearchInput
+              value={guardSearch}
+              onChange={setGuardSearch}
+              placeholder="Filter by name or employee number..."
+            />
 
-            <form onSubmit={handleReplaceSubmit} className="mt-4 space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-security-navy-800 dark:text-security-navy-200">
-                  Search & Select Replacement Guard <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="search"
-                  value={guardSearch}
-                  onChange={(e) => setGuardSearch(e.target.value)}
-                  placeholder="Filter by name or employee number..."
-                  className="input-modern mt-1 w-full text-xs"
-                />
-
-                <div className="mt-2 max-h-56 overflow-y-auto rounded border border-security-navy-200 bg-security-navy-50/50 p-1 divide-y divide-security-navy-100 dark:border-security-navy-800 dark:bg-security-navy-950">
-                  {loadingGuards ? (
-                    <div className="p-4 text-center">
-                      <Spinner className="h-5 w-5 mx-auto text-security-navy-600 mb-1" />
-                      <p className="text-xs text-security-navy-500">Ranking guards by SA overtime &amp; PSIRA…</p>
-                    </div>
-                  ) : rankedCandidates.length > 0 ? (
-                    rankedCandidates
-                      .filter((c) => {
-                        if (!guardSearch.trim()) return true;
-                        const term = guardSearch.toLowerCase();
-                        return `${c.fullName} ${c.employeeNumber}`.toLowerCase().includes(term);
-                      })
-                      .map((c) => (
-                        <label
-                          key={c.employeeId}
-                          className={`flex flex-col gap-1 p-2.5 rounded transition-colors text-xs ${
-                            !c.eligible
-                              ? "opacity-45 cursor-not-allowed"
-                              : selectedReplacementId === c.employeeId
-                                ? "bg-security-navy-800 text-white font-semibold cursor-pointer"
-                                : "hover:bg-white dark:hover:bg-security-navy-900 text-security-navy-800 dark:text-security-navy-200 cursor-pointer"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="radio"
-                                name="replacementGuard"
-                                value={c.employeeId}
-                                disabled={!c.eligible}
-                                checked={selectedReplacementId === c.employeeId}
-                                onChange={() => setSelectedReplacementId(c.employeeId)}
-                                className="sr-only"
-                              />
-                              <span>{c.fullName}</span>
-                              <span className="text-[10px] opacity-75">#{c.employeeNumber}</span>
-                            </div>
-                            <span className="text-[10px] tabular-nums opacity-85">
-                              {c.weekHoursBefore}h → {c.weekHoursAfter}h
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {c.eligible ? (
-                              c.badges.map((b) => (
-                                <span
-                                  key={b}
-                                  className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                                    selectedReplacementId === c.employeeId
-                                      ? "bg-white/20 text-white"
-                                      : b === "Zero OT"
-                                        ? "bg-emerald-100 text-emerald-900"
-                                        : b.startsWith("+")
-                                          ? "bg-amber-100 text-amber-900"
-                                          : "bg-security-navy-100 text-security-navy-700 dark:bg-security-navy-800 dark:text-security-navy-300"
-                                  }`}
-                                >
-                                  {b}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-[10px] text-red-600">{c.ineligibleReason}</span>
-                            )}
-                          </div>
-                        </label>
-                      ))
-                  ) : filteredReplacementGuards.length === 0 ? (
-                    <p className="p-4 text-center text-xs text-security-navy-500">
-                      No active replacement guards found matching your search.
-                    </p>
-                  ) : (
-                    filteredReplacementGuards.map((g) => (
-                      <label
-                        key={g.id}
-                        className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors text-xs ${
-                          selectedReplacementId === g.id
-                            ? "bg-security-navy-800 text-white font-semibold"
-                            : "hover:bg-white dark:hover:bg-security-navy-900 text-security-navy-800 dark:text-security-navy-200"
-                        }`}
-                      >
+            <div className="mt-2 max-h-56 divide-y divide-security-navy-100 overflow-y-auto rounded-security border border-security-navy-200 bg-security-navy-50/50 p-1">
+              {loadingGuards ? (
+                <div className="p-4 text-center">
+                  <Spinner className="mx-auto mb-1 h-5 w-5 text-security-navy-600" />
+                  <p className="text-xs text-security-navy-500">Ranking guards by SA overtime &amp; PSIRA…</p>
+                </div>
+              ) : rankedCandidates.length > 0 ? (
+                rankedCandidates
+                  .filter((c) => {
+                    if (!guardSearch.trim()) return true;
+                    const term = guardSearch.toLowerCase();
+                    return `${c.fullName} ${c.employeeNumber}`.toLowerCase().includes(term);
+                  })
+                  .map((c) => (
+                    <label
+                      key={c.employeeId}
+                      className={`flex flex-col gap-1 rounded p-2.5 text-xs transition-colors ${
+                        !c.eligible
+                          ? "cursor-not-allowed opacity-45"
+                          : selectedReplacementId === c.employeeId
+                            ? "cursor-pointer bg-security-navy-800 font-semibold text-white"
+                            : "cursor-pointer text-security-navy-800 hover:bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <input
                             type="radio"
                             name="replacementGuard"
-                            value={g.id}
-                            checked={selectedReplacementId === g.id}
-                            onChange={() => setSelectedReplacementId(g.id)}
+                            value={c.employeeId}
+                            disabled={!c.eligible}
+                            checked={selectedReplacementId === c.employeeId}
+                            onChange={() => setSelectedReplacementId(c.employeeId)}
                             className="sr-only"
                           />
-                          <span>
-                            {g.firstName} {g.lastName}
-                          </span>
-                          <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded ${
-                              selectedReplacementId === g.id
-                                ? "bg-security-navy-700 text-white"
-                                : "bg-security-navy-100 text-security-navy-600 dark:bg-security-navy-800 dark:text-security-navy-400"
-                            }`}
-                          >
-                            #{g.employeeNumber}
-                          </span>
+                          <span>{c.fullName}</span>
+                          <span className="text-[10px] opacity-75">#{c.employeeNumber}</span>
                         </div>
-                        {g.phone && (
-                          <span className="text-[11px] opacity-80">{g.phone}</span>
+                        <span className="text-[10px] tabular-nums opacity-85">
+                          {c.weekHoursBefore}h → {c.weekHoursAfter}h
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {c.eligible ? (
+                          c.badges.map((b) => (
+                            <span
+                              key={b}
+                              className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                selectedReplacementId === c.employeeId
+                                  ? "bg-white/20 text-white"
+                                  : b === "Zero OT"
+                                    ? "bg-emerald-100 text-emerald-900"
+                                    : b.startsWith("+")
+                                      ? "bg-amber-100 text-amber-900"
+                                      : "bg-security-navy-100 text-security-navy-700"
+                              }`}
+                            >
+                              {b}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[10px] text-red-600">{c.ineligibleReason}</span>
                         )}
-                      </label>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-security-navy-800 dark:text-security-navy-200">
-                  Reason for Replacement <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  rows={2}
-                  value={replacementReason}
-                  onChange={(e) => setReplacementReason(e.target.value)}
-                  placeholder="e.g. Original guard reported sick / AWOL no-show on morning roll call"
-                  required
-                  className="input-modern mt-1 w-full text-xs"
-                />
-              </div>
-
-              {errorMsg && (
-                <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700 font-medium">
-                  {errorMsg}
-                </div>
+                      </div>
+                    </label>
+                  ))
+              ) : filteredReplacementGuards.length === 0 ? (
+                <p className="p-4 text-center text-xs text-security-navy-500">
+                  No active replacement guards found matching your search.
+                </p>
+              ) : (
+                filteredReplacementGuards.map((g) => (
+                  <label
+                    key={g.id}
+                    className={`flex cursor-pointer items-center justify-between rounded p-2 text-xs transition-colors ${
+                      selectedReplacementId === g.id
+                        ? "bg-security-navy-800 font-semibold text-white"
+                        : "text-security-navy-800 hover:bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="replacementGuard"
+                        value={g.id}
+                        checked={selectedReplacementId === g.id}
+                        onChange={() => setSelectedReplacementId(g.id)}
+                        className="sr-only"
+                      />
+                      <span>
+                        {g.firstName} {g.lastName}
+                      </span>
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[10px] ${
+                          selectedReplacementId === g.id
+                            ? "bg-security-navy-700 text-white"
+                            : "bg-security-navy-100 text-security-navy-600"
+                        }`}
+                      >
+                        #{g.employeeNumber}
+                      </span>
+                    </div>
+                    {g.phone && <span className="text-[11px] opacity-80">{g.phone}</span>}
+                  </label>
+                ))
               )}
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-security-navy-100 dark:border-security-navy-800">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setReplaceModalOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  type="submit"
-                  disabled={!selectedReplacementId || !replacementReason.trim()}
-                  loading={loadingAction === "replace"}
-                  className="bg-security-navy-800 text-white"
-                >
-                  Confirm & Assign Reliever
-                </Button>
-              </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+
+          <Field label="Reason for Replacement *">
+            <Textarea
+              rows={2}
+              density="compact"
+              value={replacementReason}
+              onChange={(e) => setReplacementReason(e.target.value)}
+              placeholder="e.g. Original guard reported sick / AWOL no-show on morning roll call"
+              required
+            />
+          </Field>
+
+          {errorMsg && <AlertBanner variant="error">{errorMsg}</AlertBanner>}
+
+          <div className="flex justify-end gap-2 border-t border-security-navy-100 pt-3">
+            <Button variant="ghost" size="sm" onClick={() => setReplaceModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              disabled={!selectedReplacementId || !replacementReason.trim()}
+              loading={loadingAction === "replace"}
+            >
+              Confirm &amp; Assign Reliever
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Manual Correction Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-security-lg border border-security-navy-200 bg-white p-6 shadow-xl dark:border-security-navy-700 dark:bg-security-navy-900">
-            <h3 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-50">
-              Adjust Guard Attendance
-            </h3>
-            <p className="mt-1 text-xs text-security-navy-600 dark:text-security-navy-400">
-              Manual modifications are permanently recorded in the audit ledger and synchronize to payroll timesheets.
-            </p>
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Adjust Guard Attendance"
+        description="Manual modifications are permanently recorded in the audit ledger and synchronize to payroll timesheets."
+        size="sm"
+      >
+        <form onSubmit={handleAdjustSubmit} className="space-y-3">
+          <Field label="Clock-In (HH:MM)">
+            <Input
+              type="time"
+              value={customIn}
+              onChange={(e) => setCustomIn(e.target.value)}
+            />
+          </Field>
 
-            <form onSubmit={handleAdjustSubmit} className="mt-4 space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
-                  Clock-In (HH:MM)
-                </label>
-                <input
-                  type="time"
-                  value={customIn}
-                  onChange={(e) => setCustomIn(e.target.value)}
-                  className="input-modern mt-1 w-full"
-                />
-              </div>
+          <Field label="Clock-Out (HH:MM)">
+            <Input
+              type="time"
+              value={customOut}
+              onChange={(e) => setCustomOut(e.target.value)}
+            />
+          </Field>
 
-              <div>
-                <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
-                  Clock-Out (HH:MM)
-                </label>
-                <input
-                  type="time"
-                  value={customOut}
-                  onChange={(e) => setCustomOut(e.target.value)}
-                  className="input-modern mt-1 w-full"
-                />
-              </div>
+          <Field label="Reason for Adjustment *">
+            <Textarea
+              rows={2}
+              density="compact"
+              value={adjustReason}
+              onChange={(e) => setAdjustReason(e.target.value)}
+              placeholder="e.g. Guard battery died, confirmed on radio by controller"
+              required
+            />
+          </Field>
 
-              <div>
-                <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
-                  Reason for Adjustment <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  rows={2}
-                  value={adjustReason}
-                  onChange={(e) => setAdjustReason(e.target.value)}
-                  placeholder="e.g. Guard battery died, confirmed on radio by controller"
-                  required
-                  className="input-modern mt-1 w-full text-xs"
-                />
-              </div>
+          {errorMsg && <AlertBanner variant="error">{errorMsg}</AlertBanner>}
 
-              {errorMsg && (
-                <p className="text-xs text-red-600 font-medium">{errorMsg}</p>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setModalOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  type="submit"
-                  loading={loadingAction === "adjust"}
-                  className="bg-security-navy-800 text-white"
-                >
-                  Save & Log
-                </Button>
-              </div>
-            </form>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              loading={loadingAction === "adjust"}
+            >
+              Save &amp; Log
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {/* Mark Absent Modal */}
-      {absentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-security-lg border border-security-navy-200 bg-white p-6 shadow-xl dark:border-security-navy-700 dark:bg-security-navy-900">
-            <h3 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-50">
-              Mark Guard Absent
-            </h3>
-            <p className="mt-1 text-xs text-security-navy-600 dark:text-security-navy-400">
-              Confirm absence for {guard.guardName}. This will record 0 hours and flag the shift in payroll.
-            </p>
+      <Modal
+        open={absentModalOpen}
+        onClose={() => setAbsentModalOpen(false)}
+        title="Mark Guard Absent"
+        description={`Confirm absence for ${guard.guardName}. This will record 0 hours and flag the shift in payroll.`}
+        size="sm"
+      >
+        <form onSubmit={handleMarkAbsentSubmit} className="space-y-3">
+          <Field label="Reason for Absence *">
+            <Textarea
+              rows={2}
+              density="compact"
+              value={absentReason}
+              onChange={(e) => setAbsentReason(e.target.value)}
+              placeholder="e.g. No-show, no prior notice given to control room"
+              required
+            />
+          </Field>
 
-            <form onSubmit={handleMarkAbsentSubmit} className="mt-4 space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
-                  Reason for Absence <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  rows={2}
-                  value={absentReason}
-                  onChange={(e) => setAbsentReason(e.target.value)}
-                  placeholder="e.g. No-show, no prior notice given to control room"
-                  required
-                  className="input-modern mt-1 w-full text-xs"
-                />
-              </div>
+          {errorMsg && <AlertBanner variant="error">{errorMsg}</AlertBanner>}
 
-              {errorMsg && (
-                <p className="text-xs text-red-600 font-medium">{errorMsg}</p>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setAbsentModalOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  type="submit"
-                  loading={loadingAction === "absent"}
-                >
-                  Confirm Absent
-                </Button>
-              </div>
-            </form>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setAbsentModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              type="submit"
+              loading={loadingAction === "absent"}
+            >
+              Confirm Absent
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }
