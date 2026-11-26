@@ -43,12 +43,15 @@ import type { LeaveTypeCode, ParentalLeaveScenarioCode } from "../../services/le
 import { sessionManager } from "./session.service.js";
 import {
   startIncidentFlow,
+  startSmartIncidentFlow,
   handleIncidentSelectType,
   handleIncidentSelectSite,
   handleIncidentEnterDetails,
+  handleIncidentConfirm,
 } from "./incident-flow.service.js";
 import {
   startLeaveFlow,
+  startSmartLeaveFlow,
   handleLeaveSelectType,
   handleLeaveEnterStartDate,
   handleLeaveEnterEndDate,
@@ -57,6 +60,7 @@ import {
 } from "./leave-flow.service.js";
 import { handleStatusFlow } from "./status-flow.service.js";
 import { handleSupervisorHandoff } from "./handoff.service.js";
+import { answerEmployeeOperationalQuestion } from "./whatsapp-assistant.service.js";
 import {
   handleOfficeClockIn,
   handleOfficeClockOut,
@@ -259,6 +263,8 @@ export async function processIncomingMessage(
         return handleIncidentSelectSite(from, rawTrimmed, session);
       case "INCIDENT_ENTER_DETAILS":
         return handleIncidentEnterDetails(from, rawTrimmed, session);
+      case "INCIDENT_CONFIRM":
+        return handleIncidentConfirm(from, rawTrimmed, session);
       case "INCIDENT_AWAITING_PHOTO":
         // User typed a command instead of sending a photo -> clear photo wait state and continue
         sessionManager.clearSession(from);
@@ -273,6 +279,10 @@ export async function processIncomingMessage(
         return handleLeaveEnterReason(from, rawTrimmed, session);
       case "LEAVE_CONFIRM":
         return handleLeaveConfirm(from, rawTrimmed, session);
+      case "LEAVE_AWAITING_CERTIFICATE":
+        // User typed a command instead of sending a certificate -> clear wait state and continue
+        sessionManager.clearSession(from);
+        break;
       case "AWAITING_SUPERVISOR_CONFIRM":
         if (cmd === "1" || cmd === "yes" || cmd === "sup_yes" || cmd.includes("alert")) {
           return handleSupervisorHandoff(
@@ -394,9 +404,12 @@ export async function processIncomingMessage(
 
   // Optional AI Natural-Language Intent Routing (read-only direct, mutating via confirmation buttons)
   if (env.ai.enabled) {
+    const timeZone = await getCompanyTimezone(employee.companyId);
+    const todayIso = formatInTimeZone(new Date(), timeZone, "yyyy-MM-dd");
     const aiResult = await classifyWhatsAppIntent(rawTrimmed, {
       firstName: employee.firstName,
       employeeType: employee.employeeType,
+      todayIso,
     });
     if (aiResult && aiResult.confidence >= INTENT_CONFIDENCE_THRESHOLD && aiResult.intent !== "UNKNOWN") {
       sessionManager.resetUnrecognized(from);
@@ -423,6 +436,9 @@ export async function processIncomingMessage(
           return handleLeaveHistory(employee);
         case "STATUS":
           return handleStatusFlow(employee.id, employee.companyId);
+        case "COMPLIANCE_STATUS":
+        case "OPERATIONAL_QUESTION":
+          return answerEmployeeOperationalQuestion(employee, rawTrimmed, aiResult.intent);
         case "FAQ_HELP":
           return {
             sendInteractiveList: {
@@ -448,6 +464,14 @@ export async function processIncomingMessage(
             ],
           };
         case "INCIDENT_REPORT":
+          if (aiResult.incidentParams?.categoryKey || aiResult.incidentParams?.details) {
+            return startSmartIncidentFlow(
+              from,
+              employee.id,
+              employee.companyId,
+              aiResult.incidentParams
+            );
+          }
           return {
             reply: "Do you want to log a new *Incident Report*?",
             buttons: [
@@ -456,6 +480,14 @@ export async function processIncomingMessage(
             ],
           };
         case "LEAVE_APPLY":
+          if (aiResult.leaveParams?.leaveType) {
+            return startSmartLeaveFlow(
+              from,
+              employee.id,
+              employee.companyId,
+              aiResult.leaveParams
+            );
+          }
           return {
             reply: "Would you like to *Apply for Leave* or check your balance?",
             buttons: [
@@ -1142,7 +1174,41 @@ async function handleRoster(
 const UNSUPPORTED_TYPE_REPLY =
   "I can only read text messages and menu selections. Send *help* for available commands.";
 
-async function deliverProcessResult(from: string, result: ProcessResult): Promise<void> {
+async function recordAutomatedOutbound(
+  ctx: { companyId: string; employeeId: string } | undefined,
+  type: string,
+  text: string,
+  whatsappMessageId?: string
+): Promise<void> {
+  if (!ctx?.companyId || !ctx?.employeeId) return;
+  await prisma.whatsAppMessage
+    ?.create({
+      data: {
+        companyId: ctx.companyId,
+        employeeId: ctx.employeeId,
+        whatsappMessageId: whatsappMessageId ?? null,
+        direction: "outbound",
+        type,
+        text,
+        status: "sent",
+        sentByUserId: null,
+      },
+    })
+    ?.catch(() => undefined);
+}
+
+async function deliverProcessResult(
+  from: string,
+  result: ProcessResult,
+  explicitCtx?: { companyId: string; employeeId: string }
+): Promise<void> {
+  const session = sessionManager.getSession(from);
+  const ctx =
+    explicitCtx ??
+    (session?.companyId && session?.employeeId
+      ? { companyId: session.companyId, employeeId: session.employeeId }
+      : undefined);
+
   if ("sendInteractiveList" in result && result.sendInteractiveList) {
     const { body, buttonText, rows } = result.sendInteractiveList;
     const interactive = await sendInteractiveList(from, body, buttonText, rows);
@@ -1155,7 +1221,10 @@ async function deliverProcessResult(from: string, result: ProcessResult): Promis
       if (!fallback.success) {
         throw new Error(fallback.error ?? "Failed to send WhatsApp reply");
       }
+      await recordAutomatedOutbound(ctx, "text", HELP_TEXT, fallback.messageId);
+      return;
     }
+    await recordAutomatedOutbound(ctx, "interactive", body, interactive.messageId);
     return;
   }
 
@@ -1167,14 +1236,15 @@ async function deliverProcessResult(from: string, result: ProcessResult): Promis
         "[WhatsApp] Interactive location failed, falling back to text:",
         interactive.error
       );
-      const fallback = await sendText(
-        from,
-        `${body}\n\n(Use WhatsApp 📎 → Location → Send your current location)`
-      );
+      const fallbackBody = `${body}\n\n(Use WhatsApp 📎 → Location → Send your current location)`;
+      const fallback = await sendText(from, fallbackBody);
       if (!fallback.success) {
         throw new Error(fallback.error ?? "Failed to send WhatsApp reply");
       }
+      await recordAutomatedOutbound(ctx, "text", fallbackBody, fallback.messageId);
+      return;
     }
+    await recordAutomatedOutbound(ctx, "interactive", body, interactive.messageId);
     return;
   }
 
@@ -1187,7 +1257,10 @@ async function deliverProcessResult(from: string, result: ProcessResult): Promis
       if (!fallback.success) {
         throw new Error(fallback.error ?? "Failed to send WhatsApp reply");
       }
+      await recordAutomatedOutbound(ctx, "text", body, fallback.messageId);
+      return;
     }
+    await recordAutomatedOutbound(ctx, "interactive", body, btnRes.messageId);
     return;
   }
 
@@ -1199,12 +1272,16 @@ async function deliverProcessResult(from: string, result: ProcessResult): Promis
         if (!textRes.success) {
           throw new Error(textRes.error ?? "Failed to send WhatsApp reply");
         }
+        await recordAutomatedOutbound(ctx, "text", result.reply, textRes.messageId);
+      } else {
+        await recordAutomatedOutbound(ctx, "interactive", result.reply, btnRes.messageId);
       }
     } else {
       const sent = await sendText(from, result.reply);
       if (!sent.success) {
         throw new Error(sent.error ?? "Failed to send WhatsApp reply");
       }
+      await recordAutomatedOutbound(ctx, "text", result.reply, sent.messageId);
     }
 
     if (result.sendDocument) {
@@ -1216,6 +1293,11 @@ async function deliverProcessResult(from: string, result: ProcessResult): Promis
       if (!docSent) {
         throw new Error("Failed to send WhatsApp document");
       }
+      await recordAutomatedOutbound(
+        ctx,
+        "document",
+        `[Document: ${result.sendDocument.filename}]`
+      );
     }
   }
 }
@@ -1340,6 +1422,7 @@ export async function processLeaveDocumentAndSend(
 ): Promise<void> {
   const employee = await findEmployeeByPhone(from);
   if (!employee) return deliverProcessResult(from, { reply: "Phone number not registered. Contact HR to update your details." });
+  const empCtx = { companyId: employee.companyId, employeeId: employee.id };
 
   const session = sessionManager.getSession(from);
   const incidentMatch = caption?.trim().match(/^incident\s+([A-Za-z0-9_-]+)$/i)?.[1];
@@ -1349,54 +1432,80 @@ export async function processLeaveDocumentAndSend(
   if (incidentRef) {
     const res = await attachIncidentEvidence(employee, incidentRef, mediaId, declaredMimeType, filename);
     sessionManager.clearSession(from);
-    return deliverProcessResult(from, res);
+    return deliverProcessResult(from, res, empCtx);
   }
 
-  const requestId = caption?.trim().match(/^leave\s+([A-Za-z0-9_-]+)$/i)?.[1];
-  if (!requestId) {
-    return deliverProcessResult(from, {
-      reply:
-        "To attach evidence, please caption the image or document:\n" +
-        "• *incident <INCIDENT_NUMBER>* for incident photos\n" +
-        "• *leave <REQUEST_ID>* for medical certificates",
+  const explicitRequestId = caption?.trim().match(/^leave\s+([A-Za-z0-9_-]+)$/i)?.[1];
+  const isAwaitingSickCert =
+    session?.state === "LEAVE_AWAITING_CERTIFICATE" &&
+    typeof session.data?.leaveRequestId === "string";
+  let requestId =
+    explicitRequestId || (isAwaitingSickCert ? (session.data.leaveRequestId as string) : undefined);
+
+  if (!requestId && !caption?.trim()) {
+    const recentPendingSick = await prisma.leaveRequest.findFirst({
+      where: {
+        companyId: employee.companyId,
+        employeeId: employee.id,
+        leaveType: "SICK",
+        status: "PENDING",
+        createdAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+      },
+      orderBy: { createdAt: "desc" },
     });
+    if (recentPendingSick) {
+      requestId = recentPendingSick.id;
+    }
+  }
+
+  if (!requestId) {
+    return deliverProcessResult(
+      from,
+      {
+        reply:
+          "To attach evidence, please caption the image or document:\n" +
+          "• *incident <INCIDENT_NUMBER>* for incident photos\n" +
+          "• *leave <REQUEST_ID>* for medical certificates",
+      },
+      empCtx
+    );
   }
   const application = await prisma.leaveRequest.findFirst({
     where: { id: requestId, companyId: employee.companyId, employeeId: employee.id, leaveType: "SICK", status: { in: ["PENDING", "APPROVED"] } },
   });
-  if (!application) return deliverProcessResult(from, { reply: "That active sick leave request was not found for your verified phone number." });
+  if (!application) return deliverProcessResult(from, { reply: "That active sick leave request was not found for your verified phone number." }, empCtx);
   const allowed = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
-  if (!allowed.has(declaredMimeType)) return deliverProcessResult(from, { reply: "Leave evidence must be a PDF, JPEG, PNG, or WebP file." });
+  if (!allowed.has(declaredMimeType)) return deliverProcessResult(from, { reply: "Leave evidence must be a PDF, JPEG, PNG, or WebP file." }, empCtx);
   const auth = { Authorization: `Bearer ${config.whatsapp.accessToken}` };
   let metadataResponse: Response;
   try {
     metadataResponse = await fetch(`https://graph.facebook.com/${config.whatsapp.apiVersion}/${encodeURIComponent(mediaId)}?phone_number_id=${encodeURIComponent(config.whatsapp.phoneNumberId)}`, { headers: auth, signal: AbortSignal.timeout(WHATSAPP_MEDIA_TIMEOUT_MS) });
   } catch {
-    return deliverProcessResult(from, { reply: "WhatsApp could not retrieve that file. Please send it again." });
+    return deliverProcessResult(from, { reply: "WhatsApp could not retrieve that file. Please send it again." }, empCtx);
   }
-  if (!metadataResponse.ok) return deliverProcessResult(from, { reply: "WhatsApp could not retrieve that file. Please send it again." });
+  if (!metadataResponse.ok) return deliverProcessResult(from, { reply: "WhatsApp could not retrieve that file. Please send it again." }, empCtx);
   const metadata = await metadataResponse.json() as { url?: string; mime_type?: string; file_size?: number };
-  if (!metadata.url || (metadata.file_size ?? 0) > MAX_LEAVE_DOCUMENT_BYTES) return deliverProcessResult(from, { reply: "The leave document is missing or exceeds the 10MB limit." });
+  if (!metadata.url || (metadata.file_size ?? 0) > MAX_LEAVE_DOCUMENT_BYTES) return deliverProcessResult(from, { reply: "The leave document is missing or exceeds the 10MB limit." }, empCtx);
   let download: Response;
   try {
     download = await fetch(metadata.url, { headers: auth, signal: AbortSignal.timeout(WHATSAPP_MEDIA_TIMEOUT_MS) });
   } catch {
-    return deliverProcessResult(from, { reply: "The WhatsApp file link expired. Please send the document again." });
+    return deliverProcessResult(from, { reply: "The WhatsApp file link expired. Please send the document again." }, empCtx);
   }
-  if (!download.ok) return deliverProcessResult(from, { reply: "The WhatsApp file link expired. Please send the document again." });
+  if (!download.ok) return deliverProcessResult(from, { reply: "The WhatsApp file link expired. Please send the document again." }, empCtx);
   const contentLength = Number(download.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > MAX_LEAVE_DOCUMENT_BYTES) {
-    return deliverProcessResult(from, { reply: "The leave document is missing or exceeds the 10MB limit." });
+    return deliverProcessResult(from, { reply: "The leave document is missing or exceeds the 10MB limit." }, empCtx);
   }
   const mimeType = (metadata.mime_type ?? download.headers.get("content-type") ?? declaredMimeType).split(";", 1)[0]!.trim().toLowerCase();
   let buffer: Buffer;
   try {
     buffer = await readResponseBodyWithLimit(download, MAX_LEAVE_DOCUMENT_BYTES);
   } catch {
-    return deliverProcessResult(from, { reply: "The leave document failed file type or size validation." });
+    return deliverProcessResult(from, { reply: "The leave document failed file type or size validation." }, empCtx);
   }
   if (!allowed.has(mimeType) || !matchesMagicBytes(buffer, mimeType)) {
-    return deliverProcessResult(from, { reply: "The leave document failed file type or size validation." });
+    return deliverProcessResult(from, { reply: "The leave document failed file type or size validation." }, empCtx);
   }
   const key = `leave-medical-certificates/${employee.companyId}/${application.id}/${randomUUID()}.${extensionForMime(mimeType)}`;
   await storage.uploadFile({ key, body: buffer, contentType: mimeType });
@@ -1417,13 +1526,24 @@ export async function processLeaveDocumentAndSend(
     await storage.deleteFile(key).catch((cleanupError) => {
       console.error("Failed to remove orphaned WhatsApp leave document", cleanupError);
     });
-    return deliverProcessResult(from, {
-      reply: error instanceof LeaveV3Error ? error.message : "Could not attach the medical certificate. Contact HR.",
-    });
+    return deliverProcessResult(
+      from,
+      {
+        reply: error instanceof LeaveV3Error ? error.message : "Could not attach the medical certificate. Contact HR.",
+      },
+      empCtx
+    );
   }
-  await deliverProcessResult(from, {
-    reply: `Certificate received for leave ${application.id}. HR will complete the practitioner details.`,
-  });
+  if (isAwaitingSickCert) {
+    sessionManager.clearSession(from);
+  }
+  await deliverProcessResult(
+    from,
+    {
+      reply: `Certificate received for leave ${application.id}. HR will complete the practitioner details.`,
+    },
+    empCtx
+  );
 }
 
 export async function sendUnsupportedTypeReply(from: string): Promise<void> {

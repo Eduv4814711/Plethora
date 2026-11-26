@@ -1,6 +1,7 @@
 import { addDays, format, isValid, parseISO } from "date-fns";
 import { createLeaveRequest, LeaveV3Error } from "../../services/leave-v3.service.js";
 import type { LeaveTypeCode } from "../../services/leave-rules.js";
+import type { ExtractedLeaveParams } from "../../services/ai/whatsapp-intent.service.js";
 import { sessionManager, type ConversationSession } from "./session.service.js";
 
 export interface LeaveFlowResult {
@@ -21,22 +22,172 @@ const LEAVE_TYPE_MAP: Record<string, { code: LeaveTypeCode; label: string }> = {
   annual: { code: "ANNUAL", label: "Annual Leave" },
   sick: { code: "SICK", label: "Sick Leave" },
   family: { code: "FAMILY_RESPONSIBILITY", label: "Family Responsibility Leave" },
+  family_responsibility: { code: "FAMILY_RESPONSIBILITY", label: "Family Responsibility Leave" },
   study: { code: "STUDY", label: "Study Leave" },
 };
 
-function parseUserDate(input: string): Date | null {
-  const trimmed = input.trim().toLowerCase();
-  const today = new Date();
+const LEAVE_CODE_LABELS: Record<string, string> = {
+  ANNUAL: "Annual Leave",
+  SICK: "Sick Leave",
+  FAMILY_RESPONSIBILITY: "Family Responsibility Leave",
+  STUDY: "Study Leave",
+};
+
+const MONTH_INDEX: Record<string, number> = {
+  jan: 0,
+  january: 0,
+  feb: 1,
+  february: 1,
+  mar: 2,
+  march: 2,
+  apr: 3,
+  april: 3,
+  may: 4,
+  jun: 5,
+  june: 5,
+  jul: 6,
+  july: 6,
+  aug: 7,
+  august: 7,
+  sep: 8,
+  sept: 8,
+  september: 8,
+  oct: 9,
+  october: 9,
+  nov: 10,
+  november: 10,
+  dec: 11,
+  december: 11,
+};
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  sunday: 0,
+  sun: 0,
+  monday: 1,
+  mon: 1,
+  tuesday: 2,
+  tue: 2,
+  tues: 2,
+  wednesday: 3,
+  wed: 3,
+  thursday: 4,
+  thu: 4,
+  thur: 4,
+  thurs: 4,
+  friday: 5,
+  fri: 5,
+  saturday: 6,
+  sat: 6,
+};
+
+export function parseUserDate(input: string, referenceDate: Date = new Date()): Date | null {
+  const trimmed = input.trim().toLowerCase().replace(/\s+/g, " ");
+  const today = new Date(referenceDate);
   today.setHours(0, 0, 0, 0);
 
   if (trimmed === "today") return today;
   if (trimmed === "tomorrow") return addDays(today, 1);
 
-  // Check YYYY-MM-DD format strictly
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  // 1. YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const parsed = parseISO(trimmed);
+    return isValid(parsed) ? parsed : null;
+  }
 
-  const parsed = parseISO(trimmed);
-  return isValid(parsed) ? parsed : null;
+  // 2. DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (dmyMatch) {
+    const day = Number(dmyMatch[1]);
+    const month = Number(dmyMatch[2]) - 1;
+    const year = Number(dmyMatch[3]);
+    const candidate = new Date(year, month, day);
+    if (
+      candidate.getFullYear() === year &&
+      candidate.getMonth() === month &&
+      candidate.getDate() === day
+    ) {
+      return candidate;
+    }
+    return null;
+  }
+
+  // 3. "28 Nov" / "28 November 2026" or "Nov 28" / "November 28, 2026"
+  const dayMonthMatch =
+    trimmed.match(/^(\d{1,2})\s+([a-z]+)(?:\s+(\d{4}))?$/) ??
+    trimmed.match(/^([a-z]+)\s+(\d{1,2})(?:,?\s+(\d{4}))?$/);
+  if (dayMonthMatch) {
+    const isDayFirst = /^\d/.test(dayMonthMatch[1]!);
+    const day = Number(isDayFirst ? dayMonthMatch[1] : dayMonthMatch[2]);
+    const monthToken = (isDayFirst ? dayMonthMatch[2] : dayMonthMatch[1])!;
+    const explicitYear = dayMonthMatch[3] ? Number(dayMonthMatch[3]) : undefined;
+    const month = MONTH_INDEX[monthToken];
+    if (month !== undefined && day >= 1 && day <= 31) {
+      let year = explicitYear ?? today.getFullYear();
+      let candidate = new Date(year, month, day);
+      if (
+        candidate.getFullYear() === year &&
+        candidate.getMonth() === month &&
+        candidate.getDate() === day
+      ) {
+        if (explicitYear === undefined && candidate.getTime() < today.getTime() - 30 * 86_400_000) {
+          year += 1;
+          candidate = new Date(year, month, day);
+        }
+        return candidate;
+      }
+    }
+  }
+
+  // 4. Weekday names ("friday", "this monday", "next monday")
+  const weekdayMatch = trimmed.match(/^(?:(this|next)\s+)?([a-z]+)$/);
+  if (weekdayMatch) {
+    const modifier = weekdayMatch[1];
+    const dayToken = weekdayMatch[2]!;
+    const targetDow = WEEKDAY_INDEX[dayToken];
+    if (targetDow !== undefined) {
+      const currentDow = today.getDay();
+      let delta = (targetDow - currentDow + 7) % 7;
+      if (delta === 0) {
+        delta = modifier === "next" ? 7 : 0;
+      } else if (modifier === "next" && delta < 7) {
+        // "next monday" when today is Friday -> upcoming Monday (+3); when today is Monday -> +7
+      }
+      return addDays(today, delta);
+    }
+  }
+
+  return null;
+}
+
+function buildLeaveConfirmResult(
+  leaveTypeLabel: string,
+  startDateIso: string,
+  endDateIso: string,
+  days: number,
+  reason: string,
+  fastTracked = false
+): LeaveFlowResult {
+  const startFmt = format(parseISO(startDateIso), "d MMM yyyy");
+  const endFmt = format(parseISO(endDateIso), "d MMM yyyy");
+  const periodLabel = days === 1 ? startFmt : `${startFmt} – ${endFmt}`;
+  const header = fastTracked
+    ? `✨ *AI Pre-Filled Leave Application*\nPlease review and confirm:`
+    : `📋 *Please Confirm Your Leave Application*:`;
+
+  return {
+    reply:
+      `${header}\n\n` +
+      `• Type: *${leaveTypeLabel}*\n` +
+      `• Period: *${periodLabel}* (${days} day${days === 1 ? "" : "s"})\n` +
+      `• Reason: *${reason}*\n\n` +
+      `1️⃣ *Confirm & Submit*\n` +
+      `2️⃣ *Cancel Application*\n\n` +
+      `Reply *1* or *yes* to submit, or *cancel* to discard.`,
+    buttons: [
+      { id: "leave_confirm_yes", title: "Confirm & Submit" },
+      { id: "leave_confirm_cancel", title: "Cancel" },
+    ],
+  };
 }
 
 export async function startLeaveFlow(
@@ -65,6 +216,67 @@ export async function startLeaveFlow(
       { id: "leave_type_3", title: "3. Family Resp." },
     ],
   };
+}
+
+export async function startSmartLeaveFlow(
+  from: string,
+  employeeId: string,
+  companyId: string,
+  extracted?: ExtractedLeaveParams
+): Promise<LeaveFlowResult> {
+  if (!extracted?.leaveType) {
+    return startLeaveFlow(from, employeeId, companyId);
+  }
+
+  const leaveType = extracted.leaveType as LeaveTypeCode;
+  const leaveTypeLabel = LEAVE_CODE_LABELS[leaveType] ?? "Leave";
+
+  const parsedStart = extracted.startDateIso ? parseUserDate(extracted.startDateIso) : null;
+  if (!parsedStart) {
+    sessionManager.setSessionState(from, "LEAVE_ENTER_START_DATE", {
+      employeeId,
+      companyId,
+      startedAt: new Date().toISOString(),
+      leaveType,
+      leaveTypeLabel,
+      prefilledReason: extracted.reason,
+    });
+
+    return {
+      reply:
+        `📅 *Leave Start Date* (Step 2/4)\n\n` +
+        `Type: *${leaveTypeLabel}*\n\n` +
+        `When does your leave start?\n` +
+        `Reply with a date (e.g. \`${format(addDays(new Date(), 1), "yyyy-MM-dd")}\`, *28 Nov*, *tomorrow*, or *today*):\n\n` +
+        `(Type *cancel* to abort)`,
+    };
+  }
+
+  const parsedEndCandidate = extracted.endDateIso ? parseUserDate(extracted.endDateIso) : parsedStart;
+  const parsedEnd =
+    parsedEndCandidate && parsedEndCandidate.getTime() >= parsedStart.getTime()
+      ? parsedEndCandidate
+      : parsedStart;
+
+  const startDateIso = format(parsedStart, "yyyy-MM-dd");
+  const endDateIso = format(parsedEnd, "yyyy-MM-dd");
+  const days = Math.round((parsedEnd.getTime() - parsedStart.getTime()) / 86_400_000) + 1;
+  const defaultReason = leaveType === "SICK" ? "Medical illness" : "Personal Leave";
+  const reason = extracted.reason?.trim() || defaultReason;
+
+  sessionManager.setSessionState(from, "LEAVE_CONFIRM", {
+    employeeId,
+    companyId,
+    startedAt: new Date().toISOString(),
+    leaveType,
+    leaveTypeLabel,
+    startDate: startDateIso,
+    endDate: endDateIso,
+    days,
+    reason,
+  });
+
+  return buildLeaveConfirmResult(leaveTypeLabel, startDateIso, endDateIso, days, reason, true);
 }
 
 export async function handleLeaveSelectType(
@@ -97,7 +309,7 @@ export async function handleLeaveSelectType(
       `📅 *Leave Start Date* (Step 2/4)\n\n` +
       `Type: *${selected.label}*\n\n` +
       `When does your leave start?\n` +
-      `Reply with date in *YYYY-MM-DD* format (e.g. \`${format(addDays(new Date(), 1), "yyyy-MM-dd")}\`), or reply *tomorrow* or *today*:\n\n` +
+      `Reply with date in *YYYY-MM-DD* format (e.g. \`${format(addDays(new Date(), 1), "yyyy-MM-dd")}\`), *28 Nov*, *tomorrow*, or *today*:\n\n` +
       `(Type *cancel* to abort)`,
   };
 }
@@ -105,14 +317,14 @@ export async function handleLeaveSelectType(
 export async function handleLeaveEnterStartDate(
   from: string,
   text: string,
-  session: ConversationSession
+  _session: ConversationSession
 ): Promise<LeaveFlowResult> {
   const date = parseUserDate(text);
   if (!date) {
     return {
       reply:
         `⚠️ Invalid date format.\n\n` +
-        `Please enter the date using *YYYY-MM-DD* (e.g. \`2026-10-01\`), or type *tomorrow* or *today*.\n\n` +
+        `Please enter the date using *YYYY-MM-DD* (e.g. \`2026-10-01\`), *28 Nov*, *tomorrow*, or *today*.\n\n` +
         `Or type *cancel* to exit.`,
     };
   }
@@ -128,7 +340,7 @@ export async function handleLeaveEnterStartDate(
       `Start Date: *${format(date, "EEE, d MMM yyyy")}*\n\n` +
       `When is the last day of your leave?\n` +
       `• Reply *1* or *same* for a 1-day leave\n` +
-      `• Or enter the end date in *YYYY-MM-DD* format (e.g. \`${format(addDays(date, 2), "yyyy-MM-dd")}\`):`,
+      `• Or enter the end date (e.g. \`${format(addDays(date, 2), "yyyy-MM-dd")}\` or *30 Nov*):`,
     buttons: [
       { id: "leave_end_1day", title: "Single Day (1 day)" },
       { id: "leave_end_cancel", title: "Cancel" },
@@ -142,13 +354,18 @@ export async function handleLeaveEnterEndDate(
   session: ConversationSession
 ): Promise<LeaveFlowResult> {
   const clean = text.trim().toLowerCase();
+  if (clean === "leave_end_cancel") {
+    sessionManager.clearSession(from);
+    return { reply: "Leave application cancelled. Reply *menu* for available commands." };
+  }
+
   const startDate = parseISO(session.data.startDate);
 
   let endDate: Date | null = null;
   if (clean === "1" || clean === "same" || clean === "single" || clean === "leave_end_1day") {
     endDate = startDate;
   } else {
-    endDate = parseUserDate(clean);
+    endDate = parseUserDate(clean, startDate);
   }
 
   if (!endDate) {
@@ -169,6 +386,23 @@ export async function handleLeaveEnterEndDate(
 
   const days = Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1;
   const endDateIso = format(endDate, "yyyy-MM-dd");
+
+  if (typeof session.data.prefilledReason === "string" && session.data.prefilledReason.trim()) {
+    const reason = session.data.prefilledReason.trim();
+    sessionManager.setSessionState(from, "LEAVE_CONFIRM", {
+      endDate: endDateIso,
+      days,
+      reason,
+    });
+    return buildLeaveConfirmResult(
+      session.data.leaveTypeLabel,
+      session.data.startDate,
+      endDateIso,
+      days,
+      reason,
+      true
+    );
+  }
 
   sessionManager.setSessionState(from, "LEAVE_ENTER_REASON", {
     endDate: endDateIso,
@@ -196,24 +430,7 @@ export async function handleLeaveEnterReason(
   });
 
   const { leaveTypeLabel, startDate, endDate, days } = session.data;
-  const startFmt = format(parseISO(startDate), "d MMM yyyy");
-  const endFmt = format(parseISO(endDate), "d MMM yyyy");
-  const periodLabel = days === 1 ? startFmt : `${startFmt} – ${endFmt}`;
-
-  return {
-    reply:
-      `📋 *Please Confirm Your Leave Application*:\n\n` +
-      `• Type: *${leaveTypeLabel}*\n` +
-      `• Period: *${periodLabel}* (${days} day${days === 1 ? "" : "s"})\n` +
-      `• Reason: *${reason}*\n\n` +
-      `1️⃣ *Confirm & Submit*\n` +
-      `2️⃣ *Cancel Application*\n\n` +
-      `Reply *1* or *yes* to submit, or *cancel* to discard.`,
-    buttons: [
-      { id: "leave_confirm_yes", title: "Confirm & Submit" },
-      { id: "leave_confirm_cancel", title: "Cancel" },
-    ],
-  };
+  return buildLeaveConfirmResult(leaveTypeLabel, startDate, endDate, days, reason, false);
 }
 
 export async function handleLeaveConfirm(
@@ -245,11 +462,19 @@ export async function handleLeaveConfirm(
           leaveType === "FAMILY_RESPONSIBILITY" ? "CHILD_SICK" : undefined,
       });
 
-      sessionManager.clearSession(from);
+      if (leaveType === "SICK") {
+        sessionManager.setSessionState(from, "LEAVE_AWAITING_CERTIFICATE", {
+          employeeId: session.employeeId,
+          companyId: session.companyId,
+          leaveRequestId: request.id,
+        });
+      } else {
+        sessionManager.clearSession(from);
+      }
 
       const medicalNote =
         leaveType === "SICK"
-          ? `\n\n📄 *Medical Certificate*: If you have a doctor's certificate or note, please send it as a photo or PDF with caption: *leave ${request.id}*.`
+          ? `\n\n📄 *Medical Certificate*: Send your doctor's certificate right now as a photo or PDF to attach it automatically (or later with caption *leave ${request.id}*).`
           : "";
 
       return {

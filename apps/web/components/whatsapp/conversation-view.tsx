@@ -31,7 +31,7 @@ export function ConversationView({
 
   if (isLoading && messages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-security-navy-500 text-sm">
+      <div className="flex flex-1 items-center justify-center text-sm text-security-navy-500">
         Loading messages...
       </div>
     );
@@ -39,38 +39,70 @@ export function ConversationView({
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-security-navy-500 text-sm p-4">
-        No messages yet. Send a message to start the conversation.
+      <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-security-navy-500">
+        No messages in this thread yet. Send a message or ask the team member to message your WhatsApp line.
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-auto p-4 space-y-3">
-      {[...messages].reverse().map((m) => (
-        <div
-          key={m.id}
-          className={`flex ${m.direction === "outbound" ? "justify-end" : "justify-start"}`}
-        >
+    <div className="flex-1 space-y-3 overflow-auto bg-security-navy-50/30 p-4">
+      {[...messages].reverse().map((m) => {
+        const isOutbound = m.direction === "outbound";
+        const isAutomated = isOutbound && !m.sentByUserId;
+
+        return (
           <div
-            className={`max-w-[80%] rounded-security px-3 py-2 ${
-              m.direction === "outbound"
-                ? "bg-security-navy-700 text-white"
-                : "bg-security-navy-50 text-security-navy-900"
-            }`}
+            key={m.id}
+            className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
           >
-            <p className="text-sm whitespace-pre-wrap break-words">{m.text ?? ""}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs opacity-75">
-                {format(new Date(m.createdAt), "MMM d, HH:mm")}
-              </span>
-              {m.direction === "outbound" && m.status && (
-                <span className="text-xs opacity-75">• {m.status}</span>
-              )}
+            <div
+              className={`max-w-[82%] rounded-security-lg px-3.5 py-2.5 shadow-sm ${
+                !isOutbound
+                  ? "border border-security-navy-100 bg-white text-security-navy-900"
+                  : isAutomated
+                    ? "border border-security-navy-200 bg-security-navy-50 text-security-navy-900"
+                    : "bg-security-navy-900 text-white"
+              }`}
+            >
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <span
+                  className={`text-[11px] font-medium ${
+                    !isOutbound
+                      ? "text-security-navy-500"
+                      : isAutomated
+                        ? "text-security-navy-600"
+                        : "text-security-navy-200"
+                  }`}
+                >
+                  {!isOutbound ? "Employee" : isAutomated ? "Plethora automated" : "Operator"}
+                </span>
+                <span
+                  className={`font-mono text-[11px] tabular-nums ${
+                    !isOutbound || isAutomated ? "text-security-navy-400" : "text-security-navy-300"
+                  }`}
+                >
+                  {format(new Date(m.createdAt), "MMM d, HH:mm")}
+                </span>
+              </div>
+              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                {m.text ?? ""}
+              </p>
+              {isOutbound && m.status ? (
+                <div className="mt-1 flex justify-end">
+                  <span
+                    className={`text-[11px] ${
+                      isAutomated ? "text-security-navy-500" : "text-security-navy-300"
+                    }`}
+                  >
+                    {m.status}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
       <div ref={bottomRef} />
     </div>
   );

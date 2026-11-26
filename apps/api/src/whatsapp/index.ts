@@ -6,6 +6,7 @@ import { messagesRoutes } from "./routes/messages.js";
 import { templatesRoutes } from "./routes/templates.js";
 import { healthRoutes } from "./routes/health.js";
 import { subscriptionRoutes } from "./routes/subscription.js";
+import { aiAssistRoutes } from "./routes/ai-assist.js";
 
 export async function registerWhatsApp(app: FastifyInstance): Promise<void> {
   app.register(webhookRoutes);
@@ -17,6 +18,7 @@ export async function registerWhatsApp(app: FastifyInstance): Promise<void> {
       api.register(templatesRoutes);
       api.register(healthRoutes);
       api.register(subscriptionRoutes);
+      api.register(aiAssistRoutes);
     },
     { prefix: "/whatsapp" }
   );

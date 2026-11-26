@@ -415,7 +415,7 @@ describe("WhatsApp Conversation State Machine & Micro-Prompts", () => {
       expect(sessionManager.getSession(phone)?.state).toBe("LEAVE_ENTER_START_DATE");
 
       // Step 2: Validate invalid start date format
-      const invalidDate = await processIncomingMessage(phone, "next monday");
+      const invalidDate = await processIncomingMessage(phone, "sometime next month");
       expect("reply" in invalidDate).toBe(true);
       if ("reply" in invalidDate) {
         expect(invalidDate.reply).toMatch(/Invalid date format[\s\S]*YYYY-MM-DD/i);

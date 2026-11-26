@@ -965,6 +965,11 @@ export interface WhatsAppContact {
   lastName: string;
   phone: string | null;
   whatsappUrl: string | null;
+  jobRole?: string | null;
+  employeeType?: string | null;
+  lastMessageText?: string | null;
+  lastMessageDirection?: "inbound" | "outbound" | null;
+  lastMessageAt?: string | null;
 }
 
 export interface WhatsAppMessage {
@@ -978,13 +983,49 @@ export interface WhatsAppMessage {
   createdAt: string;
 }
 
+export interface WhatsAppAiSuggestResponse {
+  summary: string;
+  suggestions: string[];
+  operationalSnapshot: {
+    activeDuty: {
+      clockedIn: boolean;
+      siteName?: string;
+      clockedInAt?: string;
+    };
+    nextShift: {
+      date: string;
+      startTime: string;
+      endTime: string;
+      site: string;
+      post: string | null;
+    } | null;
+    recentLeaveRequests: Array<{
+      id: string;
+      leaveType: string;
+      startDate: string;
+      endDate: string;
+      status: string;
+    }>;
+    compliance: {
+      psiraGrade: string | null;
+      psiraNumber: string | null;
+      psiraExpiry: string | null;
+      armedGuard: boolean;
+      firearmCompetency: boolean;
+      firearmExpiry: string | null;
+    };
+  };
+  aiUsed: boolean;
+}
+
 export async function getWhatsAppContacts(
   token: string,
-  params?: { limit?: number; offset?: number }
+  params?: { limit?: number; offset?: number; search?: string }
 ): Promise<{ data: WhatsAppContact[]; total: number }> {
   const q = new URLSearchParams();
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.offset) q.set("offset", String(params.offset));
+  if (params?.search?.trim()) q.set("search", params.search.trim());
   const res = await authFetch(`/whatsapp/contacts?${q.toString()}`, token);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -992,6 +1033,37 @@ export async function getWhatsAppContacts(
   }
   const json = await res.json();
   return { data: json.data ?? [], total: json.total ?? 0 };
+}
+
+export async function suggestWhatsAppReplies(
+  token: string,
+  employeeId: string
+): Promise<WhatsAppAiSuggestResponse> {
+  const res = await authFetch("/whatsapp/ai-assist", token, {
+    method: "POST",
+    body: JSON.stringify({ mode: "suggest", employeeId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string; error?: string }).message ?? "Failed to generate AI suggestions");
+  }
+  return res.json();
+}
+
+export async function polishWhatsAppDraft(
+  token: string,
+  employeeId: string,
+  draft: string
+): Promise<{ original: string; polished: string; aiUsed: boolean }> {
+  const res = await authFetch("/whatsapp/ai-assist", token, {
+    method: "POST",
+    body: JSON.stringify({ mode: "polish", employeeId, draft }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string; error?: string }).message ?? "Failed to polish draft");
+  }
+  return res.json();
 }
 
 export async function getWhatsAppMessages(
