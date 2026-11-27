@@ -1,6 +1,8 @@
 import {
   addDaysToDateKey,
   DEFAULT_LABOUR_COMPLIANCE_SETTINGS,
+  getIsoWeekStartKey,
+  getSastDayOfWeek,
   hasMinimumPsiraGrade,
   SA_NBCPSS_RULES,
   type EffectiveHolidayEntry,
@@ -326,21 +328,63 @@ export function summarizeSolvedSchedule(params: {
     if (guardAssigns.length === 0) continue;
 
     const shiftInputs: ShiftClassificationInput[] = [];
-    // Add prior-week carryover context shifts so period week-1 ordinary caps match reality
+    // Add prior-week carryover context shifts across individual non-holiday days in the week
+    // (never a single monolithic block on Monday, which could fall on a public holiday).
     for (const [weekKey, hours] of Object.entries(guard.priorWeekWorkedHoursByWeekKey)) {
       if (hours <= 0) continue;
-      const start = new Date(`${weekKey}T06:00:00+02:00`);
-      const end = new Date(start.getTime() + hours * 3_600_000);
-      shiftInputs.push({
-        id: `prior:${guard.id}:${weekKey}`,
-        employeeId: guard.id,
-        siteId: request.siteId,
-        startTime: start,
-        endTime: end,
-        isScheduledOnRoster: true,
-        employeeCategory: guard.bceaCategory,
-        isCarryoverContextOnly: true,
-      });
+      let remainingHours = hours;
+      const candidateDays: string[] = [];
+      for (const dk of guard.priorWorkDateKeys) {
+        if (dk < request.periodStart && getIsoWeekStartKey(dk) === weekKey && !holidayEntries.has(dk)) {
+          candidateDays.push(dk);
+        }
+      }
+      for (let offset = 0; offset < 6; offset++) {
+        const dk = addDaysToDateKey(weekKey, offset);
+        if (dk >= request.periodStart) break;
+        if (!holidayEntries.has(dk) && getSastDayOfWeek(dk) !== 0 && !candidateDays.includes(dk)) {
+          candidateDays.push(dk);
+        }
+      }
+      if (candidateDays.length === 0) {
+        candidateDays.push(weekKey);
+      }
+      for (let dIdx = 0; dIdx < candidateDays.length && remainingHours > 0; dIdx++) {
+        const dk = candidateDays[dIdx]!;
+        const chunk = dIdx === candidateDays.length - 1 ? remainingHours : Math.min(12, remainingHours);
+        const start = new Date(`${dk}T06:00:00+02:00`);
+        const end = new Date(start.getTime() + chunk * 3_600_000);
+        shiftInputs.push({
+          id: `prior:${guard.id}:${weekKey}:${dk}`,
+          employeeId: guard.id,
+          siteId: request.siteId,
+          startTime: start,
+          endTime: end,
+          isScheduledOnRoster: true,
+          employeeCategory: guard.bceaCategory,
+          isCarryoverContextOnly: true,
+        });
+        remainingHours -= chunk;
+      }
+    }
+
+    // Add in-period cross-site shifts as carryover context so weekly ordinary buckets
+    // and daily rest gaps reflect shifts already worked at other sites.
+    for (const [dk, otherList] of Object.entries(guard.otherSiteShiftsByDate)) {
+      if (dk < request.periodStart || dk > request.periodEnd) continue;
+      for (let oIdx = 0; oIdx < otherList.length; oIdx++) {
+        const o = otherList[oIdx]!;
+        shiftInputs.push({
+          id: `other:${guard.id}:${dk}:${o.siteId}:${oIdx}`,
+          employeeId: guard.id,
+          siteId: o.siteId,
+          startTime: new Date(o.startTimeIso),
+          endTime: new Date(o.endTimeIso),
+          isScheduledOnRoster: true,
+          employeeCategory: guard.bceaCategory,
+          isCarryoverContextOnly: true,
+        });
+      }
     }
 
     let dayShifts = 0;

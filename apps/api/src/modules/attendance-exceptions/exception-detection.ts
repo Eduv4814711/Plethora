@@ -14,8 +14,11 @@ export type ShiftClockSnapshot = {
   scheduledEnd: Date;
   clockIn: Date | null;
   clockOut: Date | null;
+  attendanceStatus?: string | null;
   clockInLat?: number | null;
   clockInLng?: number | null;
+  clockOutLat?: number | null;
+  clockOutLng?: number | null;
   geofenceLat?: number | null;
   geofenceLng?: number | null;
   geofenceRadiusMeters?: number | null;
@@ -51,10 +54,7 @@ export type ShiftAttendanceResolutionTarget = {
   shiftType?: string | null;
 };
 
-const COVERED_ATTENDANCE_STATUSES = new Set([
-  "present",
-  "late",
-  "left_early",
+const COVERED_BY_OTHER_STATUSES = new Set([
   "reliever",
   "shift_swapped",
 ]);
@@ -99,7 +99,7 @@ export function attendanceSupersedesShiftExceptions(
     (row) =>
       row.approvalStatus === "reviewed" ||
       row.approvalStatus === "approved" ||
-      (Boolean(row.actualGuardId) && COVERED_ATTENDANCE_STATUSES.has(row.attendanceStatus))
+      (Boolean(row.actualGuardId) && COVERED_BY_OTHER_STATUSES.has(row.attendanceStatus))
   );
 }
 
@@ -131,27 +131,34 @@ export function detectExceptionsForShift(
   const out: DetectedException[] = [];
   const sid = snap.shiftId;
 
-  // Outside geofence on clock-in
+  // Outside geofence on clock-in or clock-out
   if (
-    snap.clockIn &&
-    snap.clockInLat != null &&
-    snap.clockInLng != null &&
     snap.geofenceLat != null &&
     snap.geofenceLng != null &&
     snap.geofenceRadiusMeters != null &&
     snap.geofenceRadiusMeters > 0
   ) {
-    const dist = haversineMeters(
-      snap.geofenceLat,
-      snap.geofenceLng,
-      snap.clockInLat,
-      snap.clockInLng
-    );
-    if (dist > snap.geofenceRadiusMeters) {
+    const inDist =
+      snap.clockIn && snap.clockInLat != null && snap.clockInLng != null
+        ? haversineMeters(snap.geofenceLat, snap.geofenceLng, snap.clockInLat, snap.clockInLng)
+        : null;
+    const outDist =
+      snap.clockOut && snap.clockOutLat != null && snap.clockOutLng != null
+        ? haversineMeters(snap.geofenceLat, snap.geofenceLng, snap.clockOutLat, snap.clockOutLng)
+        : null;
+
+    if (inDist != null && inDist > snap.geofenceRadiusMeters) {
       out.push({
         exceptionType: "OUTSIDE_GEOFENCE",
         severity: "MEDIUM",
-        description: `Clock-in was ${Math.round(dist)}m from site (allowed ${snap.geofenceRadiusMeters}m)`,
+        description: `Clock-in was ${Math.round(inDist)}m from site (allowed ${snap.geofenceRadiusMeters}m)`,
+        dedupeKey: `OUTSIDE_GEOFENCE:shift:${sid}`,
+      });
+    } else if (outDist != null && outDist > snap.geofenceRadiusMeters) {
+      out.push({
+        exceptionType: "OUTSIDE_GEOFENCE",
+        severity: "MEDIUM",
+        description: `Clock-out was ${Math.round(outDist)}m from site (allowed ${snap.geofenceRadiusMeters}m)`,
         dedupeKey: `OUTSIDE_GEOFENCE:shift:${sid}`,
       });
     }
@@ -194,7 +201,7 @@ export function detectExceptionsForShift(
     snap.scheduledStart.getTime() + ABSENT_THRESHOLD_MINUTES * 60_000;
 
   // Missed clock-in
-  if (!snap.clockIn && pastStartGrace && !pastAbsent) {
+  if (!snap.clockIn && snap.attendanceStatus !== "absent" && pastStartGrace && !pastAbsent) {
     out.push({
       exceptionType: "MISSED_CLOCK_IN",
       severity: "CRITICAL",
@@ -203,8 +210,8 @@ export function detectExceptionsForShift(
     });
   }
 
-  // Absent (no clock-in after longer threshold)
-  if (!snap.clockIn && pastAbsent) {
+  // Absent (no clock-in after longer threshold, unless already confirmed absent)
+  if (!snap.clockIn && snap.attendanceStatus !== "absent" && pastAbsent) {
     out.push({
       exceptionType: "ABSENT",
       severity: "CRITICAL",

@@ -89,7 +89,7 @@ function buildFallbackCopilotAnswer(question: string, s: CopilotMetricsSnapshot)
 export async function aiRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     "/health",
-    { preHandler: [authMiddleware] },
+    { preHandler: [authMiddleware, requireAnyCapability(["/", "/dashboard"], "view")] },
     async (_request, reply) => {
       const status = await checkLlmHealth();
       return reply.send(status);

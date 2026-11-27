@@ -194,7 +194,7 @@ function getCategoryCaps(category: BceaEmployeeCategory) {
   if (category === "general") {
     return {
       weeklyOrdinaryHours: SA_NBCPSS_RULES.generalStaffMaxWeeklyOrdinaryHours,
-      dailyMaxHours: SA_NBCPSS_RULES.securityOfficerMaxDailyHours, // allow up to 12h shift ceiling before flagging
+      dailyMaxHours: SA_NBCPSS_RULES.generalStaffMaxDailyHours,
       weeklyOvertimeCapHours: SA_NBCPSS_RULES.maxWeeklyOvertimeHours,
     };
   }
@@ -239,22 +239,25 @@ export function classifyEmployeePeriodShifts(params: {
   const periodWeekSet = new Set<string>();
   for (const s of periodRealShifts) {
     periodWeekSet.add(getIsoWeekStartKey(toSastDateKey(s.startTime)));
+    for (const seg of buildShiftSegments(s.startTime, s.endTime, params.settings.overnightBoundaryMode)) {
+      periodWeekSet.add(getIsoWeekStartKey(seg.dateKey));
+    }
   }
 
   let averagingOrdinaryUsedMin = 0;
   const averagingWeekCount = params.settings.averagingEnabled
-    ? Math.max(1, Math.min(params.settings.averagingWeeks, Math.max(1, periodWeekSet.size)))
+    ? Math.max(1, periodWeekSet.size)
     : 1;
   const averagingTotalOrdinaryCapMin =
     getCategoryCaps(defaultCat).weeklyOrdinaryHours * 60 * averagingWeekCount;
 
-  // Credential checks against latest worked shift date
+  // Credential checks against latest worked shift date (SAST calendar comparison)
   if (periodRealShifts.length > 0 && params.employeeCredentials) {
     const latestShift = periodRealShifts[periodRealShifts.length - 1];
     const latestDateKey = toSastDateKey(latestShift.startTime);
     if (
       params.employeeCredentials.psiraRegistrationExpiry &&
-      params.employeeCredentials.psiraRegistrationExpiry.getTime() < latestShift.startTime.getTime()
+      toSastDateKey(params.employeeCredentials.psiraRegistrationExpiry) < latestDateKey
     ) {
       allFlags.push({
         code: "PSIRA_EXPIRED",
@@ -268,7 +271,7 @@ export function classifyEmployeePeriodShifts(params: {
     if (
       params.employeeCredentials.firearmCompetency &&
       params.employeeCredentials.firearmCompetencyExpiry &&
-      params.employeeCredentials.firearmCompetencyExpiry.getTime() < latestShift.startTime.getTime()
+      toSastDateKey(params.employeeCredentials.firearmCompetencyExpiry) < latestDateKey
     ) {
       allFlags.push({
         code: "FIREARM_EXPIRED",
@@ -379,6 +382,7 @@ export function classifyEmployeePeriodShifts(params: {
     const category = shift.employeeCategory ?? defaultCat;
     const caps = getCategoryCaps(category);
     const weeklyOrdCapMin = caps.weeklyOrdinaryHours * 60;
+    let remainingDailyOrdinaryMin = caps.dailyMaxHours * 60;
 
     let shiftBasicMin = 0;
     let shiftOtMin = 0;
@@ -399,6 +403,7 @@ export function classifyEmployeePeriodShifts(params: {
       if (segNetMin <= 0) continue;
 
       const weekKey = getIsoWeekStartKey(seg.dateKey);
+      if (!shift.isCarryoverContextOnly) periodWeekSet.add(weekKey);
       if (!weeklyCategory.has(weekKey)) weeklyCategory.set(weekKey, category);
 
       const isPublicHoliday = params.holidays.has(seg.dateKey);
@@ -443,16 +448,22 @@ export function classifyEmployeePeriodShifts(params: {
 
       if (params.settings.averagingEnabled && !shift.isCarryoverContextOnly) {
         const availAvgMin = Math.max(0, averagingTotalOrdinaryCapMin - averagingOrdinaryUsedMin);
-        const dailyCapLeft = Math.min(availAvgMin, caps.dailyMaxHours * 60);
+        const dailyCapLeft = Math.min(availAvgMin, remainingDailyOrdinaryMin);
         ordMin = Math.min(withinScheduledMin, dailyCapLeft);
         overflowOtMin = withinScheduledMin - ordMin;
         averagingOrdinaryUsedMin += ordMin;
+        remainingDailyOrdinaryMin = Math.max(0, remainingDailyOrdinaryMin - ordMin);
+        weeklyOrdinaryMinUsed.set(weekKey, (weeklyOrdinaryMinUsed.get(weekKey) ?? 0) + ordMin);
       } else {
         const usedWeekMin = weeklyOrdinaryMinUsed.get(weekKey) ?? 0;
-        const remainingWeekCap = Math.max(0, weeklyOrdCapMin - usedWeekMin);
+        const remainingWeekCap = Math.max(
+          0,
+          Math.min(weeklyOrdCapMin - usedWeekMin, remainingDailyOrdinaryMin),
+        );
         ordMin = Math.min(withinScheduledMin, remainingWeekCap);
         overflowOtMin = withinScheduledMin - ordMin;
         weeklyOrdinaryMinUsed.set(weekKey, usedWeekMin + ordMin);
+        remainingDailyOrdinaryMin = Math.max(0, remainingDailyOrdinaryMin - ordMin);
       }
 
       const totalSegOtMin = pastScheduledMin + overflowOtMin;
@@ -547,13 +558,10 @@ export function classifyEmployeePeriodShifts(params: {
       });
     }
 
-    const restCapRequired = params.settings.fortnightlyRestEnabled
-      ? SA_NBCPSS_RULES.minFortnightlyRestHours
-      : SA_NBCPSS_RULES.minWeeklyRestHours;
-
     // Only enforce 36h check on weeks where guard actually worked >= 4 shifts (avoid flagging 1-shift partial boundary weeks)
-    const restCapMet =
-      params.settings.fortnightlyRestEnabled || weekIntervals.length < 4
+    let restCapMet = params.settings.fortnightlyRestEnabled
+      ? true
+      : weekIntervals.length < 4
         ? true
         : maxGapHours >= SA_NBCPSS_RULES.minWeeklyRestHours - 0.01;
 
@@ -567,9 +575,6 @@ export function classifyEmployeePeriodShifts(params: {
       });
     }
 
-    // Also suppress unused warning on restCapRequired
-    void restCapRequired;
-
     weeklyBuckets.push({
       weekStartKey,
       ordinaryHoursWorked: ordWorkedHours,
@@ -579,6 +584,44 @@ export function classifyEmployeePeriodShifts(params: {
       maxConsecutiveRestHours: round2(maxGapHours),
       restCapMet,
     });
+  }
+
+  if (params.settings.fortnightlyRestEnabled && weeklyBuckets.length >= 2) {
+    for (let i = 0; i < weeklyBuckets.length - 1; i++) {
+      const w1 = weeklyBuckets[i];
+      const w2 = weeklyBuckets[i + 1];
+      if (addDaysToDateKey(w1.weekStartKey, 7) !== w2.weekStartKey) continue;
+
+      const fortStartMs = new Date(`${w1.weekStartKey}T00:00:00.000Z`).getTime() - 2 * MS_PER_HOUR;
+      const fortEndMs = fortStartMs + 14 * 86_400_000;
+      const fortIntervals: Array<{ startMs: number; endMs: number }> = [];
+      for (const s of sorted) {
+        const sMs = Math.max(fortStartMs, s.startTime.getTime());
+        const eMs = Math.min(fortEndMs, s.endTime.getTime());
+        if (eMs > sMs) fortIntervals.push({ startMs: sMs, endMs: eMs });
+      }
+      if (fortIntervals.length < 8) continue;
+      fortIntervals.sort((a, b) => a.startMs - b.startMs);
+
+      let fortMaxGap = (fortIntervals[0].startMs - fortStartMs) / MS_PER_HOUR;
+      let prevEnd = fortIntervals[0].endMs;
+      for (let j = 1; j < fortIntervals.length; j++) {
+        fortMaxGap = Math.max(fortMaxGap, (fortIntervals[j].startMs - prevEnd) / MS_PER_HOUR);
+        prevEnd = Math.max(prevEnd, fortIntervals[j].endMs);
+      }
+      fortMaxGap = Math.max(fortMaxGap, (fortEndMs - prevEnd) / MS_PER_HOUR);
+
+      if (fortMaxGap < SA_NBCPSS_RULES.minFortnightlyRestHours - 0.01) {
+        w2.restCapMet = false;
+        allFlags.push({
+          code: "WEEKLY_REST_UNDER_36H",
+          severity: "warning",
+          dateKey: addDaysToDateKey(w2.weekStartKey, 6),
+          hoursDelta: round2(SA_NBCPSS_RULES.minFortnightlyRestHours - fortMaxGap),
+          message: `Fortnight of ${w1.weekStartKey}: max continuous rest ${round2(fortMaxGap)}h (below 60h fortnightly minimum)`,
+        });
+      }
+    }
   }
 
   return {

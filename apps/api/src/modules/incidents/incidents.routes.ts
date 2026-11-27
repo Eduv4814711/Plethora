@@ -314,6 +314,12 @@ export async function incidentsRoutes(app: FastifyInstance) {
     if (result.error === "not_found") {
       return reply.code(404).send({ error: "Not found", message: "Incident not found" });
     }
+    if (result.error === "self_approve") {
+      return reply.code(403).send({
+        error: "Forbidden",
+        message: "You cannot approve or reject an incident you reported",
+      });
+    }
     return reply.send(result);
     }
   );

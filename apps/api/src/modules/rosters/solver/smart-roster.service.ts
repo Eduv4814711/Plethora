@@ -1,7 +1,9 @@
+import { fromZonedTime } from "date-fns-tz";
 import type { SiteRosterShiftCode } from "@prisma/client";
 import { createAuditLog } from "../../../lib/audit.js";
 import { prisma } from "../../../lib/prisma.js";
 import { resolveSiteCoverageDays } from "../../../lib/site-coverage-days.js";
+import { dateKeyInTimeZone, getCompanyTimezone } from "../../../lib/timezone.js";
 import {
   addDaysToDateKey,
   buildEffectiveHolidaySet,
@@ -130,7 +132,7 @@ export async function updateSiteRosterSetup(
               id: { in: input.assignedGuardIds },
               companyId,
               employeeType: "security_officer",
-              status: { in: ["active", "reliever"] },
+              status: { in: ["active", "reliever", "training", "hired"] },
               OR: [
                 { jobRole: null },
                 { jobRole: { not: { startsWith: `${ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX}:` } } },
@@ -249,13 +251,19 @@ async function buildSolveRequestForSite(
   const nightStartTime = site.rosterNightShiftStartTime ?? fw.defaultNightStart;
   const nightEndTime = site.rosterNightShiftEndTime ?? fw.defaultNightEnd;
 
-  const sampleBounds = buildShiftUtcBounds(input.startDate, "day", {
+  const timeZone =
+    ((company?.settings as Record<string, unknown> | null)?.timezone as string | undefined)?.trim() ||
+    "Africa/Johannesburg";
+
+  const shiftTimingConfig = {
     dayStartTime,
     dayEndTime,
     nightStartTime,
     nightEndTime,
     shiftDurationHours: fw.shiftDurationHours,
-  });
+  };
+  const sampleBounds = buildShiftUtcBounds(input.startDate, "day", shiftTimingConfig);
+  const sampleNightBounds = buildShiftUtcBounds(input.startDate, "night", shiftTimingConfig);
 
   const dateKeys = enumerateDateKeys(input.startDate, input.endDate);
   const lookbackStart = addDaysToDateKey(input.startDate, -7);
@@ -337,17 +345,49 @@ async function buildSolveRequestForSite(
       });
     });
   } else {
-    posts.push({
-      id: null,
-      name: `${site.name} Post`,
-      dayRequired: site.rosterDayShiftGuardsRequired,
-      nightRequired: fw.id === "5on2off_day" ? 0 : site.rosterNightShiftGuardsRequired,
-      requiredPsiraGrade: null,
-      requiresFirearm: false,
-      requiredGender: mapSiteGenderToPost(site.rosterDayShiftGender),
-      dayAllowedDays: defaultDayDays,
-      nightAllowedDays: defaultNightDays,
-    });
+    const dayReq = site.rosterDayShiftGuardsRequired;
+    const nightReq = fw.id === "5on2off_day" ? 0 : site.rosterNightShiftGuardsRequired;
+    const dayGender = mapSiteGenderToPost(site.rosterDayShiftGender);
+    const nightGender = mapSiteGenderToPost(site.rosterNightShiftGender);
+
+    if (dayReq > 0 && nightReq > 0 && dayGender !== nightGender) {
+      posts.push(
+        {
+          id: null,
+          name: `${site.name} Day Post`,
+          dayRequired: dayReq,
+          nightRequired: 0,
+          requiredPsiraGrade: null,
+          requiresFirearm: false,
+          requiredGender: dayGender,
+          dayAllowedDays: defaultDayDays,
+          nightAllowedDays: [],
+        },
+        {
+          id: null,
+          name: `${site.name} Night Post`,
+          dayRequired: 0,
+          nightRequired: nightReq,
+          requiredPsiraGrade: null,
+          requiresFirearm: false,
+          requiredGender: nightGender,
+          dayAllowedDays: [],
+          nightAllowedDays: defaultNightDays,
+        },
+      );
+    } else {
+      posts.push({
+        id: null,
+        name: `${site.name} Post`,
+        dayRequired: dayReq,
+        nightRequired: nightReq,
+        requiredPsiraGrade: null,
+        requiresFirearm: false,
+        requiredGender: nightReq > 0 && dayReq === 0 ? nightGender : dayGender,
+        dayAllowedDays: defaultDayDays,
+        nightAllowedDays: defaultNightDays,
+      });
+    }
   }
 
   // Load candidate guards: assigned guards + reliever pool (or all active guards if site has 0 assigned yet)
@@ -417,8 +457,8 @@ async function buildSolveRequestForSite(
               employeeId: { in: candidateIds },
               siteId: { not: siteId },
               status: { in: ["created", "assigned", "active", "completed", "verified"] },
-              startTime: { lt: new Date(`${addDaysToDateKey(input.endDate, 2)}T00:00:00+02:00`) },
-              endTime: { gt: new Date(`${addDaysToDateKey(input.startDate, -2)}T00:00:00+02:00`) },
+              startTime: { lt: fromZonedTime(`${addDaysToDateKey(input.endDate, 2)}T00:00:00`, timeZone) },
+              endTime: { gt: fromZonedTime(`${lookbackStart}T00:00:00`, timeZone) },
             },
             select: {
               employeeId: true,
@@ -446,13 +486,17 @@ async function buildSolveRequestForSite(
   const priorHoursMap = new Map<string, Record<string, number>>();
   const priorDatesMap = new Map<string, string[]>();
   const priorLastShiftMap = new Map<string, "day" | "night" | "off" | null>();
+  const seenLookbackGuardDates = new Set<string>();
 
   for (const row of lookbackGenerated) {
     const dk = dateKey(row.rosterDate);
     const wk = getIsoWeekStartKey(dk);
+    const rowHours =
+      row.shiftType === "night" ? sampleNightBounds.durationHours : sampleBounds.durationHours;
+    seenLookbackGuardDates.add(`${row.guardId}:${dk}`);
     if (!priorHoursMap.has(row.guardId)) priorHoursMap.set(row.guardId, {});
     const hrs = priorHoursMap.get(row.guardId)!;
-    hrs[wk] = (hrs[wk] ?? 0) + sampleBounds.durationHours;
+    hrs[wk] = (hrs[wk] ?? 0) + rowHours;
 
     if (!priorDatesMap.has(row.guardId)) priorDatesMap.set(row.guardId, []);
     priorDatesMap.get(row.guardId)!.push(dk);
@@ -467,10 +511,11 @@ async function buildSolveRequestForSite(
 
   const otherShiftsMap = new Map<string, SmartRosterGuardInput["otherSiteShiftsByDate"]>();
   for (const s of otherSiteShifts) {
-    const dk = toSastDateKey(s.startTime);
+    const dk = dateKeyInTimeZone(s.startTime, timeZone);
     const wk = getIsoWeekStartKey(dk);
-    // Also fold lookback other-site shifts into weekly hours
-    if (dk < input.startDate) {
+    // Also fold lookback other-site shifts into weekly hours without double-counting generated rows
+    if (dk < input.startDate && !seenLookbackGuardDates.has(`${s.employeeId}:${dk}`)) {
+      seenLookbackGuardDates.add(`${s.employeeId}:${dk}`);
       if (!priorHoursMap.has(s.employeeId)) priorHoursMap.set(s.employeeId, {});
       const hrs = priorHoursMap.get(s.employeeId)!;
       hrs[wk] = (hrs[wk] ?? 0) + Math.max(0, (s.endTime.getTime() - s.startTime.getTime()) / 3_600_000);
@@ -628,6 +673,7 @@ export async function applySmartRoster(
         id: { in: uniqueGuardIds },
         companyId,
         employeeType: "security_officer",
+        status: { in: ["active", "reliever", "training", "hired"] },
         OR: [
           { jobRole: null },
           { jobRole: { not: { startsWith: `${ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX}:` } } },
@@ -640,10 +686,22 @@ export async function applySmartRoster(
     }
   }
 
-  const startDt = dateOnly(input.startDate);
-  const endDt = dateOnly(input.endDate);
-  const publishRangeStart = startDt;
-  const publishRangeEnd = new Date(endDt.getTime() + 2 * 86_400_000);
+  const uniquePostIds = [
+    ...new Set(input.assignments.map((a) => a.postId).filter((id): id is string => Boolean(id))),
+  ];
+  if (uniquePostIds.length > 0) {
+    const validPosts = await prisma.sitePost.findMany({
+      where: { id: { in: uniquePostIds }, siteId },
+      select: { id: true },
+    });
+    if (validPosts.length !== uniquePostIds.length) {
+      throw new Error("All assigned posts must belong to this site");
+    }
+  }
+
+  const timeZone = await getCompanyTimezone(companyId);
+  const publishRangeStart = fromZonedTime(`${input.startDate}T00:00:00`, timeZone);
+  const publishRangeEnd = fromZonedTime(`${addDaysToDateKey(input.endDate, 1)}T00:00:00`, timeZone);
 
   // Never overwrite shifts already clocked/completed/verified in live attendance
   const protectedShifts = await prisma.shift.findMany({
@@ -651,12 +709,11 @@ export async function applySmartRoster(
       companyId,
       siteId,
       status: { notIn: ["created", "assigned"] },
-      startTime: { lt: publishRangeEnd },
-      endTime: { gt: publishRangeStart },
+      startTime: { gte: publishRangeStart, lt: publishRangeEnd },
     },
     select: { employeeId: true, startTime: true },
   });
-  const protectedDateKeys = new Set(protectedShifts.map((s) => toSastDateKey(s.startTime)));
+  const protectedDateKeys = new Set(protectedShifts.map((s) => dateKeyInTimeZone(s.startTime, timeZone)));
 
   const fw = getSaSecurityFramework(input.frameworkId ?? site.operatingFramework);
   const shiftConfig = {
@@ -667,12 +724,13 @@ export async function applySmartRoster(
     shiftDurationHours: fw.shiftDurationHours,
   };
 
-  const workingAssignments = input.assignments.filter(
-    (a) =>
-      a.dateKey >= input.startDate &&
-      a.dateKey <= input.endDate &&
-      !protectedDateKeys.has(a.dateKey),
-  );
+  const dedupedAssignments = new Map<string, (typeof input.assignments)[number]>();
+  for (const a of input.assignments) {
+    if (a.dateKey >= input.startDate && a.dateKey <= input.endDate && !protectedDateKeys.has(a.dateKey)) {
+      dedupedAssignments.set(`${a.guardId}:${a.dateKey}`, a);
+    }
+  }
+  const workingAssignments = [...dedupedAssignments.values()];
 
   let appliedCount = 0;
   let publishedCount = 0;
@@ -699,9 +757,10 @@ export async function applySmartRoster(
       });
     }
 
+    const generatedIdByKey = new Map<string, string>();
     for (const a of workingAssignments) {
       const rosterDate = dateOnly(a.dateKey);
-      await tx.siteRosterGeneratedShift.upsert({
+      const genRow = await tx.siteRosterGeneratedShift.upsert({
         where: {
           siteId_guardId_rosterDate: {
             siteId,
@@ -724,38 +783,58 @@ export async function applySmartRoster(
           shiftType: a.shiftType === "night" ? "night" : "day",
           source: "pattern",
           sitePostId: a.postId ?? null,
+          publishedShiftId: null,
         },
+        select: { id: true },
       });
+      generatedIdByKey.set(`${a.guardId}:${a.dateKey}`, genRow.id);
       appliedCount += 1;
     }
 
     if (input.publishImmediately !== false) {
-      await tx.shift.deleteMany({
+      const replaceableShifts = await tx.shift.findMany({
         where: {
           companyId,
           siteId,
           status: { in: ["created", "assigned"] },
-          startTime: { lt: publishRangeEnd },
-          endTime: { gt: publishRangeStart },
+          startTime: { gte: publishRangeStart, lt: publishRangeEnd },
         },
+        select: { id: true, startTime: true },
       });
+      const replaceableIds = replaceableShifts
+        .filter((s) => !protectedDateKeys.has(dateKeyInTimeZone(s.startTime, timeZone)))
+        .map((s) => s.id);
+      if (replaceableIds.length > 0) {
+        await tx.shift.deleteMany({
+          where: { id: { in: replaceableIds } },
+        });
+      }
 
       if (workingAssignments.length > 0) {
-        const shiftRows = workingAssignments.map((a) => {
+        for (const a of workingAssignments) {
           const { startTime, endTime } = buildShiftUtcBounds(a.dateKey, a.shiftType, shiftConfig);
-          return {
-            companyId,
-            employeeId: a.guardId,
-            siteId,
-            shiftType: a.shiftType,
-            legacyPostName: "Smart Roster",
-            startTime,
-            endTime,
-            status: "assigned" as const,
-          };
-        });
-        const created = await tx.shift.createMany({ data: shiftRows });
-        publishedCount = created.count;
+          const createdShift = await tx.shift.create({
+            data: {
+              companyId,
+              employeeId: a.guardId,
+              siteId,
+              shiftType: a.shiftType,
+              legacyPostName: "Smart Roster",
+              startTime,
+              endTime,
+              status: "assigned",
+            },
+            select: { id: true },
+          });
+          const genId = generatedIdByKey.get(`${a.guardId}:${a.dateKey}`);
+          if (genId) {
+            await tx.siteRosterGeneratedShift.update({
+              where: { id: genId },
+              data: { publishedShiftId: createdShift.id },
+            });
+          }
+          publishedCount += 1;
+        }
       }
     }
   });
@@ -811,6 +890,8 @@ export async function quickEditRosterCell(
     where: {
       id: { in: checkIds },
       companyId,
+      employeeType: "security_officer",
+      status: { in: ["active", "reliever", "training", "hired"] },
       OR: [
         { jobRole: null },
         { jobRole: { not: { startsWith: `${ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX}:` } } },
@@ -822,8 +903,21 @@ export async function quickEditRosterCell(
     throw new Error("Guard does not belong to this company");
   }
 
+  const timeZone = await getCompanyTimezone(companyId);
   const rosterDate = dateOnly(input.rosterDate);
+  const dayWinStart = fromZonedTime(`${input.rosterDate}T00:00:00`, timeZone);
+  const dayWinEnd = fromZonedTime(`${addDaysToDateKey(input.rosterDate, 1)}T00:00:00`, timeZone);
   const warnings: string[] = [];
+
+  if (input.sitePostId) {
+    const validPost = await prisma.sitePost.findFirst({
+      where: { id: input.sitePostId, siteId },
+      select: { id: true },
+    });
+    if (!validPost) {
+      throw new Error("Post does not belong to this site");
+    }
+  }
 
   if (input.shiftCode !== "O") {
     const leaveConflict = await prisma.leaveRequest.findFirst({
@@ -848,22 +942,66 @@ export async function quickEditRosterCell(
         employeeId: targetGuardId,
         siteId: { not: siteId },
         status: { in: ["created", "assigned", "active"] },
-        startTime: { lt: new Date(`${addDaysToDateKey(input.rosterDate, 1)}T18:00:00+02:00`) },
-        endTime: { gt: new Date(`${input.rosterDate}T06:00:00+02:00`) },
+        startTime: { lt: fromZonedTime(`${addDaysToDateKey(input.rosterDate, 1)}T18:00:00`, timeZone) },
+        endTime: { gt: fromZonedTime(`${input.rosterDate}T06:00:00`, timeZone) },
       },
       include: { site: { select: { name: true } } },
     });
     if (otherShift) {
       warnings.push(`Note: guard also has a shift at ${otherShift.site?.name ?? "another site"} nearby.`);
     }
+
+    if (input.syncPublishedShift !== false) {
+      const protectedTargetShift = await prisma.shift.findFirst({
+        where: {
+          companyId,
+          siteId,
+          employeeId: targetGuardId,
+          status: { notIn: ["created", "assigned"] },
+          startTime: { gte: dayWinStart, lt: dayWinEnd },
+        },
+        select: { id: true },
+      });
+      if (protectedTargetShift) {
+        return {
+          error: "Target guard already has an active, completed, or verified shift on this date.",
+        };
+      }
+    }
   }
 
-  const shiftType = input.shiftCode === "N" ? "night" : input.shiftCode === "O" ? "off" : "day";
+  let resolvedWorkingType: "day" | "night" = input.shiftCode === "N" ? "night" : "day";
+  if (input.shiftCode === "R") {
+    const existingGen = await prisma.siteRosterGeneratedShift.findUnique({
+      where: {
+        siteId_guardId_rosterDate: { siteId, guardId: input.guardId, rosterDate },
+      },
+      select: { shiftType: true },
+    });
+    if (existingGen?.shiftType === "night") {
+      resolvedWorkingType = "night";
+    } else if (!existingGen) {
+      const existingPublished = await prisma.shift.findFirst({
+        where: {
+          companyId,
+          siteId,
+          employeeId: input.guardId,
+          startTime: { gte: dayWinStart, lt: dayWinEnd },
+        },
+        select: { shiftType: true },
+      });
+      if (existingPublished?.shiftType?.toLowerCase() === "night") {
+        resolvedWorkingType = "night";
+      }
+    }
+  }
+
+  const shiftType = input.shiftCode === "O" ? "off" : resolvedWorkingType;
   const fw = getSaSecurityFramework(site.operatingFramework);
   const bounds =
     input.shiftCode === "O"
       ? null
-      : buildShiftUtcBounds(input.rosterDate, input.shiftCode === "N" ? "night" : "day", {
+      : buildShiftUtcBounds(input.rosterDate, resolvedWorkingType, {
           dayStartTime: site.rosterDayShiftStartTime ?? fw.defaultDayStart,
           dayEndTime: site.rosterDayShiftEndTime ?? fw.defaultDayEnd,
           nightStartTime: site.rosterNightShiftStartTime ?? fw.defaultNightStart,
@@ -891,11 +1029,36 @@ export async function quickEditRosterCell(
           shiftCode: "O",
           shiftType: "off",
           source: "replacement",
+          publishedShiftId: null,
         },
       });
     }
 
-    await tx.siteRosterGeneratedShift.upsert({
+    if (!input.replacementGuardId) {
+      await tx.siteRosterManualOverride.upsert({
+        where: {
+          siteId_guardId_rosterDate: { siteId, guardId: targetGuardId, rosterDate },
+        },
+        create: {
+          companyId,
+          siteId,
+          guardId: targetGuardId,
+          rosterDate,
+          overrideShiftCode: input.shiftCode as SiteRosterShiftCode,
+          overrideShiftType: shiftType,
+          reason: input.reason ?? "Quick edit",
+          doesChangeBasePattern: false,
+          createdBy: userId,
+        },
+        update: {
+          overrideShiftCode: input.shiftCode as SiteRosterShiftCode,
+          overrideShiftType: shiftType,
+          reason: input.reason ?? "Quick edit",
+        },
+      });
+    }
+
+    const genRow = await tx.siteRosterGeneratedShift.upsert({
       where: {
         siteId_guardId_rosterDate: { siteId, guardId: targetGuardId, rosterDate },
       },
@@ -914,13 +1077,12 @@ export async function quickEditRosterCell(
         shiftType,
         source: input.replacementGuardId ? "replacement" : "manual_override",
         sitePostId: input.sitePostId ?? null,
+        ...(input.syncPublishedShift !== false ? { publishedShiftId: null } : {}),
       },
+      select: { id: true },
     });
 
     if (input.syncPublishedShift !== false) {
-      const dayWinStart = new Date(`${input.rosterDate}T00:00:00+02:00`);
-      const dayWinEnd = new Date(`${addDaysToDateKey(input.rosterDate, 1)}T00:00:00+02:00`);
-
       await tx.shift.deleteMany({
         where: {
           companyId,
@@ -932,17 +1094,22 @@ export async function quickEditRosterCell(
       });
 
       if (bounds && input.shiftCode !== "O") {
-        await tx.shift.create({
+        const createdShift = await tx.shift.create({
           data: {
             companyId,
             siteId,
             employeeId: targetGuardId,
-            shiftType: input.shiftCode === "N" ? "night" : "day",
+            shiftType: resolvedWorkingType,
             legacyPostName: "Roster quick edit",
             startTime: bounds.startTime,
             endTime: bounds.endTime,
             status: "assigned",
           },
+          select: { id: true },
+        });
+        await tx.siteRosterGeneratedShift.update({
+          where: { id: genRow.id },
+          data: { publishedShiftId: createdShift.id },
         });
       }
     }

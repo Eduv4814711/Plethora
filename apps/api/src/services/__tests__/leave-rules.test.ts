@@ -101,8 +101,9 @@ describe("sick leave — the universal formula", () => {
   it("requires a medical certificate for > 2 consecutive units, or a 3rd occurrence in 8 weeks", () => {
     expect(isMedicalCertificateRequired({ unitsRequested: 1, priorSickOccurrencesInTrailing8Weeks: 0 })).toBe(false);
     expect(isMedicalCertificateRequired({ unitsRequested: 3, priorSickOccurrencesInTrailing8Weeks: 0 })).toBe(true);
+    expect(isMedicalCertificateRequired({ unitsRequested: 1, priorSickOccurrencesInTrailing8Weeks: 1 })).toBe(false);
+    expect(isMedicalCertificateRequired({ unitsRequested: 1, priorSickOccurrencesInTrailing8Weeks: 2 })).toBe(true);
     expect(isMedicalCertificateRequired({ unitsRequested: 1, priorSickOccurrencesInTrailing8Weeks: 3 })).toBe(true);
-    expect(isMedicalCertificateRequired({ unitsRequested: 1, priorSickOccurrencesInTrailing8Weeks: 2 })).toBe(false);
   });
 });
 
@@ -173,6 +174,32 @@ describe("public holidays", () => {
     // so this exercises the pure date-shift logic directly instead.
     const holidays = publicHolidaysInRange(utc("2026-06-16"), utc("2026-06-16"));
     expect(holidays).toContain("2026-06-16");
+  });
+
+  it("computes dynamic SA statutory public holidays for future years (e.g. 2027 Easter & Sunday rollover)", () => {
+    // In 2027, Good Friday is 2027-03-26, Family Day is 2027-03-29; Mar 21 (Human Rights Day) is Sunday -> Mar 22 observed!
+    const marHolidays = publicHolidaysInRange(utc("2027-03-20"), utc("2027-03-31"));
+    expect(marHolidays).toContain("2027-03-22");
+    expect(marHolidays).toContain("2027-03-26");
+    expect(marHolidays).toContain("2027-03-29");
+  });
+
+  it("enforces strict > 4 months service boundary for Family Responsibility leave", () => {
+    // Joined 2026-01-15: on 2026-05-15 (exact 4 months) -> false; on 2026-05-16 (> 4 months) -> true
+    expect(
+      isEligibleForFamilyResponsibilityLeave({
+        employeeType: "general",
+        commencementDate: utc("2026-01-15"),
+        asOf: utc("2026-05-15"),
+      })
+    ).toBe(false);
+    expect(
+      isEligibleForFamilyResponsibilityLeave({
+        employeeType: "general",
+        commencementDate: utc("2026-01-15"),
+        asOf: utc("2026-05-16"),
+      })
+    ).toBe(true);
   });
 });
 

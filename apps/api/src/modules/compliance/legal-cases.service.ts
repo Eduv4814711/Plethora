@@ -58,11 +58,35 @@ export async function listLegalCases(
   return { items, total, limit, offset };
 }
 
+async function validateLegalCaseCompanyRefs(
+  companyId: string,
+  refs: { employeeId?: unknown; assignedToId?: unknown }
+) {
+  if (typeof refs.employeeId === "string" && refs.employeeId) {
+    const emp = await prisma.employee.findFirst({
+      where: { id: refs.employeeId, companyId },
+      select: { id: true },
+    });
+    if (!emp) {
+      throw Object.assign(new Error("Referenced employee not found"), { statusCode: 400 });
+    }
+  }
+  if (typeof refs.assignedToId === "string" && refs.assignedToId) {
+    const assignee = await prisma.user.findFirst({
+      where: { id: refs.assignedToId, companyId },
+      select: { id: true },
+    });
+    if (!assignee) {
+      throw Object.assign(new Error("Referenced assigned user not found"), { statusCode: 400 });
+    }
+  }
+}
+
 export async function getLegalCase(companyId: string, id: string) {
   return prisma.complianceLegalCase.findFirst({
     where: { id, companyId },
     include: {
-      employee: true,
+      employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
       assignedTo: { select: { id: true, name: true, email: true } },
     },
   });
@@ -73,6 +97,10 @@ export async function createLegalCase(
   data: Omit<Prisma.ComplianceLegalCaseUncheckedCreateInput, "companyId">,
   actorUserId?: string
 ) {
+  await validateLegalCaseCompanyRefs(companyId, {
+    employeeId: data.employeeId,
+    assignedToId: data.assignedToId,
+  });
   const legalCase = await prisma.complianceLegalCase.create({
     data: {
       ...data,
@@ -102,6 +130,10 @@ export async function updateLegalCase(
   data: Prisma.ComplianceLegalCaseUncheckedUpdateInput,
   actorUserId?: string
 ) {
+  await validateLegalCaseCompanyRefs(companyId, {
+    employeeId: data.employeeId,
+    assignedToId: data.assignedToId,
+  });
   const legalCase = await prisma.complianceLegalCase.update({
     where: { id, companyId },
     data,
@@ -183,11 +215,39 @@ export async function listRemediationPlans(
   return { items, total, limit, offset };
 }
 
+async function validateRemediationPlanCompanyRefs(
+  companyId: string,
+  refs: { obligationId?: unknown; ownerUserId?: unknown }
+) {
+  if (typeof refs.obligationId === "string" && refs.obligationId) {
+    const obligation = await prisma.complianceObligation.findFirst({
+      where: { id: refs.obligationId, companyId },
+      select: { id: true },
+    });
+    if (!obligation) {
+      throw Object.assign(new Error("Referenced compliance obligation not found"), { statusCode: 400 });
+    }
+  }
+  if (typeof refs.ownerUserId === "string" && refs.ownerUserId) {
+    const owner = await prisma.user.findFirst({
+      where: { id: refs.ownerUserId, companyId },
+      select: { id: true },
+    });
+    if (!owner) {
+      throw Object.assign(new Error("Referenced owner user not found"), { statusCode: 400 });
+    }
+  }
+}
+
 export async function createRemediationPlan(
   companyId: string,
   data: Omit<Prisma.ComplianceRemediationPlanUncheckedCreateInput, "companyId">,
   actorUserId?: string
 ) {
+  await validateRemediationPlanCompanyRefs(companyId, {
+    obligationId: data.obligationId,
+    ownerUserId: data.ownerUserId ?? actorUserId,
+  });
   const plan = await prisma.complianceRemediationPlan.create({
     data: {
       ...data,
@@ -218,6 +278,10 @@ export async function updateRemediationPlan(
   data: Prisma.ComplianceRemediationPlanUncheckedUpdateInput,
   actorUserId?: string
 ) {
+  await validateRemediationPlanCompanyRefs(companyId, {
+    obligationId: data.obligationId,
+    ownerUserId: data.ownerUserId,
+  });
   const plan = await prisma.complianceRemediationPlan.update({
     where: { id, companyId },
     data,

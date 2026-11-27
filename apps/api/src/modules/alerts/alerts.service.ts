@@ -118,12 +118,50 @@ export async function upsertAlert(input: UpsertAlertInput) {
 
     return { alert, created: true as const };
   } catch (err) {
-    // Race on unique (companyId, dedupeKey) — return existing
+    // Unique constraint on (companyId, dedupeKey): reopen if RESOLVED/DISMISSED, otherwise return existing.
     const again = await prisma.operationalAlert.findFirst({
       where: { companyId: input.companyId, dedupeKey: input.dedupeKey },
     });
-    if (again) return { alert: again, created: false as const };
-    throw err;
+    if (!again) throw err;
+
+    if (again.status === "RESOLVED" || again.status === "DISMISSED") {
+      const reopened = await prisma.operationalAlert.update({
+        where: { id: again.id },
+        data: {
+          title: input.title,
+          message: input.message,
+          priority: input.priority,
+          sourceModule: input.sourceModule,
+          sourceId: input.sourceId ?? null,
+          siteId: input.siteId ?? null,
+          employeeId: input.employeeId ?? null,
+          assignedToId: input.assignedToId ?? null,
+          metadata: (input.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
+          status: "OPEN",
+          resolvedAt: null,
+          resolvedById: null,
+        },
+      });
+
+      if (input.priority === "CRITICAL") {
+        const modulePath = MODULE_PATH_BY_SOURCE[input.sourceModule] ?? "/";
+        const linkUrl = alertLinkUrl(input.sourceModule, input.sourceId, input.siteId, reopened.id);
+        void notifyModuleUsers({
+          companyId: input.companyId,
+          modulePath,
+          title: input.title,
+          message: input.message,
+          dedupeKeyPrefix: `alert:${reopened.id}`,
+          sourceModule: input.sourceModule,
+          sourceId: reopened.id,
+          linkUrl,
+        }).catch(() => undefined);
+      }
+
+      return { alert: reopened, created: true as const };
+    }
+
+    return { alert: again, created: false as const };
   }
 }
 
@@ -182,7 +220,7 @@ export async function listAlerts(companyId: string, query: ListAlertsQuery) {
       },
     }),
     prisma.operationalAlert.count({ where }),
-    getAlertCounts(companyId),
+    getAlertCounts(companyId, query.siteId ? [query.siteId] : undefined),
   ]);
 
   // Sort CRITICAL → MEDIUM → LOW then newest

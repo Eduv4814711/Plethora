@@ -44,10 +44,11 @@ export function renderGenericCsv(
   const periodEndFormatted = formatExportDate(context.periodEnd, context.dateFormat);
 
   const rows: unknown[][] = lines.map((line) => {
+    const sundayAll = line.sundayHours + (line.sundayDoubleHours ?? 0);
     const totalPaidHours =
       line.basicHours +
       line.overtimeHours +
-      line.sundayHours +
+      sundayAll +
       line.publicHolidayHours +
       line.annualLeaveHours +
       line.sickLeaveHours +
@@ -65,7 +66,7 @@ export function renderGenericCsv(
       line.costCenterCode ?? "",
       formatHours(line.basicHours),
       formatHours(line.overtimeHours),
-      formatHours(line.sundayHours),
+      formatHours(sundayAll),
       formatHours(line.publicHolidayHours),
       formatHours(line.nightShiftHours),
       formatHours(line.annualLeaveHours),

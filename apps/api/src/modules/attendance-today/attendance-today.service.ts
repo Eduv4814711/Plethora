@@ -132,7 +132,7 @@ export async function getTodayAttendance(
           where: {
             companyId,
             shiftId: { in: shiftIds },
-            status: "OPEN",
+            status: { in: ["OPEN", "UNDER_REVIEW"] },
           },
           select: { shiftId: true, exceptionType: true, description: true, severity: true },
         })
@@ -150,9 +150,15 @@ export async function getTodayAttendance(
       : [],
   ]);
 
+  const severityRank = (sev: string | null | undefined) =>
+    sev === "CRITICAL" ? 3 : sev === "HIGH" ? 2 : sev === "MEDIUM" ? 1 : 0;
   const exceptionsByShift = new Map<string, (typeof exceptions)[0]>();
   for (const exc of exceptions) {
-    if (exc.shiftId) exceptionsByShift.set(exc.shiftId, exc);
+    if (!exc.shiftId) continue;
+    const prev = exceptionsByShift.get(exc.shiftId);
+    if (!prev || severityRank(exc.severity) > severityRank(prev.severity)) {
+      exceptionsByShift.set(exc.shiftId, exc);
+    }
   }
 
   const replacementsByShift = new Map<string, Record<string, unknown>>();
@@ -190,6 +196,7 @@ export async function getTodayAttendance(
       validationStatus: att?.validationStatus,
       source: att?.source,
       whatsappMessageId: att?.whatsappMessageId,
+      confirmedAbsent: att?.status === "absent",
       hasBlockingException: Boolean(exc && (exc.severity === "CRITICAL" || exc.exceptionType === "OUTSIDE_GEOFENCE")),
       now,
     });

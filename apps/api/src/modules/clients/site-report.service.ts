@@ -1,5 +1,7 @@
+import { addDays } from "date-fns";
+import { fromZonedTime } from "date-fns-tz";
 import { prisma } from "../../lib/prisma.js";
-import { dateKeyInTimeZone, getCompanyTimezone } from "../../lib/timezone.js";
+import { dateKeyInTimeZone, getCompanyTimezone, parseDateOnly } from "../../lib/timezone.js";
 import { getSiteTimesheet } from "../rosters/site-timesheets.service.js";
 
 /** A reporting window, always whole UTC days. `periodEnd` is inclusive. */
@@ -74,6 +76,17 @@ export function resolvePeriod(query: {
 export function periodEndExclusive(period: MonthPeriod): Date {
   const end = new Date(`${period.periodEnd}T00:00:00.000Z`);
   return new Date(end.getTime() + 24 * 60 * 60 * 1000);
+}
+
+function periodUtcBoundsInTimeZone(
+  period: MonthPeriod,
+  timeZone: string
+): { start: Date; endExclusive: Date } {
+  const nextDayKey = addDays(parseDateOnly(period.periodEnd), 1).toISOString().slice(0, 10);
+  return {
+    start: fromZonedTime(`${period.periodStart}T00:00:00`, timeZone),
+    endExclusive: fromZonedTime(`${nextDayKey}T00:00:00`, timeZone),
+  };
 }
 
 export type SiteExceptionSummary = {
@@ -203,6 +216,8 @@ async function loadIncidents(
   siteId: string,
   period: MonthPeriod
 ): Promise<SiteMonthReport["incidents"]> {
+  const timeZone = await getCompanyTimezone(companyId);
+  const { start, endExclusive } = periodUtcBoundsInTimeZone(period, timeZone);
   const incidents = await prisma.incident.findMany({
     where: {
       companyId,
@@ -212,8 +227,8 @@ async function loadIncidents(
       clientVisible: true,
       status: { not: "DRAFT" },
       incidentDateTime: {
-        gte: new Date(`${period.periodStart}T00:00:00.000Z`),
-        lt: periodEndExclusive(period),
+        gte: start,
+        lt: endExclusive,
       },
     },
     select: {
@@ -415,6 +430,11 @@ export async function getClientMonthEndSummary(
     orderBy: { name: "asc" },
   });
 
+  const timeZone = await getCompanyTimezone(companyId);
+  const { start: incidentStart, endExclusive: incidentEnd } = periodUtcBoundsInTimeZone(
+    period,
+    timeZone
+  );
   const siteRows: ClientMonthEndSite[] = [];
   for (const site of sites) {
     // Sequential: getSiteTimesheet seeds rows, and parallel seeding of the same period
@@ -433,8 +453,8 @@ export async function getClientMonthEndSummary(
           clientVisible: true,
           status: { not: "DRAFT" },
           incidentDateTime: {
-            gte: new Date(`${period.periodStart}T00:00:00.000Z`),
-            lt: periodEndExclusive(period),
+            gte: incidentStart,
+            lt: incidentEnd,
           },
         },
       }),

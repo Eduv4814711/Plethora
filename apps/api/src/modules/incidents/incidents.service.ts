@@ -181,7 +181,7 @@ export async function listIncidents(
   const [items, total] = await Promise.all([
     prisma.incident.findMany({
       where,
-      orderBy: [{ severity: "asc" }, { incidentDateTime: "desc" }],
+      orderBy: [{ severity: "desc" }, { incidentDateTime: "desc" }],
       take: query.limit ?? 50,
       skip: query.offset ?? 0,
       include: {
@@ -192,6 +192,17 @@ export async function listIncidents(
     }),
     prisma.incident.count({ where }),
   ]);
+  const severityRank: Record<IncidentSeverity, number> = {
+    CRITICAL: 0,
+    HIGH: 1,
+    MEDIUM: 2,
+    LOW: 3,
+  };
+  items.sort((a, b) => {
+    const rankDiff = severityRank[a.severity] - severityRank[b.severity];
+    if (rankDiff !== 0) return rankDiff;
+    return b.incidentDateTime.getTime() - a.incidentDateTime.getTime();
+  });
   return { items, total };
 }
 
@@ -218,6 +229,13 @@ export async function reviewIncident(params: {
     where: { id: params.incidentId, companyId: params.companyId },
   });
   if (!incident) return { error: "not_found" as const };
+
+  if (
+    (params.action === "approve" || params.action === "reject") &&
+    incident.reportedById === params.reviewerId
+  ) {
+    return { error: "self_approve" as const };
+  }
 
   let data: Prisma.IncidentUpdateInput = {};
   if (params.action === "submit") {
@@ -268,6 +286,22 @@ export async function reviewIncident(params: {
       assignedSupervisorId: updated.assignedSupervisorId,
       incidentNumber: updated.incidentNumber,
       reportedById: incident.reportedById,
+    });
+  }
+
+  if (params.action === "approve" || params.action === "reject" || params.action === "close") {
+    await prisma.operationalAlert.updateMany({
+      where: {
+        companyId: params.companyId,
+        sourceModule: "INCIDENTS",
+        sourceId: incident.id,
+        status: { in: ["OPEN", "ACKNOWLEDGED"] },
+      },
+      data: {
+        status: "RESOLVED",
+        resolvedAt: new Date(),
+        resolvedById: params.reviewerId,
+      },
     });
   }
 

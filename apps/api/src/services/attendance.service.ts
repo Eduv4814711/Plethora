@@ -98,7 +98,7 @@ export function calculateHours(
 
   let overtimeHours = 0;
   if (clockOut.getTime() > shiftEndTime.getTime()) {
-    overtimeHours = (clockOut.getTime() - shiftEndTime.getTime()) / msPerHour;
+    overtimeHours = Math.max(0, (clockOut.getTime() - Math.max(clockIn.getTime(), shiftEndTime.getTime())) / msPerHour);
   }
 
   return {

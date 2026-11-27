@@ -449,6 +449,7 @@ export async function employeesRoutes(app: FastifyInstance) {
       psiraGrade: q.psiraGrade,
       groupId: q.groupId,
       search: q.q || q.search,
+      includeSensitiveSearch: canViewEmployeeSensitiveFields(user),
       expiryFilter: q.expiryFilter as never,
       limit: q.limit ? Number(q.limit) : 50,
       offset: q.offset ? Number(q.offset) : 0,
@@ -480,21 +481,29 @@ export async function employeesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Employee not found" });
     }
 
+    const canExport = hasCapability(user, "/documents", "export") || hasCapability(user, "/employees", "export");
+    const canSeeSensitive =
+      user.isOwner ||
+      canAccessSensitiveData(user, "/employees") ||
+      hasCapability(user, "/documents", "view_sensitive");
+    const canSeeClientSensitive =
+      user.isOwner ||
+      canAccessSensitiveData(user, "/clients") ||
+      hasCapability(user, "/documents", "view_sensitive");
+
     const result = await listDocuments(user.companyId, {
       employeeId: id,
       documentCategory: q.documentCategory,
       verificationStatus: q.verificationStatus,
       status: q.status as never,
       search: q.q || q.search,
+      sensitivityScope: {
+        allowEmployeeSensitive: canSeeSensitive,
+        allowClientSensitive: canSeeClientSensitive,
+      },
       limit: q.limit ? Number(q.limit) : 100,
       offset: q.offset ? Number(q.offset) : 0,
     });
-
-    const canExport = hasCapability(user, "/documents", "export") || hasCapability(user, "/employees", "export");
-    const canSeeSensitive =
-      user.isOwner ||
-      canAccessSensitiveData(user, "/employees") ||
-      hasCapability(user, "/documents", "view_sensitive");
 
     const items = result.items
       .filter((doc) => {
@@ -515,7 +524,7 @@ export async function employeesRoutes(app: FastifyInstance) {
 
     return reply.send({
       items,
-      total: items.length,
+      total: result.total,
     });
   });
 

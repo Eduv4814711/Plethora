@@ -15,7 +15,7 @@ import {
   getNextSpanningPeriod,
   startOfUtcDay,
 } from "../../services/payroll-period.service.js";
-import { getCompanyTimezone, getShiftTimes } from "../../lib/timezone.js";
+import { dateKeyInTimeZone, getCompanyTimezone, getShiftTimes } from "../../lib/timezone.js";
 import { meetsSiteShiftGenderRule } from "../../services/rostering.service.js";
 import {
   isShiftCoveredOn,
@@ -540,6 +540,18 @@ export async function reconcileRosterContinuityForSite(
       const window = rosterWindow(site.company.settings, site.rosterPeriodCalendarId, now);
       const start = window.start > pattern.effectiveFrom ? window.start : dateOnly(pattern.effectiveFrom);
       const end = pattern.effectiveTo && pattern.effectiveTo < window.end ? dateOnly(pattern.effectiveTo) : window.end;
+      if (start > end) {
+        return {
+          siteId,
+          state: site.rosterContinuityState === "needs_attention" ? "needs_attention" : "running",
+          maintainedThrough: site.rosterMaintainedThrough ? dateKey(site.rosterMaintainedThrough) : dateKey(end),
+          generated: 0,
+          published: 0,
+          updated: 0,
+          removed: 0,
+          issues: [],
+        };
+      }
       const freezeBoundary = new Date(now.getTime() + FREEZE_HOURS * 60 * 60 * 1000);
       const guardIds = [
         ...new Set([
@@ -680,6 +692,8 @@ export async function reconcileRosterContinuityForSite(
                 shiftType: nextType,
                 message: `A day shift follows a night shift without a rest day on ${dayKey}.`,
               });
+              consecutiveWorkingDaysByGuard.set(guardId, 0);
+              previousWorkingTypeByGuard.delete(guardId);
               continue;
             }
             const streak = (consecutiveWorkingDaysByGuard.get(guardId) ?? 0) + 1;
@@ -691,6 +705,8 @@ export async function reconcileRosterContinuityForSite(
                 shiftType: nextType,
                 message: `A patterned guard would exceed six consecutive working days on ${dayKey}.`,
               });
+              consecutiveWorkingDaysByGuard.set(guardId, 0);
+              previousWorkingTypeByGuard.delete(guardId);
               continue;
             }
             consecutiveWorkingDaysByGuard.set(guardId, streak);
@@ -722,7 +738,7 @@ export async function reconcileRosterContinuityForSite(
         if (item.source !== "leave") continue;
         const key = `${item.guardId}:${dateKey(item.date)}`;
         const linkedShift = generatedByKey.get(key)?.publishedShift;
-        if (!linkedShift) continue;
+        if (!linkedShift || !["created", "assigned"].includes(linkedShift.status)) continue;
         const slot = `${dateKey(item.date)}:${linkedShift.shiftType}`;
         const bucket = leaveCoveredShiftPool.get(slot) ?? [];
         bucket.push({ generatedKey: key, shift: linkedShift });
@@ -847,7 +863,23 @@ export async function reconcileRosterContinuityForSite(
 
         const reassignment = reassignmentByReplacementKey.get(key);
         if (reassignment) {
-          await tx.shift.update({
+          const reassignmentConflict = shifts.some(
+            (shift) =>
+              shift.id !== reassignment.shift.id &&
+              shift.employeeId === item.guardId &&
+              overlaps(shiftStart, shiftEnd, shift.startTime, shift.endTime)
+          );
+          if (reassignmentConflict) {
+            issues.push({
+              code: "SHIFT_CONFLICT",
+              guardId: item.guardId,
+              dateKey: dateKey(item.date),
+              shiftType,
+              message: `The replacement guard already has an overlapping shift on ${dateKey(item.date)}.`,
+            });
+            continue;
+          }
+          const reassignedShift = await tx.shift.update({
             where: { id: reassignment.shift.id },
             data: {
               employeeId: item.guardId,
@@ -857,6 +889,7 @@ export async function reconcileRosterContinuityForSite(
               legacyPostName: "Continuous roster",
             },
           });
+          shifts.push(reassignedShift);
           await tx.siteRosterGeneratedShift.update({
             where: { id: generatedRow.id },
             data: { publishedShiftId: reassignment.shift.id },
@@ -893,6 +926,7 @@ export async function reconcileRosterContinuityForSite(
             status: "assigned",
           },
         });
+        shifts.push(createdShift);
         await tx.siteRosterGeneratedShift.update({
           where: { id: generatedRow.id },
           data: { publishedShiftId: createdShift.id },
@@ -1533,12 +1567,15 @@ export async function getReplacementSuggestions(
     const employeeShifts = shifts.filter((shift) => shift.employeeId === employee.id);
     if (employeeShifts.some((shift) => overlaps(shiftStart, shiftEnd, shift.startTime, shift.endTime))) continue;
     if (!meetsSiteShiftGenderRule(employee.gender, site, metadata.shiftType)) continue;
-    const typeByDate = new Map(
-      employeeShifts.map((shift) => [
-        dateKey(shift.startTime),
-        shift.shiftType?.toLowerCase() === "night" ? ("night" as const) : ("day" as const),
-      ])
-    );
+    const typeByDate = new Map<string, "day" | "night">();
+    for (const shift of employeeShifts) {
+      typeByDate.set(
+        dateKeyInTimeZone(shift.startTime, timeZone),
+        shift.shiftType?.toLowerCase() === "night" ? "night" : "day"
+      );
+    }
+    const targetDateKey = dateKey(workDate);
+    if (typeByDate.has(targetDateKey)) continue;
     const previousDateKey = dateKey(addDays(workDate, -1));
     const nextDateKey = dateKey(addDays(workDate, 1));
     if (metadata.shiftType === "day" && typeByDate.get(previousDateKey) === "night") continue;
@@ -1546,6 +1583,10 @@ export async function getReplacementSuggestions(
     let consecutiveDays = 0;
     for (let offset = 1; offset <= 6; offset += 1) {
       if (!typeByDate.has(dateKey(addDays(workDate, -offset)))) break;
+      consecutiveDays += 1;
+    }
+    for (let offset = 1; offset <= 6; offset += 1) {
+      if (!typeByDate.has(dateKey(addDays(workDate, offset)))) break;
       consecutiveDays += 1;
     }
     if (consecutiveDays >= 6) continue;

@@ -74,7 +74,7 @@ export async function handleOfficeClockIn(
     if (existing.timeIn && !existing.timeOut) {
       const inFmt = formatInTimeZone(existing.timeIn, timeZone, "HH:mm");
       return {
-        reply: `You are already clocked in for today at *${inFmt}* (Office).\n\nReply *2* or *clock out* when your workday ends, or *7* to view your status.`,
+        reply: `You are already clocked in for today at *${inFmt}* (Office).\n\nReply *2* or *clock out* when your workday ends, or *6* to view your status.`,
       };
     }
     if (existing.timeIn && existing.timeOut) {
@@ -82,7 +82,7 @@ export async function handleOfficeClockIn(
       const outFmt = formatInTimeZone(existing.timeOut, timeZone, "HH:mm");
       const hours = existing.hoursWorked != null ? Number(existing.hoursWorked).toFixed(2) : "0.00";
       return {
-        reply: `You have already completed your workday today.\n\n• In: *${inFmt}*\n• Out: *${outFmt}*\n• Total: *${hours} hrs*\n\nReply *7* for status or contact HR if you need an adjustment.`,
+        reply: `You have already completed your workday today.\n\n• In: *${inFmt}*\n• Out: *${outFmt}*\n• Total: *${hours} hrs*\n\nReply *6* for status or contact HR if you need an adjustment.`,
       };
     }
   }
@@ -186,7 +186,7 @@ export async function handleOfficeClockOut(
       const outFmt = formatInTimeZone(record.timeOut, timeZone, "HH:mm");
       const hours = record.hoursWorked != null ? Number(record.hoursWorked).toFixed(2) : "0.00";
       return {
-        reply: `You have already clocked out today at *${outFmt}* (clocked in at ${inFmt}). Total: *${hours} hrs*.\n\nReply *7* for status.`,
+        reply: `You have already clocked out today at *${outFmt}* (clocked in at ${inFmt}). Total: *${hours} hrs*.\n\nReply *6* for status.`,
       };
     }
     return {

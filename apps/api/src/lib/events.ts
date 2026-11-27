@@ -7,7 +7,9 @@ export type OperationalEventType =
   | "SUPERVISOR_ESCALATION"
   | "ATTENDANCE_VERIFIED"
   | "ROLL_CALL_DISPATCHED"
-  | "ALERT_CREATED";
+  | "ALERT_CREATED"
+  | "LEAVE_REQUEST_CREATED"
+  | "LEAVE_REQUEST_DECIDED";
 
 export interface OperationalEvent<T = unknown> {
   id: string;

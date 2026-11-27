@@ -75,7 +75,7 @@ export async function handleStatusFlow(
           ? `• ${pendingLeaves} pending application(s) awaiting review`
           : `• No pending leave applications`) +
         `\n\n` +
-        `Reply *1* to Clock In, *2* to Clock Out, *6* for Leave, or *menu* for all options.`,
+        `Reply *1* to Clock In, *2* to Clock Out, *5* for Leave, or *menu* for all options.`,
     };
   }
 

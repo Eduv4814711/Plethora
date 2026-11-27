@@ -3,6 +3,8 @@ import { authMiddleware } from "../middleware/auth.js";
 import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { parsePayrollCalendarSettings } from "../lib/payroll-calendar-settings.js";
+import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
+import { buildApprovedSiteDateCoverage } from "../services/timesheet.service.js";
 import {
   formatPayPeriodLabel,
   getPayPeriodContaining,
@@ -27,6 +29,7 @@ export async function reportsRoutes(app: FastifyInstance) {
       where: { id: companyId },
       select: { settings: true },
     });
+    const timeZone = await getCompanyTimezone(companyId);
     const calendar = parsePayrollCalendarSettings(company?.settings);
     const periods = listPayPeriods(calendar, {
       before: payPeriodCount - 1,
@@ -105,6 +108,7 @@ export async function reportsRoutes(app: FastifyInstance) {
           shift: {
             select: {
               siteId: true,
+              startTime: true,
               site: {
                 select: { name: true },
               },
@@ -112,8 +116,8 @@ export async function reportsRoutes(app: FastifyInstance) {
           },
         },
       }),
-      // Same per-site rule as payroll's aggregateTimesheets: sites with an
-      // approved/locked site timesheet report the approved hours, others fall
+      // Same per-site-date rule as payroll's aggregateTimesheets: site+dates with an
+      // approved/locked site timesheet report the approved hours, other dates fall
       // back to raw clock data. Keeps reports consistent with what gets paid.
       prisma.siteTimesheet.findMany({
         where: {
@@ -122,7 +126,7 @@ export async function reportsRoutes(app: FastifyInstance) {
           periodStart: { lte: end },
           periodEnd: { gte: start },
         },
-        select: { siteId: true },
+        select: { siteId: true, periodStart: true, periodEnd: true },
       }),
       prisma.siteTimesheetRow.findMany({
         where: {
@@ -202,7 +206,7 @@ export async function reportsRoutes(app: FastifyInstance) {
       };
     });
 
-    const approvedSiteIds = new Set(approvedTimesheetSites.map((t) => t.siteId));
+    const approvedCoverage = buildApprovedSiteDateCoverage(approvedTimesheetSites);
     const siteHours = new Map<string, number>();
     for (const row of approvedTimesheetRows) {
       const siteName = row.site?.name ?? "Unknown";
@@ -210,7 +214,10 @@ export async function reportsRoutes(app: FastifyInstance) {
       siteHours.set(siteName, (siteHours.get(siteName) ?? 0) + hrs);
     }
     for (const a of rawAttendanceHours) {
-      if (a.shift?.siteId && approvedSiteIds.has(a.shift.siteId)) continue;
+      const dateKey = a.shift?.startTime ? dateKeyInTimeZone(a.shift.startTime, timeZone) : null;
+      if (a.shift?.siteId && dateKey && approvedCoverage.has(`${a.shift.siteId}:${dateKey}`)) {
+        continue;
+      }
       const siteName = a.shift?.site?.name ?? "Unknown";
       const hrs = Number(a.hoursWorked ?? 0);
       siteHours.set(siteName, (siteHours.get(siteName) ?? 0) + hrs);

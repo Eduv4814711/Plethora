@@ -153,7 +153,7 @@ export async function runAutoRosterForSite(params: {
     );
   }).length;
 
-  if (!hasDayPost || !hasNightPost || rosterableGuards === 0) {
+  if ((!hasDayPost && !hasNightPost) || rosterableGuards === 0) {
     await prisma.site.update({
       where: { id: site.id },
       data: { autoRosterLastRunAt: new Date(), autoRosterLastStatus: "skipped" },

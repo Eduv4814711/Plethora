@@ -33,9 +33,11 @@ import { getCompanyTimezone } from "../../lib/timezone.js";
 import { addDays, format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import {
+  attachLeaveSupportingDocument,
   attachMedicalCertificate,
   cancelLeaveRequest,
   createLeaveRequest,
+  defaultDocumentKindForLeaveType,
   getLeaveBalances,
   LeaveV3Error,
 } from "../../services/leave-v3.service.js";
@@ -50,12 +52,15 @@ import {
   handleIncidentConfirm,
 } from "./incident-flow.service.js";
 import {
+  attachDraftDocumentToLeaveSession,
   startLeaveFlow,
   startSmartLeaveFlow,
   handleLeaveSelectType,
+  handleLeaveSelectFamilyReason,
   handleLeaveEnterStartDate,
   handleLeaveEnterEndDate,
   handleLeaveEnterReason,
+  handleLeaveAwaitingDocumentText,
   handleLeaveConfirm,
 } from "./leave-flow.service.js";
 import { handleStatusFlow } from "./status-flow.service.js";
@@ -112,7 +117,10 @@ export async function findEmployeeByPhone(waId: string): Promise<EmployeeWithCom
   if (!normalized) return null;
 
   const employees = await prisma.employee.findMany({
-    where: { status: "active", phone: { not: null } },
+    where: {
+      status: { in: ["active", "reliever", "training", "hired"] },
+      phone: { not: null },
+    },
     select: {
       id: true,
       companyId: true,
@@ -271,12 +279,16 @@ export async function processIncomingMessage(
         break;
       case "LEAVE_SELECT_TYPE":
         return handleLeaveSelectType(from, rawTrimmed, session);
+      case "LEAVE_SELECT_FAMILY_REASON":
+        return handleLeaveSelectFamilyReason(from, rawTrimmed, session);
       case "LEAVE_ENTER_START_DATE":
         return handleLeaveEnterStartDate(from, rawTrimmed, session);
       case "LEAVE_ENTER_END_DATE":
         return handleLeaveEnterEndDate(from, rawTrimmed, session);
       case "LEAVE_ENTER_REASON":
         return handleLeaveEnterReason(from, rawTrimmed, session);
+      case "LEAVE_AWAITING_DOCUMENT":
+        return handleLeaveAwaitingDocumentText(from, rawTrimmed, session);
       case "LEAVE_CONFIRM":
         return handleLeaveConfirm(from, rawTrimmed, session);
       case "LEAVE_AWAITING_CERTIFICATE":
@@ -621,6 +633,27 @@ async function handleClockIn(
     return handleOfficeClockIn(employee, fromWaId);
   }
 
+  if (typeof prisma.leaveRequest?.findFirst === "function") {
+    const timeZone = await getCompanyTimezone(employee.companyId);
+    const todayDateStr = formatInTimeZone(new Date(), timeZone, "yyyy-MM-dd");
+    const workDate = new Date(`${todayDateStr}T00:00:00.000Z`);
+    const approvedLeave = await prisma.leaveRequest.findFirst({
+      where: {
+        companyId: employee.companyId,
+        employeeId: employee.id,
+        status: "APPROVED",
+        startDate: { lte: workDate },
+        endDate: { gte: workDate },
+      },
+    });
+    if (approvedLeave) {
+      const leaveLabel = approvedLeave.leaveType.toLowerCase().replace(/_/g, " ");
+      return {
+        reply: `❌ You are on approved *${leaveLabel}* leave today (${todayDateStr}). You cannot clock in while on approved leave. Please contact HR if your leave dates have changed.`,
+      };
+    }
+  }
+
   // Operational guard: Look up officer's roster shift (allowing ±2 hr window)
   const shift = await findActiveRosterShift(employee.id, new Date());
   if (!shift) {
@@ -724,6 +757,7 @@ async function handleClockOut(
     if (session) delete session.data.lastLocation;
     const result = await operationalAttendanceService.validateAndRecordOperationalAttendance({
       employeeId: employee.id,
+      shiftId: attendance.shiftId,
       latitude: recentLocation.latitude,
       longitude: recentLocation.longitude,
       intent: "clock_out",
@@ -781,10 +815,8 @@ export async function processIncomingLocation(
 
   if (!pending) {
     // Cache the location coordinates in the session for instant 1-tap confirmation
-    const session = sessionManager.getSession(from);
-    if (session) {
-      session.data.lastLocation = { latitude, longitude, timestamp: Date.now() };
-    }
+    const session = sessionManager.getOrCreateSession(from, employee.id, employee.companyId);
+    session.data.lastLocation = { latitude, longitude, timestamp: Date.now() };
 
     const isGeneral = (employee.employeeType ?? "security_officer") === "general";
     if (isGeneral) {
@@ -883,6 +915,7 @@ export async function processIncomingLocation(
 
   const result = await operationalAttendanceService.validateAndRecordOperationalAttendance({
     employeeId: employee.id,
+    shiftId: pending.shiftId ?? undefined,
     latitude,
     longitude,
     intent: guardIntent,
@@ -1409,9 +1442,70 @@ async function attachIncidentEvidence(
   };
 }
 
+async function downloadAndValidateLeaveMedia(
+  mediaId: string,
+  declaredMimeType: string
+): Promise<{ ok: true; buffer: Buffer; mimeType: string } | { ok: false; errorReply: string }> {
+  const allowed = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
+  if (!allowed.has(declaredMimeType)) {
+    return { ok: false, errorReply: "Leave evidence must be a PDF, JPEG, PNG, or WebP file." };
+  }
+  const auth = { Authorization: `Bearer ${config.whatsapp.accessToken}` };
+  let metadataResponse: Response;
+  try {
+    metadataResponse = await fetch(
+      `https://graph.facebook.com/${config.whatsapp.apiVersion}/${encodeURIComponent(mediaId)}?phone_number_id=${encodeURIComponent(config.whatsapp.phoneNumberId)}`,
+      { headers: auth, signal: AbortSignal.timeout(WHATSAPP_MEDIA_TIMEOUT_MS) }
+    );
+  } catch {
+    return { ok: false, errorReply: "WhatsApp could not retrieve that file. Please send it again." };
+  }
+  if (!metadataResponse.ok) {
+    return { ok: false, errorReply: "WhatsApp could not retrieve that file. Please send it again." };
+  }
+  const metadata = (await metadataResponse.json()) as {
+    url?: string;
+    mime_type?: string;
+    file_size?: number;
+  };
+  if (!metadata.url || (metadata.file_size ?? 0) > MAX_LEAVE_DOCUMENT_BYTES) {
+    return { ok: false, errorReply: "The leave document is missing or exceeds the 10MB limit." };
+  }
+  let download: Response;
+  try {
+    download = await fetch(metadata.url, {
+      headers: auth,
+      signal: AbortSignal.timeout(WHATSAPP_MEDIA_TIMEOUT_MS),
+    });
+  } catch {
+    return { ok: false, errorReply: "The WhatsApp file link expired. Please send the document again." };
+  }
+  if (!download.ok) {
+    return { ok: false, errorReply: "The WhatsApp file link expired. Please send the document again." };
+  }
+  const contentLength = Number(download.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_LEAVE_DOCUMENT_BYTES) {
+    return { ok: false, errorReply: "The leave document is missing or exceeds the 10MB limit." };
+  }
+  const mimeType = (metadata.mime_type ?? download.headers.get("content-type") ?? declaredMimeType)
+    .split(";", 1)[0]!
+    .trim()
+    .toLowerCase();
+  let buffer: Buffer;
+  try {
+    buffer = await readResponseBodyWithLimit(download, MAX_LEAVE_DOCUMENT_BYTES);
+  } catch {
+    return { ok: false, errorReply: "The leave document failed file type or size validation." };
+  }
+  if (!allowed.has(mimeType) || !matchesMagicBytes(buffer, mimeType)) {
+    return { ok: false, errorReply: "The leave document failed file type or size validation." };
+  }
+  return { ok: true, buffer, mimeType };
+}
+
 /**
- * WhatsApp media receiver: handles both medical certificates (caption: leave ID)
- * and incident evidence (caption: incident ID or pending photo upload session).
+ * WhatsApp media receiver: handles incident evidence, in-flow leave proof
+ * (sick notes, study proof, family proof), and late leave document attachments.
  */
 export async function processLeaveDocumentAndSend(
   from: string,
@@ -1435,6 +1529,27 @@ export async function processLeaveDocumentAndSend(
     return deliverProcessResult(from, res, empCtx);
   }
 
+  // In-flow leave supporting document capture (before submitting to HR)
+  if (session?.state === "LEAVE_AWAITING_DOCUMENT") {
+    const media = await downloadAndValidateLeaveMedia(mediaId, declaredMimeType);
+    if (!media.ok) {
+      return deliverProcessResult(from, { reply: media.errorReply }, empCtx);
+    }
+    const ext = extensionForMime(media.mimeType);
+    const safeName = filename?.trim() || `leave-proof-${Date.now()}.${ext}`;
+    const key = `leave-documents/${employee.companyId}/drafts/${randomUUID()}.${ext}`;
+    await storage.uploadFile({ key, body: media.buffer, contentType: media.mimeType });
+
+    const leaveType = (session.data.leaveType as "ANNUAL" | "SICK" | "FAMILY_RESPONSIBILITY" | "STUDY") ?? "SICK";
+    const result = attachDraftDocumentToLeaveSession(from, session, {
+      kind: defaultDocumentKindForLeaveType(leaveType),
+      fileName: safeName,
+      mimeType: media.mimeType,
+      fileReference: storage.getAssetUrl(key),
+    });
+    return deliverProcessResult(from, result, empCtx);
+  }
+
   const explicitRequestId = caption?.trim().match(/^leave\s+([A-Za-z0-9_-]+)$/i)?.[1];
   const isAwaitingSickCert =
     session?.state === "LEAVE_AWAITING_CERTIFICATE" &&
@@ -1443,18 +1558,18 @@ export async function processLeaveDocumentAndSend(
     explicitRequestId || (isAwaitingSickCert ? (session.data.leaveRequestId as string) : undefined);
 
   if (!requestId && !caption?.trim()) {
-    const recentPendingSick = await prisma.leaveRequest.findFirst({
+    const recentPending = await prisma.leaveRequest.findFirst({
       where: {
         companyId: employee.companyId,
         employeeId: employee.id,
-        leaveType: "SICK",
+        leaveType: { in: ["SICK", "STUDY", "FAMILY_RESPONSIBILITY", "PARENTAL"] },
         status: "PENDING",
         createdAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
       },
       orderBy: { createdAt: "desc" },
     });
-    if (recentPendingSick) {
-      requestId = recentPendingSick.id;
+    if (recentPending) {
+      requestId = recentPending.id;
     }
   }
 
@@ -1465,61 +1580,41 @@ export async function processLeaveDocumentAndSend(
         reply:
           "To attach evidence, please caption the image or document:\n" +
           "• *incident <INCIDENT_NUMBER>* for incident photos\n" +
-          "• *leave <REQUEST_ID>* for medical certificates",
+          "• *leave <REQUEST_ID>* for sick notes or study/leave proof",
       },
       empCtx
     );
   }
   const application = await prisma.leaveRequest.findFirst({
-    where: { id: requestId, companyId: employee.companyId, employeeId: employee.id, leaveType: "SICK", status: { in: ["PENDING", "APPROVED"] } },
+    where: {
+      id: requestId,
+      companyId: employee.companyId,
+      employeeId: employee.id,
+      status: { in: ["PENDING", "APPROVED"] },
+    },
   });
-  if (!application) return deliverProcessResult(from, { reply: "That active sick leave request was not found for your verified phone number." }, empCtx);
-  const allowed = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
-  if (!allowed.has(declaredMimeType)) return deliverProcessResult(from, { reply: "Leave evidence must be a PDF, JPEG, PNG, or WebP file." }, empCtx);
-  const auth = { Authorization: `Bearer ${config.whatsapp.accessToken}` };
-  let metadataResponse: Response;
+  if (!application) {
+    return deliverProcessResult(from, { reply: "That active leave request was not found for your verified phone number." }, empCtx);
+  }
+
+  const media = await downloadAndValidateLeaveMedia(mediaId, declaredMimeType);
+  if (!media.ok) {
+    return deliverProcessResult(from, { reply: media.errorReply }, empCtx);
+  }
+
+  const ext = extensionForMime(media.mimeType);
+  const safeName = filename?.trim() || `leave-document-${application.id}.${ext}`;
+  const key = `leave-documents/${employee.companyId}/${application.id}/${randomUUID()}.${ext}`;
+  await storage.uploadFile({ key, body: media.buffer, contentType: media.mimeType });
+
   try {
-    metadataResponse = await fetch(`https://graph.facebook.com/${config.whatsapp.apiVersion}/${encodeURIComponent(mediaId)}?phone_number_id=${encodeURIComponent(config.whatsapp.phoneNumberId)}`, { headers: auth, signal: AbortSignal.timeout(WHATSAPP_MEDIA_TIMEOUT_MS) });
-  } catch {
-    return deliverProcessResult(from, { reply: "WhatsApp could not retrieve that file. Please send it again." }, empCtx);
-  }
-  if (!metadataResponse.ok) return deliverProcessResult(from, { reply: "WhatsApp could not retrieve that file. Please send it again." }, empCtx);
-  const metadata = await metadataResponse.json() as { url?: string; mime_type?: string; file_size?: number };
-  if (!metadata.url || (metadata.file_size ?? 0) > MAX_LEAVE_DOCUMENT_BYTES) return deliverProcessResult(from, { reply: "The leave document is missing or exceeds the 10MB limit." }, empCtx);
-  let download: Response;
-  try {
-    download = await fetch(metadata.url, { headers: auth, signal: AbortSignal.timeout(WHATSAPP_MEDIA_TIMEOUT_MS) });
-  } catch {
-    return deliverProcessResult(from, { reply: "The WhatsApp file link expired. Please send the document again." }, empCtx);
-  }
-  if (!download.ok) return deliverProcessResult(from, { reply: "The WhatsApp file link expired. Please send the document again." }, empCtx);
-  const contentLength = Number(download.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > MAX_LEAVE_DOCUMENT_BYTES) {
-    return deliverProcessResult(from, { reply: "The leave document is missing or exceeds the 10MB limit." }, empCtx);
-  }
-  const mimeType = (metadata.mime_type ?? download.headers.get("content-type") ?? declaredMimeType).split(";", 1)[0]!.trim().toLowerCase();
-  let buffer: Buffer;
-  try {
-    buffer = await readResponseBodyWithLimit(download, MAX_LEAVE_DOCUMENT_BYTES);
-  } catch {
-    return deliverProcessResult(from, { reply: "The leave document failed file type or size validation." }, empCtx);
-  }
-  if (!allowed.has(mimeType) || !matchesMagicBytes(buffer, mimeType)) {
-    return deliverProcessResult(from, { reply: "The leave document failed file type or size validation." }, empCtx);
-  }
-  const key = `leave-medical-certificates/${employee.companyId}/${application.id}/${randomUUID()}.${extensionForMime(mimeType)}`;
-  await storage.uploadFile({ key, body: buffer, contentType: mimeType });
-  try {
-    const today = new Date();
-    await attachMedicalCertificate({
+    await attachLeaveSupportingDocument({
       companyId: employee.companyId,
       actorUserId: employee.id,
       leaveRequestId: application.id,
-      practitionerName: "Submitted via WhatsApp — pending HR completion",
-      practitionerRegistrationNumber: "N/A",
-      consultationDate: today,
-      bookedOffStartDate: application.startDate,
-      bookedOffEndDate: application.endDate,
+      kind: defaultDocumentKindForLeaveType(application.leaveType as never),
+      fileName: safeName,
+      mimeType: media.mimeType,
       fileReference: storage.getAssetUrl(key),
     });
   } catch (error) {
@@ -1529,7 +1624,7 @@ export async function processLeaveDocumentAndSend(
     return deliverProcessResult(
       from,
       {
-        reply: error instanceof LeaveV3Error ? error.message : "Could not attach the medical certificate. Contact HR.",
+        reply: error instanceof LeaveV3Error ? error.message : "Could not attach the leave document. Contact HR.",
       },
       empCtx
     );
@@ -1540,7 +1635,7 @@ export async function processLeaveDocumentAndSend(
   await deliverProcessResult(
     from,
     {
-      reply: `Certificate received for leave ${application.id}. HR will complete the practitioner details.`,
+      reply: `✅ Supporting document attached to leave *${application.id}*. HR can now review it in the Leave module.`,
     },
     empCtx
   );

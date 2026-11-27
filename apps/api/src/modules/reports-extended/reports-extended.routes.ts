@@ -1,20 +1,67 @@
 import type { FastifyInstance } from "fastify";
+import { addDays } from "date-fns";
+import { fromZonedTime } from "date-fns-tz";
 import { authMiddleware } from "../../middleware/auth.js";
 import { requireCapability } from "../../middleware/authorization.js";
 import { prisma } from "../../lib/prisma.js";
 import { parsePayrollCalendarSettings } from "../../lib/payroll-calendar-settings.js";
 import { listPayPeriods } from "../../services/payroll-period.service.js";
+import { dateKeyInTimeZone, getCompanyTimezone, parseDateOnly } from "../../lib/timezone.js";
+import { buildApprovedSiteDateCoverage } from "../../services/timesheet.service.js";
 import {
   getExceptionAnalytics,
   getPeriodExportReadiness,
 } from "../attendance-exceptions/exceptions.service.js";
 import { toCsv } from "../../lib/csv.js";
 
-function parseRange(q: Record<string, string | undefined>) {
-  const end = q.endDate ? new Date(q.endDate) : new Date();
-  const start = q.startDate
-    ? new Date(q.startDate)
-    : new Date(end.getFullYear(), end.getMonth(), 1);
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function parseRange(
+  q: Record<string, string | undefined>,
+  timeZone: string
+): { start: Date; end: Date } | { error: string } {
+  const now = new Date();
+  let end: Date;
+  if (q.endDate) {
+    if (DATE_ONLY_PATTERN.test(q.endDate)) {
+      const nextDayKey = addDays(parseDateOnly(q.endDate), 1).toISOString().slice(0, 10);
+      end = new Date(fromZonedTime(`${nextDayKey}T00:00:00`, timeZone).getTime() - 1);
+    } else {
+      end = new Date(q.endDate);
+    }
+    if (Number.isNaN(end.getTime())) {
+      return { error: "Invalid endDate" };
+    }
+  } else {
+    end = now;
+  }
+
+  let start: Date;
+  if (q.startDate) {
+    start = DATE_ONLY_PATTERN.test(q.startDate)
+      ? fromZonedTime(`${q.startDate}T00:00:00`, timeZone)
+      : new Date(q.startDate);
+    if (Number.isNaN(start.getTime())) {
+      return { error: "Invalid startDate" };
+    }
+  } else {
+    const endKey = dateKeyInTimeZone(end, timeZone);
+    start = fromZonedTime(`${endKey.slice(0, 7)}-01T00:00:00`, timeZone);
+  }
+
+  if (start > end) {
+    return { error: "startDate must not be after endDate" };
+  }
+
   return { start, end };
 }
 
@@ -50,7 +97,16 @@ export async function reportsExtendedRoutes(app: FastifyInstance) {
     const user = request.user!;
     const { type } = request.params as { type: string };
     const q = request.query as Record<string, string | undefined>;
-    const { start, end } = parseRange(q);
+    const timeZone = await getCompanyTimezone(user.companyId);
+    const range = parseRange(q, timeZone);
+    if ("error" in range) {
+      return reply.code(400).send({ error: "Validation error", message: range.error });
+    }
+    const { start, end } = range;
+    const startKey = dateKeyInTimeZone(start, timeZone);
+    const endKey = dateKeyInTimeZone(end, timeZone);
+    const startDateOnly = parseDateOnly(startKey);
+    const endDateOnly = parseDateOnly(endKey);
     const format = q.format ?? "json";
     const siteId = q.siteId;
     const employeeId = q.employeeId;
@@ -113,37 +169,82 @@ export async function reportsExtendedRoutes(app: FastifyInstance) {
         total: exceptions.length,
       };
     } else if (type === "overtime") {
-      const attendances = await prisma.attendance.findMany({
-        where: {
-          overtimeHours: { gt: 0 },
-          shift: {
+      const [approvedSheets, approvedOtRows, rawAttendances] = await Promise.all([
+        prisma.siteTimesheet.findMany({
+          where: {
             companyId: user.companyId,
-            startTime: { gte: start, lte: end },
+            status: { in: ["approved", "locked"] },
+            periodStart: { lte: endDateOnly },
+            periodEnd: { gte: startDateOnly },
             ...(siteId ? { siteId } : {}),
-            ...(employeeId ? { employeeId } : {}),
+            ...(clientId ? { site: { clientId } } : {}),
           },
-        },
-        include: {
-          shift: {
-            include: {
-              employee: { select: { firstName: true, lastName: true } },
-              site: { select: { name: true } },
+          select: { siteId: true, periodStart: true, periodEnd: true },
+        }),
+        prisma.siteTimesheetRow.findMany({
+          where: {
+            companyId: user.companyId,
+            workDate: { gte: startDateOnly, lte: endDateOnly },
+            overtimeHours: { gt: 0 },
+            actualGuardId: { not: null },
+            siteTimesheet: { status: { in: ["approved", "locked"] } },
+            ...(siteId ? { siteId } : {}),
+            ...(employeeId ? { actualGuardId: employeeId } : {}),
+            ...(clientId ? { site: { clientId } } : {}),
+          },
+          include: {
+            actualGuard: { select: { firstName: true, lastName: true } },
+            site: { select: { name: true } },
+          },
+          take: 1000,
+        }),
+        prisma.attendance.findMany({
+          where: {
+            overtimeHours: { gt: 0 },
+            shift: {
+              companyId: user.companyId,
+              startTime: { gte: start, lte: end },
+              ...(siteId ? { siteId } : {}),
+              ...(employeeId ? { employeeId } : {}),
+              ...(clientId ? { site: { clientId } } : {}),
             },
           },
-        },
-        take: 1000,
+          include: {
+            shift: {
+              include: {
+                employee: { select: { firstName: true, lastName: true } },
+                site: { select: { name: true } },
+              },
+            },
+          },
+          take: 1000,
+        }),
+      ]);
+      const approvedCoverage = buildApprovedSiteDateCoverage(approvedSheets);
+      const uncoveredRaw = rawAttendances.filter((a) => {
+        const dk = dateKeyInTimeZone(a.shift.startTime, timeZone);
+        return !approvedCoverage.has(`${a.shift.siteId}:${dk}`);
       });
       headers = ["Date", "Guard", "Site", "Hours Worked", "Overtime Hours"];
-      rows = attendances.map((a) => [
-        a.shift.startTime.toISOString(),
-        a.shift.employee
-          ? `${a.shift.employee.firstName} ${a.shift.employee.lastName}`
-          : "",
-        a.shift.site?.name ?? "",
-        a.hoursWorked?.toString() ?? "",
-        a.overtimeHours?.toString() ?? "",
-      ]);
-      summary = { total: attendances.length };
+      rows = [
+        ...approvedOtRows.map((r) => [
+          r.workDate.toISOString().slice(0, 10),
+          r.actualGuard ? `${r.actualGuard.firstName} ${r.actualGuard.lastName}` : "",
+          r.site?.name ?? "",
+          r.hoursWorked?.toString() ?? "",
+          r.overtimeHours?.toString() ?? "",
+        ]),
+        ...uncoveredRaw.map((a) => [
+          a.shift.startTime.toISOString(),
+          a.shift.employee
+            ? `${a.shift.employee.firstName} ${a.shift.employee.lastName}`
+            : "",
+          a.shift.site?.name ?? "",
+          a.hoursWorked?.toString() ?? "",
+          a.overtimeHours?.toString() ?? "",
+        ]),
+      ];
+      summary = { total: rows.length };
     } else if (type === "leave") {
       const leaves = await prisma.leaveRequest.findMany({
         where: {
@@ -230,30 +331,64 @@ export async function reportsExtendedRoutes(app: FastifyInstance) {
       headers = ["Site", "Status", "Risk", "Guards", "Shifts", "Attendance %"];
       rows = [];
       for (const site of sites) {
-        const [shifts, attended] = await Promise.all([
-          prisma.shift.count({
+        const [shifts, approvedSheets, approvedWorkedRows, rawAttendances] = await Promise.all([
+          prisma.shift.findMany({
             where: {
               companyId: user.companyId,
               siteId: site.id,
               startTime: { gte: start, lte: end },
+            },
+            select: { id: true, startTime: true },
+          }),
+          prisma.siteTimesheet.findMany({
+            where: {
+              companyId: user.companyId,
+              siteId: site.id,
+              status: { in: ["approved", "locked"] },
+              periodStart: { lte: endDateOnly },
+              periodEnd: { gte: startDateOnly },
+            },
+            select: { siteId: true, periodStart: true, periodEnd: true },
+          }),
+          prisma.siteTimesheetRow.count({
+            where: {
+              companyId: user.companyId,
+              siteId: site.id,
+              workDate: { gte: startDateOnly, lte: endDateOnly },
+              siteTimesheet: { status: { in: ["approved", "locked"] } },
+              attendanceStatus: {
+                in: ["present", "late", "left_early", "reliever", "shift_swapped", "training"],
+              },
             },
           }),
-          prisma.shift.count({
+          prisma.shift.findMany({
             where: {
               companyId: user.companyId,
               siteId: site.id,
               startTime: { gte: start, lte: end },
-              attendances: { some: { clockIn: { not: null } } },
+              attendances: {
+                some: {
+                  clockIn: { not: null },
+                  validationStatus: { not: "REJECTED_GEOFENCE" },
+                },
+              },
             },
+            select: { id: true, startTime: true },
           }),
         ]);
-        const pct = shifts > 0 ? Math.round((attended / shifts) * 1000) / 10 : 100;
+        const siteCoverage = buildApprovedSiteDateCoverage(approvedSheets);
+        const uncoveredAttended = rawAttendances.filter((s) => {
+          const dk = dateKeyInTimeZone(s.startTime, timeZone);
+          return !siteCoverage.has(`${site.id}:${dk}`);
+        }).length;
+        const attended = Math.min(shifts.length, approvedWorkedRows + uncoveredAttended);
+        const pct = shifts.length > 0 ? Math.round((attended / shifts.length) * 1000) / 10 : 0;
         rows.push([
           site.name,
           site.siteStatus,
           site.riskLevel,
           site._count.assignedGuards,
-          shifts,
+          shifts.length,
           pct,
         ]);
       }
@@ -264,6 +399,7 @@ export async function reportsExtendedRoutes(app: FastifyInstance) {
           companyId: user.companyId,
           incidentDateTime: { gte: start, lte: end },
           ...(siteId ? { siteId } : {}),
+          ...(clientId ? { site: { clientId } } : {}),
           ...(q.clientVisible === "true" ? { clientVisible: true } : {}),
         },
         include: { site: { select: { name: true } } },
@@ -376,12 +512,12 @@ export async function reportsExtendedRoutes(app: FastifyInstance) {
 
     if (format === "pdf") {
       // Lightweight printable HTML — clients can print to PDF; full branded PDF can reuse puppeteer later
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${type}</title>
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${escapeHtml(type)}</title>
         <style>body{font-family:system-ui,sans-serif;padding:24px}table{border-collapse:collapse;width:100%;font-size:12px}
         th,td{border:1px solid #ccc;padding:6px;text-align:left}th{background:#f5f5f5}h1{font-size:18px}</style></head>
-        <body><h1>Plethora — ${type}</h1><p>${start.toISOString().slice(0, 10)} to ${end.toISOString().slice(0, 10)}</p>
-        <table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
-        <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${String(c ?? "").replace(/</g, "&lt;")}</td>`).join("")}</tr>`).join("")}</tbody></table>
+        <body><h1>Plethora — ${escapeHtml(type)}</h1><p>${escapeHtml(start.toISOString().slice(0, 10))} to ${escapeHtml(end.toISOString().slice(0, 10))}</p>
+        <table><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>
         </body></html>`;
       return reply
         .header("Content-Type", "text/html; charset=utf-8")

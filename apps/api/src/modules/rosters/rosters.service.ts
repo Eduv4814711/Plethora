@@ -1,8 +1,9 @@
 import { format } from "date-fns";
+import { fromZonedTime } from "date-fns-tz";
 import type { Prisma, SiteRosterShiftCode } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { shiftCodeToType, countsTowardCoverage } from "./lib/pattern-parser.js";
-import { getCompanyTimezone, getShiftTimes } from "../../lib/timezone.js";
+import { dateKeyInTimeZone, getCompanyTimezone, getShiftTimes } from "../../lib/timezone.js";
 import { reconcileRosterContinuityForSite } from "./roster-continuity.service.js";
 import {
   isShiftCoveredOnDateKey,
@@ -17,6 +18,33 @@ export class RosterGuardValidationError extends Error {
   constructor() {
     super("ROSTER_GUARD_NOT_FOUND");
     this.name = "RosterGuardValidationError";
+  }
+}
+
+export class RosterPatternValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RosterPatternValidationError";
+  }
+}
+
+function validatePatternCells(
+  cycleLengthDays: number,
+  cells?: { guardId: string; patternDayIndex: number; shiftCode: SiteRosterShiftCode }[]
+) {
+  if (!cells || cells.length === 0) return;
+  const seen = new Set<string>();
+  for (const c of cells) {
+    if (!Number.isInteger(c.patternDayIndex) || c.patternDayIndex < 0 || c.patternDayIndex >= cycleLengthDays) {
+      throw new RosterPatternValidationError(
+        `Pattern day index ${c.patternDayIndex} must be between 0 and ${cycleLengthDays - 1}`
+      );
+    }
+    const key = `${c.guardId}:${c.patternDayIndex}`;
+    if (seen.has(key)) {
+      throw new RosterPatternValidationError("Pattern contains duplicate guard and day index cells");
+    }
+    seen.add(key);
   }
 }
 
@@ -589,6 +617,7 @@ export async function createPattern(
     companyId,
     input.cells?.map((cell) => cell.guardId) ?? []
   );
+  validatePatternCells(input.cycleLengthDays, input.cells);
 
   const pattern = await prisma.siteRosterPattern.create({
     data: {
@@ -637,6 +666,7 @@ export async function updatePattern(
     companyId,
     input.cells?.map((cell) => cell.guardId) ?? []
   );
+  validatePatternCells(input.cycleLengthDays ?? existing.cycleLengthDays, input.cells);
 
   await prisma.$transaction(async (tx) => {
     await tx.siteRosterPattern.update({
@@ -739,6 +769,46 @@ async function applyOngoingPatternChanges(
       where: { id: active.id },
       data: { status: "archived", effectiveTo: addCalendarDays(effectiveFrom, -1) },
     });
+    const assignedGuards = await tx.siteAssignment.findMany({
+      where: { siteId, isActive: true },
+      select: { employeeId: true },
+    });
+    const existingKeys = new Set(active.cells.map((cell) => `${cell.guardId}:${cell.patternDayIndex}`));
+    const cellInputs = active.cells.map((cell) => {
+      const shiftCode =
+        replacementByKey.get(`${cell.guardId}:${cell.patternDayIndex}`) ?? cell.shiftCode;
+      return {
+        guardId: cell.guardId,
+        patternDayIndex: cell.patternDayIndex,
+        shiftCode,
+        shiftType: shiftCodeToType(shiftCode),
+        sitePostId: cell.sitePostId,
+        isLocked: cell.isLocked,
+        notes: cell.notes,
+      };
+    });
+    const assignedSet = new Set(assignedGuards.map((a) => a.employeeId));
+    for (const change of changes) {
+      if (!assignedSet.has(change.guardId)) continue;
+      const pDay = patternDayForDate(
+        active.anchorDate,
+        active.cycleLengthDays,
+        dateOnly(change.rosterDate)
+      );
+      const cellKey = `${change.guardId}:${pDay}`;
+      if (!existingKeys.has(cellKey)) {
+        existingKeys.add(cellKey);
+        cellInputs.push({
+          guardId: change.guardId,
+          patternDayIndex: pDay,
+          shiftCode: change.overrideShiftCode,
+          shiftType: shiftCodeToType(change.overrideShiftCode),
+          sitePostId: null,
+          isLocked: false,
+          notes: null,
+        });
+      }
+    }
     return tx.siteRosterPattern.create({
       data: {
         companyId,
@@ -750,19 +820,7 @@ async function applyOngoingPatternChanges(
         status: "active",
         createdBy: userId,
         cells: {
-          create: active.cells.map((cell) => {
-            const shiftCode =
-              replacementByKey.get(`${cell.guardId}:${cell.patternDayIndex}`) ?? cell.shiftCode;
-            return {
-              guardId: cell.guardId,
-              patternDayIndex: cell.patternDayIndex,
-              shiftCode,
-              shiftType: shiftCodeToType(shiftCode),
-              sitePostId: cell.sitePostId,
-              isLocked: cell.isLocked,
-              notes: cell.notes,
-            };
-          }),
+          create: cellInputs,
         },
       },
     });
@@ -781,6 +839,7 @@ export async function generateRosterFromPattern(
 
   const activePattern = await prisma.siteRosterPattern.findFirst({
     where: { siteId, companyId, status: "active" },
+    orderBy: { effectiveFrom: "desc" },
   });
   if (!activePattern) {
     return { generatedCount: 0, grid };
@@ -788,35 +847,76 @@ export async function generateRosterFromPattern(
 
   let generatedCount = 0;
   if (persist) {
-    const patternCells = await prisma.siteRosterPatternCell.findMany({
-      where: { rosterPatternId: activePattern.id },
-    });
+    const [patternCells, siteConfig, existingOverrides, approvedLeaves] = await Promise.all([
+      prisma.siteRosterPatternCell.findMany({
+        where: { rosterPatternId: activePattern.id },
+      }),
+      prisma.site.findFirst({
+        where: { id: siteId, companyId },
+        select: { rosterDayShiftDays: true, rosterNightShiftDays: true },
+      }),
+      prisma.siteRosterManualOverride.findMany({
+        where: {
+          companyId,
+          siteId,
+          rosterDate: { gte: dateOnly(startDate), lte: dateOnly(endDate) },
+        },
+        select: { guardId: true, rosterDate: true },
+      }),
+      prisma.leaveRequest.findMany({
+        where: {
+          companyId,
+          employeeId: { in: grid.rows.map((r) => r.guardId) },
+          status: "APPROVED",
+          startDate: { lte: dateOnly(endDate) },
+          endDate: { gte: dateOnly(startDate) },
+        },
+        select: { employeeId: true, startDate: true, endDate: true },
+      }),
+    ]);
+    const coverageDays = resolveSiteCoverageDays(siteConfig ?? {});
     const byGuardDay = new Map<string, SiteRosterShiftCode>();
     for (const c of patternCells) {
       byGuardDay.set(`${c.guardId}:${c.patternDayIndex}`, c.shiftCode);
     }
 
-    const existingOverrides = await prisma.siteRosterManualOverride.findMany({
-      where: {
-        companyId,
-        siteId,
-        rosterDate: { gte: dateOnly(startDate), lte: dateOnly(endDate) },
-      },
-      select: { guardId: true, rosterDate: true },
-    });
     const overrideKeys = new Set(
       existingOverrides.map((row) => `${row.guardId}:${dateKey(row.rosterDate)}`)
     );
+    const leaveKeys = new Set<string>();
+    for (const lv of approvedLeaves) {
+      for (let ld = dateOnly(lv.startDate); ld <= dateOnly(lv.endDate); ld = addCalendarDays(ld, 1)) {
+        leaveKeys.add(`${lv.employeeId}:${dateKey(ld)}`);
+      }
+    }
 
-    const start = dateOnly(startDate);
-    const end = dateOnly(endDate);
-    for (let d = start; d <= end; d = addCalendarDays(d, 1)) {
+    const effectiveStart =
+      dateOnly(activePattern.effectiveFrom) > dateOnly(startDate)
+        ? dateOnly(activePattern.effectiveFrom)
+        : dateOnly(startDate);
+    const effectiveEnd =
+      activePattern.effectiveTo && dateOnly(activePattern.effectiveTo) < dateOnly(endDate)
+        ? dateOnly(activePattern.effectiveTo)
+        : dateOnly(endDate);
+
+    for (let d = effectiveStart; d <= effectiveEnd; d = addCalendarDays(d, 1)) {
       const dayKey = dateKey(d);
       const pDay = patternDayForDate(activePattern.anchorDate, activePattern.cycleLengthDays, d);
       for (const row of grid.rows) {
         if (overrideKeys.has(`${row.guardId}:${dayKey}`)) continue;
-        const code = byGuardDay.get(`${row.guardId}:${pDay}`) ?? "blank";
-        if (!countsTowardCoverage(shiftCodeToType(code)) && code === "blank") continue;
+        let code = byGuardDay.get(`${row.guardId}:${pDay}`) ?? "blank";
+        if (code === "blank") continue;
+        if (WORKING_SHIFT_CODES.has(code)) {
+          if (leaveKeys.has(`${row.guardId}:${dayKey}`)) {
+            code = "O";
+          } else {
+            const st = code === "N" ? "night" : "day";
+            if (!isShiftCoveredOnDateKey(coverageDays, st, dayKey)) {
+              code = "O";
+            }
+          }
+        }
+        if (!countsTowardCoverage(shiftCodeToType(code)) && (code as string) === "blank") continue;
         await prisma.siteRosterGeneratedShift.upsert({
           where: {
             siteId_guardId_rosterDate: {
@@ -1162,15 +1262,15 @@ export async function publishRoster(
   }
 
   const timeZone = await getCompanyTimezone(companyId);
-  const rangeStart = dateOnly(input.startDate);
-  const rangeEnd = addCalendarDays(dateOnly(input.endDate), 2);
+  const publishRangeStart = fromZonedTime(`${input.startDate.slice(0, 10)}T00:00:00`, timeZone);
+  const nextDayKey = dateKey(addCalendarDays(dateOnly(input.endDate), 1));
+  const publishRangeEnd = fromZonedTime(`${nextDayKey}T00:00:00`, timeZone);
   const protectedShifts = await prisma.shift.findMany({
     where: {
       companyId,
       siteId: input.siteId,
       status: { notIn: ["created", "assigned"] },
-      startTime: { lt: rangeEnd },
-      endTime: { gt: rangeStart },
+      startTime: { gte: publishRangeStart, lt: publishRangeEnd },
     },
     select: { id: true, startTime: true },
     take: 5,
@@ -1196,8 +1296,53 @@ export async function publishRoster(
 
   const shiftsToCreate: Prisma.ShiftCreateManyInput[] = [];
   let skippedCount = 0;
+  const guardIdsInGrid = grid.rows.map((r) => r.guardId);
+  const prevDayKey = dateKey(addCalendarDays(dateOnly(input.startDate), -1));
+  const prevDayStart = fromZonedTime(`${prevDayKey}T00:00:00`, timeZone);
+
+  const [priorNightShifts, approvedLeaves] =
+    guardIdsInGrid.length > 0
+      ? await Promise.all([
+          prisma.shift.findMany({
+            where: {
+              companyId,
+              employeeId: { in: guardIdsInGrid },
+              shiftType: "night",
+              status: { in: ["created", "assigned", "active", "completed", "verified"] },
+              startTime: { gte: prevDayStart, lt: publishRangeStart },
+            },
+            select: { employeeId: true, startTime: true },
+          }),
+          prisma.leaveRequest.findMany({
+            where: {
+              companyId,
+              employeeId: { in: guardIdsInGrid },
+              status: "APPROVED",
+              startDate: { lte: dateOnly(input.endDate) },
+              endDate: { gte: dateOnly(input.startDate) },
+            },
+            select: { employeeId: true, startDate: true, endDate: true },
+          }),
+        ])
+      : [[], []];
+
+  const leaveKeys = new Set<string>();
+  for (const lv of approvedLeaves) {
+    for (let ld = dateOnly(lv.startDate); ld <= dateOnly(lv.endDate); ld = addCalendarDays(ld, 1)) {
+      leaveKeys.add(`${lv.employeeId}:${dateKey(ld)}`);
+    }
+  }
+
+  const publishHardWarnings: RosterWarning[] = [];
+  const shiftTypeByGuardDate = new Map<string, Map<string, "day" | "night">>();
+  for (const pn of priorNightShifts) {
+    const map = shiftTypeByGuardDate.get(pn.employeeId) ?? new Map<string, "day" | "night">();
+    map.set(dateKeyInTimeZone(pn.startTime, timeZone), "night");
+    shiftTypeByGuardDate.set(pn.employeeId, map);
+  }
 
   for (const row of grid.rows) {
+    const guardDateMap = shiftTypeByGuardDate.get(row.guardId) ?? new Map<string, "day" | "night">();
     for (const cell of row.cells) {
       if (!cell.dateKey) continue;
       const code = cell.shiftCode as SiteRosterShiftCode;
@@ -1205,7 +1350,29 @@ export async function publishRoster(
         if (code !== "blank") skippedCount += 1;
         continue;
       }
+      if (leaveKeys.has(`${row.guardId}:${cell.dateKey}`)) {
+        publishHardWarnings.push({
+          code: "LEAVE_CONFLICT",
+          severity: "hard",
+          guardId: row.guardId,
+          dateKey: cell.dateKey,
+          message: `${row.guardName} has approved leave on ${cell.dateKey} and cannot be published to work.`,
+        });
+        continue;
+      }
       const shiftType = code === "N" ? "night" : "day";
+      const prevKey = dateKey(addCalendarDays(dateOnly(cell.dateKey), -1));
+      if (shiftType === "day" && guardDateMap.get(prevKey) === "night") {
+        publishHardWarnings.push({
+          code: "REST_RULE_VIOLATION",
+          severity: "hard",
+          guardId: row.guardId,
+          dateKey: cell.dateKey,
+          message: `${row.guardName} has a day shift on ${cell.dateKey} immediately after a night shift on ${prevKey}.`,
+        });
+        continue;
+      }
+      guardDateMap.set(cell.dateKey, shiftType);
       const { shiftStart, shiftEnd } = getShiftTimes(
         dateOnly(cell.dateKey),
         shiftType,
@@ -1225,6 +1392,18 @@ export async function publishRoster(
     }
   }
 
+  if (publishHardWarnings.length > 0) {
+    return {
+      success: false,
+      blocked: true,
+      message: "Roster has hard leave or rest-rule conflicts that must be resolved before publishing.",
+      publishedCount: 0,
+      skippedCount,
+      replacedCount: 0,
+      warnings: publishHardWarnings,
+    };
+  }
+
   let replacedCount = 0;
   let publishedCount = 0;
   await prisma.$transaction(async (tx) => {
@@ -1234,8 +1413,7 @@ export async function publishRoster(
           companyId,
           siteId: input.siteId,
           status: { in: ["created", "assigned"] },
-          startTime: { lt: rangeEnd },
-          endTime: { gt: rangeStart },
+          startTime: { gte: publishRangeStart, lt: publishRangeEnd },
         },
       });
       replacedCount = deleted.count;

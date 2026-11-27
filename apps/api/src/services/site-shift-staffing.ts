@@ -18,9 +18,9 @@ export function resolveSiteShiftStaffing(site: {
 
 /**
  * Minimum rosterable guards for simultaneous day + night coverage.
- * Day (06:00–18:00) and night (18:00–06:00) do not overlap, so the same pool
- * can cover both when each guard works at most one shift per type per day.
+ * Day and night shifts on the same date cannot both be worked by the same guard
+ * while satisfying SA rest rules, so minimum daily headcount is day + night.
  */
 export function minRosterableGuardsForStaffing(staffing: { day: number; night: number }): number {
-  return Math.max(staffing.day, staffing.night);
+  return staffing.day + staffing.night;
 }

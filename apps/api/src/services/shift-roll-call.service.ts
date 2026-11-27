@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma.js";
-import { format } from "date-fns";
+import { addDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
+import { localTimeInZone, parseDateOnly } from "../lib/timezone.js";
 import { normalizeWhatsAppPhone } from "../lib/phone.js";
 import { sendTextWithTemplateFallback, templateBodyParameters } from "../whatsapp/services/send.service.js";
 import { createAuditLog } from "../lib/audit.js";
@@ -58,29 +59,31 @@ export async function aggregateShiftRollCall(
   const timeZone =
     (typeof settings.timezone === "string" && settings.timezone.trim()) || "Africa/Johannesburg";
 
-  const targetDate = options?.date || new Date();
-  const shiftType = options?.shiftType || (new Date().getHours() >= 18 || new Date().getHours() < 6 ? "night" : "day");
+  const now = new Date();
+  const targetDate = options?.date || now;
+  const nowLocalHour = Number(formatInTimeZone(now, timeZone, "H"));
+  const shiftType = options?.shiftType || (nowLocalHour >= 18 || nowLocalHour < 6 ? "night" : "day");
 
   // Determine window for shift in company timezone
   const dateStr = formatInTimeZone(targetDate, timeZone, "yyyy-MM-dd");
+  const baseDate = parseDateOnly(dateStr);
+  const nextBaseDate = addDays(baseDate, 1);
   let windowStart: Date;
   let windowEnd: Date;
   let shiftLabel: string;
 
   if (shiftType === "day") {
     shiftLabel = "Day Shift (06:00 – 18:00)";
-    windowStart = new Date(`${dateStr}T05:00:00.000Z`);
-    windowEnd = new Date(`${dateStr}T19:00:00.000Z`);
+    windowStart = localTimeInZone(baseDate, 4, 0, timeZone);
+    windowEnd = new Date(localTimeInZone(baseDate, 18, 0, timeZone).getTime() - 1);
   } else if (shiftType === "night") {
     shiftLabel = "Night Shift (18:00 – 06:00)";
-    windowStart = new Date(`${dateStr}T17:00:00.000Z`);
-    const nextDay = new Date(targetDate.getTime() + 24 * 60 * 60 * 1000);
-    const nextDayStr = formatInTimeZone(nextDay, timeZone, "yyyy-MM-dd");
-    windowEnd = new Date(`${nextDayStr}T07:00:00.000Z`);
+    windowStart = localTimeInZone(baseDate, 18, 0, timeZone);
+    windowEnd = new Date(localTimeInZone(nextBaseDate, 4, 0, timeZone).getTime() - 1);
   } else {
     shiftLabel = "All Shifts (24 Hours)";
-    windowStart = new Date(`${dateStr}T00:00:00.000Z`);
-    windowEnd = new Date(`${dateStr}T23:59:59.999Z`);
+    windowStart = localTimeInZone(baseDate, 0, 0, timeZone);
+    windowEnd = new Date(localTimeInZone(nextBaseDate, 0, 0, timeZone).getTime() - 1);
   }
 
   const shifts = await prisma.shift.findMany({
@@ -137,7 +140,12 @@ export async function aggregateShiftRollCall(
     let clockInFmt: string | null = null;
     let clockOutFmt: string | null = null;
 
-    if (att && att.clockIn) {
+    if (att?.validationStatus === "REJECTED_GEOFENCE") {
+      if (att.clockIn) clockInFmt = formatInTimeZone(att.clockIn, timeZone, "HH:mm");
+      if (att.clockOut) clockOutFmt = formatInTimeZone(att.clockOut, timeZone, "HH:mm");
+      guardStatus = "REJECTED";
+      siteSummary.flaggedCount += 1;
+    } else if (att && att.clockIn) {
       clockInFmt = formatInTimeZone(att.clockIn, timeZone, "HH:mm");
       if (att.clockOut) {
         clockOutFmt = formatInTimeZone(att.clockOut, timeZone, "HH:mm");
@@ -148,9 +156,6 @@ export async function aggregateShiftRollCall(
         siteSummary.verifiedCount += 1;
       } else if (att.validationStatus === "FLAGGED_NO_GEOFENCE") {
         guardStatus = "FLAGGED";
-        siteSummary.flaggedCount += 1;
-      } else if (att.validationStatus === "REJECTED_GEOFENCE") {
-        guardStatus = "REJECTED";
         siteSummary.flaggedCount += 1;
       } else {
         guardStatus = "VERIFIED";
@@ -195,7 +200,7 @@ export async function aggregateShiftRollCall(
     shiftType,
     shiftLabel,
     dateStr,
-    generatedAt: format(new Date(), "yyyy-MM-dd HH:mm:ss"),
+    generatedAt: formatInTimeZone(new Date(), timeZone, "yyyy-MM-dd HH:mm:ss"),
     totalSites: sitesList.length,
     totalRostered,
     totalVerified,
@@ -292,7 +297,7 @@ export async function resolveDesignatedOfficePhones(companyId: string): Promise<
 
 export async function dispatchShiftRollCall(
   companyId: string,
-  options?: { shiftType?: "day" | "night" | "all"; siteId?: string; overrideRecipients?: string[] }
+  options?: { shiftType?: "day" | "night" | "all"; date?: Date; siteId?: string; overrideRecipients?: string[] }
 ): Promise<{ success: boolean; recipientCount: number; recipients: string[]; summary: ShiftRollCallSummary; message: string }> {
   const summary = await aggregateShiftRollCall(companyId, options);
   const message = formatRollCallWhatsAppMessage(summary);

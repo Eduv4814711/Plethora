@@ -51,13 +51,15 @@ import { reportsExtendedRoutes } from "./modules/reports-extended/reports-extend
 import { complianceRoutes } from "./modules/compliance/compliance.routes.js";
 import { eventsRoutes } from "./routes/events.js";
 import { aiRoutes } from "./routes/ai.routes.js";
+import { ZodError } from "zod";
 import { corsOriginFromEnv, env } from "./lib/env.js";
 import { verifyDatabaseReadiness } from "./lib/db-connectivity.js";
 
 function isValidationError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
-  const e = err as { validation?: unknown; statusCode?: number };
-  return e.validation != null || e.statusCode === 400;
+  if (err instanceof ZodError) return true;
+  const e = err as { name?: string; validation?: unknown; statusCode?: number };
+  return e.name === "ZodError" || e.validation != null || e.statusCode === 400;
 }
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -160,10 +162,19 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     if (isValidationError(err)) {
       const message =
-        (err as { message?: string }).message ?? "Validation failed";
+        err instanceof ZodError
+          ? err.issues[0]?.message ?? "Validation failed"
+          : (err as { message?: string }).message ?? "Validation failed";
       return reply.code(statusCode >= 400 && statusCode < 500 ? statusCode : 400).send({
         error: "Validation error",
         message,
+      });
+    }
+
+    if ((err as { code?: string } | null)?.code === "P2025") {
+      return reply.code(404).send({
+        error: "Not found",
+        message: "Record not found",
       });
     }
 

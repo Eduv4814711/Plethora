@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AccessChangeStatus } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireCapability, requireOwner } from "../middleware/authorization.js";
+import { diffCapabilities, hasCapability } from "../lib/capabilities.js";
 import { prisma } from "../lib/prisma.js";
 import { badRequest } from "../lib/api-response.js";
 import { buildPasswordSetupLink } from "../lib/setup-link.js";
@@ -20,6 +21,7 @@ import {
   type UserUpdatePayload,
 } from "../services/user-access.service.js";
 import {
+  AccessRequestAlreadyReviewedError,
   closeAccessChangeRequest,
   describeAccessChange,
   findAccessChangeRequest,
@@ -102,6 +104,18 @@ export async function accessRequestsRoutes(app: FastifyInstance) {
         message: "The person who raised this request no longer has an active account.",
       });
     }
+    const requiredActionCap =
+      row.kind === "CREATE_USER" ? "create" : row.kind === "DEACTIVATE_USER" ? "delete" : "edit";
+    if (
+      !hasCapability(requester, "/settings/access", "manage_access") ||
+      !hasCapability(requester, "/settings/access", requiredActionCap)
+    ) {
+      return reply.code(409).send({
+        error: "Conflict",
+        code: "requester_ineligible",
+        message: `${row.requestedBy.name} no longer has permission to propose this access change.`,
+      });
+    }
 
     const before = (row.beforeState ?? {}) as unknown as AccessBeforeState;
     const target = row.targetUserId ? await loadAccessTarget(companyId, row.targetUserId) : null;
@@ -119,7 +133,7 @@ export async function accessRequestsRoutes(app: FastifyInstance) {
         code: "stale",
         message:
           "This person's access changed after the request was raised. Review the current state before applying it.",
-        current: describeAccessChange(row).diff,
+        current: diffCapabilities(before.capabilities, target?.capabilities ?? {}),
       });
     }
 
@@ -166,6 +180,13 @@ export async function accessRequestsRoutes(app: FastifyInstance) {
             : {}),
         });
       } catch (error) {
+        if (error instanceof AccessRequestAlreadyReviewedError) {
+          return reply.code(409).send({
+            error: "Conflict",
+            code: "already_reviewed",
+            message: error.message,
+          });
+        }
         if ((error as { code?: string }).code === "P2002") {
           return reply.code(409).send({
             error: "Conflict",
@@ -187,16 +208,28 @@ export async function accessRequestsRoutes(app: FastifyInstance) {
           message: `${row.requestedBy.name} can no longer make this change: ${guard.message}`,
         });
       }
-      const updatedRequest = await prisma.$transaction(async (tx) => {
-        await applyUserDeactivate(request, tx, { id: target!.id, existing: target!, source });
-        return closeAccessChangeRequest(request, tx, {
-          row,
-          status: "APPROVED",
-          reviewNote: parsed.data.reviewNote,
+      try {
+        const updatedRequest = await prisma.$transaction(async (tx) => {
+          const closed = await closeAccessChangeRequest(request, tx, {
+            row,
+            status: "APPROVED",
+            reviewNote: parsed.data.reviewNote,
+          });
+          await applyUserDeactivate(request, tx, { id: target!.id, existing: target!, source });
+          return closed;
         });
-      });
-      await notifyRequester({ companyId, row, status: "APPROVED", reviewNote: parsed.data.reviewNote });
-      return reply.send({ request: describeAccessChange(updatedRequest) });
+        await notifyRequester({ companyId, row, status: "APPROVED", reviewNote: parsed.data.reviewNote });
+        return reply.send({ request: describeAccessChange(updatedRequest) });
+      } catch (error) {
+        if (error instanceof AccessRequestAlreadyReviewedError) {
+          return reply.code(409).send({
+            error: "Conflict",
+            code: "already_reviewed",
+            message: error.message,
+          });
+        }
+        throw error;
+      }
     }
 
     const payload = row.payload as unknown as UserUpdatePayload;
@@ -210,16 +243,16 @@ export async function accessRequestsRoutes(app: FastifyInstance) {
     }
     try {
       const result = await prisma.$transaction(async (tx) => {
+        const updatedRequest = await closeAccessChangeRequest(request, tx, {
+          row,
+          status: "APPROVED",
+          reviewNote: parsed.data.reviewNote,
+        });
         const user = await applyUserUpdate(request, tx, {
           id: target!.id,
           existing: target!,
           payload,
           source,
-        });
-        const updatedRequest = await closeAccessChangeRequest(request, tx, {
-          row,
-          status: "APPROVED",
-          reviewNote: parsed.data.reviewNote,
         });
         return { user, updatedRequest };
       });
@@ -229,6 +262,13 @@ export async function accessRequestsRoutes(app: FastifyInstance) {
         user: { ...result.user, isOwner: target!.isOwner },
       });
     } catch (error) {
+      if (error instanceof AccessRequestAlreadyReviewedError) {
+        return reply.code(409).send({
+          error: "Conflict",
+          code: "already_reviewed",
+          message: error.message,
+        });
+      }
       if ((error as { code?: string }).code === "P2002") {
         return reply.code(409).send({
           error: "Conflict",
@@ -254,15 +294,26 @@ export async function accessRequestsRoutes(app: FastifyInstance) {
       });
     }
 
-    const updated = await prisma.$transaction(async (tx) =>
-      closeAccessChangeRequest(request, tx, {
-        row,
-        status: "DECLINED",
-        reviewNote: parsed.data.reviewNote,
-      })
-    );
-    await notifyRequester({ companyId, row, status: "DECLINED", reviewNote: parsed.data.reviewNote });
-    return reply.send({ request: describeAccessChange(updated) });
+    try {
+      const updated = await prisma.$transaction(async (tx) =>
+        closeAccessChangeRequest(request, tx, {
+          row,
+          status: "DECLINED",
+          reviewNote: parsed.data.reviewNote,
+        })
+      );
+      await notifyRequester({ companyId, row, status: "DECLINED", reviewNote: parsed.data.reviewNote });
+      return reply.send({ request: describeAccessChange(updated) });
+    } catch (error) {
+      if (error instanceof AccessRequestAlreadyReviewedError) {
+        return reply.code(409).send({
+          error: "Conflict",
+          code: "already_reviewed",
+          message: error.message,
+        });
+      }
+      throw error;
+    }
   });
 
   /** Withdrawing a proposal: the requester who raised it, or the owner. */
@@ -286,10 +337,21 @@ export async function accessRequestsRoutes(app: FastifyInstance) {
           message: `This request was already ${row.status.toLowerCase()}.`,
         });
       }
-      const updated = await prisma.$transaction(async (tx) =>
-        closeAccessChangeRequest(request, tx, { row, status: "CANCELLED" })
-      );
-      return reply.send({ request: describeAccessChange(updated) });
+      try {
+        const updated = await prisma.$transaction(async (tx) =>
+          closeAccessChangeRequest(request, tx, { row, status: "CANCELLED" })
+        );
+        return reply.send({ request: describeAccessChange(updated) });
+      } catch (error) {
+        if (error instanceof AccessRequestAlreadyReviewedError) {
+          return reply.code(409).send({
+            error: "Conflict",
+            code: "already_reviewed",
+            message: error.message,
+          });
+        }
+        throw error;
+      }
     }
   );
 }

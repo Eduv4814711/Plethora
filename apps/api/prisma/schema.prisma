@@ -99,6 +99,7 @@ model Company {
   complianceRemediationPlans ComplianceRemediationPlan[]
   complianceLegalCases       ComplianceLegalCase[]
   employmentExits            EmploymentExit[]
+  leaveSupportingDocuments   LeaveSupportingDocument[]
 }
 
 model User {
@@ -822,8 +823,9 @@ model LeaveRequest {
   parentalLeaveScenario      ParentalLeaveScenario? // only when leaveType = PARENTAL
   workedPublicHoliday        Boolean                     @default(false) // flag only, no pay calculation here
 
-  reviewedBy String?
-  reviewedAt DateTime?
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  decisionReason String?
 
   payrollExportBatchId String? // set when an approved export batch consumes this leave; cleared on batch void
 
@@ -832,14 +834,40 @@ model LeaveRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee           Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  payrollExportBatch PayrollExportBatch? @relation(fields: [payrollExportBatchId], references: [id], onDelete: SetNull)
-  medicalCertificate MedicalCertificate?
+  company             Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee            Employee                  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payrollExportBatch  PayrollExportBatch?       @relation(fields: [payrollExportBatchId], references: [id], onDelete: SetNull)
+  medicalCertificate  MedicalCertificate?
+  supportingDocuments LeaveSupportingDocument[]
 
   @@index([companyId, employeeId, leaveType])
   @@index([companyId, status])
   @@index([payrollExportBatchId])
+}
+
+enum LeaveDocumentKind {
+  SICK_NOTE
+  STUDY_PROOF
+  FAMILY_RESPONSIBILITY_PROOF
+  PARENTAL_PROOF
+  OTHER
+}
+
+model LeaveSupportingDocument {
+  id             String            @id @default(cuid())
+  companyId      String
+  leaveRequestId String
+  kind           LeaveDocumentKind
+  fileName       String
+  mimeType       String
+  fileReference  String
+  uploadedBy     String
+  createdAt      DateTime          @default(now())
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, leaveRequestId])
 }
 
 model MedicalCertificate {

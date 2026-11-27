@@ -52,6 +52,7 @@ export interface AccessActor {
 /** Everything the guards need to know about the account being changed. */
 export interface AccessTarget {
   id: string;
+  name: string;
   email: string;
   accountType: AccountType;
   jobTitle: string | null;
@@ -149,11 +150,11 @@ export function checkUserUpdateAllowed(
     return { status: 400, message: "Transfer ownership before deactivating the company owner" };
   }
   const targetManagesAccess = hasCapability(
-    { capabilities: target.capabilities, isActive: target.isActive },
+    { capabilities: target.capabilities, isActive: true },
     "/settings/access",
     "manage_access"
   );
-  if (!actor.isOwner && targetManagesAccess) {
+  if (!actor.isOwner && target.id !== actor.id && targetManagesAccess) {
     return { status: 403, message: "Only the company owner may update another access manager" };
   }
   if (!actor.isOwner && target.id === actor.id && payload.capabilities !== undefined) {
@@ -178,7 +179,7 @@ export function checkUserDeactivateAllowed(
   if (
     !actor.isOwner &&
     hasCapability(
-      { capabilities: target.capabilities, isActive: target.isActive },
+      { capabilities: target.capabilities, isActive: true },
       "/settings/access",
       "manage_access"
     )
@@ -264,6 +265,13 @@ export async function applyUserUpdate(
     ...(payload.accountType !== undefined ? { accountType: payload.accountType } : {}),
     ...(payload.jobTitle !== undefined ? { jobTitle: payload.jobTitle || null } : {}),
     ...(payload.isActive !== undefined ? { isActive: payload.isActive } : {}),
+    ...(payload.isActive === false
+      ? {
+          passwordSetupRequired: false,
+          passwordSetupTokenHash: null,
+          passwordSetupTokenExpiresAt: null,
+        }
+      : {}),
     ...(payload.capabilities !== undefined ? { capabilities: payload.capabilities } : {}),
   };
 
@@ -329,7 +337,7 @@ export function checkPasswordResetAllowed(
     !actor.isOwner &&
     target.id !== actor.id &&
     hasCapability(
-      { capabilities: target.capabilities, isActive: target.isActive },
+      { capabilities: target.capabilities, isActive: true },
       "/settings/access",
       "manage_access"
     )
@@ -338,6 +346,15 @@ export function checkPasswordResetAllowed(
       status: 403,
       message: "Only the company owner may reset another access manager's password",
     };
+  }
+  if (!actor.isOwner && target.id !== actor.id) {
+    const unassignable = findUnassignableCapability(actor, normalizeCapabilities(target.capabilities));
+    if (unassignable) {
+      return {
+        status: 403,
+        message: "You cannot reset the password of an account with higher privileges than your own",
+      };
+    }
   }
   return null;
 }
@@ -359,7 +376,6 @@ export async function issuePasswordResetToken(
   await tx.user.update({
     where: { id: params.id },
     data: {
-      passwordSetupRequired: true,
       passwordSetupTokenHash: hashPasswordSetupToken(token),
       passwordSetupTokenExpiresAt: expiresAt,
       // A previously used token leaves this set, and the validate query demands
@@ -442,6 +458,7 @@ export async function loadAccessTarget(
   if (!row) return null;
   return {
     id: row.id,
+    name: row.name,
     email: row.email,
     accountType: row.accountType,
     jobTitle: row.jobTitle,

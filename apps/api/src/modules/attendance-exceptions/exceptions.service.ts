@@ -260,6 +260,57 @@ async function resolveActiveExceptionsForShiftIds(
   return activeExceptions.length;
 }
 
+async function resolveObsoleteShiftExceptionTypes(
+  companyId: string,
+  shiftId: string,
+  exceptionTypes: Array<"MISSED_CLOCK_IN" | "MISSED_CLOCK_OUT" | "ABSENT">
+) {
+  if (exceptionTypes.length === 0) return 0;
+  const activeExceptions = await prisma.attendanceException.findMany({
+    where: {
+      companyId,
+      shiftId,
+      exceptionType: { in: exceptionTypes },
+      status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
+    },
+    select: { id: true },
+  });
+  if (activeExceptions.length === 0) return 0;
+  const exceptionIds = activeExceptions.map((e) => e.id);
+  const resolvedAt = new Date();
+  const reason = "Automatically resolved because updated attendance superseded this alert.";
+  const pendingApprovals = await prisma.approvalRequest.findMany({
+    where: {
+      companyId,
+      entityType: "AttendanceException",
+      entityId: { in: exceptionIds },
+      status: "PENDING",
+    },
+    select: { id: true },
+  });
+  await Promise.all([
+    prisma.attendanceException.updateMany({
+      where: { id: { in: exceptionIds }, companyId },
+      data: { status: "RESOLVED", reviewedAt: resolvedAt, reviewNote: reason },
+    }),
+    pendingApprovals.length > 0
+      ? prisma.approvalRequest.updateMany({
+          where: { id: { in: pendingApprovals.map((a) => a.id) }, companyId },
+          data: { status: "REJECTED", reviewedAt: resolvedAt, comment: reason },
+        })
+      : Promise.resolve(),
+    prisma.operationalAlert.updateMany({
+      where: {
+        companyId,
+        sourceId: { in: [...exceptionIds, ...pendingApprovals.map((a) => a.id)] },
+        status: { in: ["OPEN", "ACKNOWLEDGED"] },
+      },
+      data: { status: "RESOLVED", resolvedAt },
+    }),
+  ]);
+  return activeExceptions.length;
+}
+
 /** Reconcile stale automated issues against the authoritative attendance review. */
 export async function reconcileSupersededAttendanceExceptions(
   companyId: string,
@@ -364,8 +415,11 @@ export async function detectAndPersistExceptions(params: {
           scheduledEnd: shift.endTime,
           clockIn: att?.clockIn ?? null,
           clockOut: att?.clockOut ?? null,
+          attendanceStatus: att?.status ?? null,
           clockInLat: att ? toGeoNumber(att.clockInLat) : null,
           clockInLng: att ? toGeoNumber(att.clockInLng) : null,
+          clockOutLat: att ? toGeoNumber(att.clockOutLat) : null,
+          clockOutLng: att ? toGeoNumber(att.clockOutLng) : null,
           geofenceLat: shift.site ? toGeoNumber(shift.site.latitude) : null,
           geofenceLng: shift.site ? toGeoNumber(shift.site.longitude) : null,
           geofenceRadiusMeters: shift.site?.geofenceRadiusMeters ?? null,
@@ -373,6 +427,20 @@ export async function detectAndPersistExceptions(params: {
         },
         graceMinutes
       );
+
+      const obsoleteTypes: Array<"MISSED_CLOCK_IN" | "MISSED_CLOCK_OUT" | "ABSENT"> = [];
+      if (att?.clockIn || att?.status === "absent" || detected.some((d) => d.exceptionType === "ABSENT")) {
+        obsoleteTypes.push("MISSED_CLOCK_IN");
+      }
+      if (att?.clockOut) {
+        obsoleteTypes.push("MISSED_CLOCK_OUT");
+      }
+      if (att?.status === "absent") {
+        obsoleteTypes.push("ABSENT");
+      }
+      if (obsoleteTypes.length > 0) {
+        await resolveObsoleteShiftExceptionTypes(params.companyId, shift.id, obsoleteTypes);
+      }
 
       for (const d of detected) {
         const result = await persistException({
@@ -450,6 +518,24 @@ export async function listExceptions(
         )
       : undefined;
   await reconcileSupersededAttendanceExceptions(companyId, periodShiftIds);
+  const periodFilter: Prisma.AttendanceExceptionWhereInput | undefined = periodShiftIds
+    ? {
+        OR: [
+          { shiftId: { in: periodShiftIds } },
+          {
+            shiftId: null,
+            ...(periodStart || periodEnd
+              ? {
+                  detectedAt: {
+                    ...(periodStart ? { gte: periodStart } : {}),
+                    ...(periodEnd ? { lte: periodEnd } : {}),
+                  },
+                }
+              : {}),
+          },
+        ],
+      }
+    : undefined;
   const where: Prisma.AttendanceExceptionWhereInput = {
     companyId,
     ...(query.status ? { status: query.status as never } : {}),
@@ -457,7 +543,7 @@ export async function listExceptions(
     ...(query.exceptionType ? { exceptionType: query.exceptionType as never } : {}),
     ...(query.siteId ? { siteId: query.siteId } : {}),
     ...(query.employeeId ? { employeeId: query.employeeId } : {}),
-    ...(periodShiftIds ? { shiftId: { in: periodShiftIds } } : {}),
+    ...(periodFilter ? periodFilter : {}),
   };
 
   const [items, total] = await Promise.all([
@@ -567,7 +653,7 @@ export async function reviewException(params: {
         where: { id: exception.attendanceId },
         data: {
           validationStatus: "MANUAL_OVERRIDE",
-          status: "VERIFIED",
+          status: "verified",
           rejectionReason: params.obNumber
             ? `Manual override approved under OB ${params.obNumber}`
             : "Manual override approved by supervisor",
@@ -576,25 +662,37 @@ export async function reviewException(params: {
     }
 
     if (params.obNumber && exception.shiftId) {
-      const row = await prisma.siteTimesheetRow.findFirst({
-        where: {
-          OR: [
-            { sourceShiftId: exception.shiftId },
-            {
-              siteId: exception.siteId ?? undefined,
-              plannedGuardId: exception.employeeId ?? undefined,
-            },
-          ],
-        },
+      const shift = await prisma.shift.findFirst({
+        where: { id: exception.shiftId, companyId: params.companyId },
+        select: { siteId: true, employeeId: true, startTime: true, shiftType: true },
       });
-      if (row) {
-        await prisma.siteTimesheetRow.update({
-          where: { id: row.id },
-          data: {
-            dutyOnObNumber: row.dutyOnObNumber ?? params.obNumber,
-            attendanceStatus: "present",
+      if (shift) {
+        const tz = await getCompanyTimezone(params.companyId);
+        const workDate = new Date(`${dateKeyInTimeZone(shift.startTime, tz)}T00:00:00.000Z`);
+        const row = await prisma.siteTimesheetRow.findFirst({
+          where: {
+            companyId: params.companyId,
+            siteTimesheet: { status: { notIn: ["approved", "locked"] } },
+            OR: [
+              { sourceShiftId: exception.shiftId },
+              {
+                siteId: shift.siteId,
+                plannedGuardId: shift.employeeId,
+                workDate,
+                ...(shift.shiftType ? { plannedShiftType: shift.shiftType } : {}),
+              },
+            ],
           },
-        }).catch(() => undefined);
+        });
+        if (row) {
+          await prisma.siteTimesheetRow.update({
+            where: { id: row.id },
+            data: {
+              dutyOnObNumber: row.dutyOnObNumber ?? params.obNumber,
+              attendanceStatus: "present",
+            },
+          }).catch(() => undefined);
+        }
       }
     }
   }
@@ -645,9 +743,27 @@ export async function getExceptionAnalytics(
           periodEnd ?? new Date("9999-12-31T23:59:59.999Z")
         )
       : undefined;
+  const periodFilter: Prisma.AttendanceExceptionWhereInput | undefined = periodShiftIds
+    ? {
+        OR: [
+          { shiftId: { in: periodShiftIds } },
+          {
+            shiftId: null,
+            ...(periodStart || periodEnd
+              ? {
+                  detectedAt: {
+                    ...(periodStart ? { gte: periodStart } : {}),
+                    ...(periodEnd ? { lte: periodEnd } : {}),
+                  },
+                }
+              : {}),
+          },
+        ],
+      }
+    : undefined;
   const where: Prisma.AttendanceExceptionWhereInput = {
     companyId,
-    ...(periodShiftIds ? { shiftId: { in: periodShiftIds } } : {}),
+    ...(periodFilter ? periodFilter : {}),
   };
 
   const [byType, bySeverity, bySite, byEmployee, openCritical, openCount, total] =
@@ -863,6 +979,13 @@ export async function getPeriodExportReadiness(
 
   const periodShiftIds = await shiftIdsForWorkedPeriod(companyId, start, end);
 
+  const periodExceptionFilter: Prisma.AttendanceExceptionWhereInput = {
+    OR: [
+      ...(periodShiftIds.length > 0 ? [{ shiftId: { in: periodShiftIds } }] : []),
+      { shiftId: null, detectedAt: { gte: start, lte: end } },
+    ],
+  };
+
   const [
     openExceptions,
     openCritical,
@@ -871,34 +994,35 @@ export async function getPeriodExportReadiness(
     pendingLeaveRequests,
     missingExternalPayrollCodes,
   ] = await Promise.all([
-    periodShiftIds.length > 0
-      ? prisma.attendanceException.count({
-          where: {
-            companyId,
-            shiftId: { in: periodShiftIds },
-            status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
-          },
-        })
-      : Promise.resolve(0),
-    periodShiftIds.length > 0
-      ? prisma.attendanceException.count({
-          where: {
-            companyId,
-            shiftId: { in: periodShiftIds },
-            severity: "CRITICAL",
-            status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
-          },
-        })
-      : Promise.resolve(0),
-    prisma.site.count({ where: { companyId, siteStatus: "ACTIVE" } }),
-    prisma.siteTimesheet.count({
+    prisma.attendanceException.count({
       where: {
         companyId,
-        status: { in: ["approved", "locked"] },
-        periodStart: { lte: end },
-        periodEnd: { gte: start },
+        ...periodExceptionFilter,
+        status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
       },
     }),
+    prisma.attendanceException.count({
+      where: {
+        companyId,
+        ...periodExceptionFilter,
+        severity: "CRITICAL",
+        status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
+      },
+    }),
+    prisma.site.count({ where: { companyId, siteStatus: "ACTIVE" } }),
+    prisma.siteTimesheet
+      .findMany({
+        where: {
+          companyId,
+          status: { in: ["approved", "locked"] },
+          periodStart: { lte: end },
+          periodEnd: { gte: start },
+          site: { companyId, siteStatus: "ACTIVE" },
+        },
+        distinct: ["siteId"],
+        select: { siteId: true },
+      })
+      .then((rows) => rows.length),
     prisma.leaveRequest.count({
       where: {
         companyId,

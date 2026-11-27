@@ -6,9 +6,22 @@ import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 
 const createPublicHolidaySchema = z.object({
-  date: z.string(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
   name: z.string().optional(),
 });
+
+function parseStrictUtcDate(dateStr: string): Date | null {
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  const dt = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) {
+    return null;
+  }
+  return dt;
+}
 
 export async function publicHolidaysRoutes(app: FastifyInstance) {
   const readProtect = [
@@ -27,10 +40,13 @@ export async function publicHolidaysRoutes(app: FastifyInstance) {
   app.get("/", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as Record<string, string | undefined>;
-    const year = q.year ? parseInt(q.year, 10) : new Date().getFullYear();
+    const year = q.year ? parseInt(q.year, 10) : new Date().getUTCFullYear();
+    if (!Number.isInteger(year) || year < 1970 || year > 2100) {
+      return reply.code(400).send({ error: "Validation error", message: "Invalid year" });
+    }
 
-    const startOfYear = new Date(year, 0, 1);
-    const endOfYear = new Date(year, 11, 31, 23, 59, 59);
+    const startOfYear = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0));
+    const endOfYear = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
 
     const holidays = await prisma.publicHoliday.findMany({
       where: {
@@ -52,8 +68,13 @@ export async function publicHolidaysRoutes(app: FastifyInstance) {
     }
 
     const companyId = request.user!.companyId;
-    const date = new Date(parsed.data.date);
-    date.setHours(0, 0, 0, 0);
+    const date = parseStrictUtcDate(parsed.data.date);
+    if (!date) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "Invalid calendar date",
+      });
+    }
 
     const holiday = await prisma.publicHoliday.upsert({
       where: {

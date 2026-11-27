@@ -25,6 +25,7 @@ import {
   observedHolidayDate,
   type EmployeeTypeKey,
 } from "../lib/leave-rules.config.js";
+import { getStatutorySaPublicHolidays } from "../lib/sa-labour-rules.config.js";
 
 export type LeaveTypeCode = "ANNUAL" | "SICK" | "FAMILY_RESPONSIBILITY" | "PARENTAL" | "STUDY";
 export type ParentalLeaveScenarioCode = "SOLE_OR_ONLY_EMPLOYED_PARENT" | "SHARED_POOL";
@@ -169,7 +170,7 @@ export function isMedicalCertificateRequired(params: {
   unitsRequested: number;
   priorSickOccurrencesInTrailing8Weeks: number;
 }): boolean {
-  return params.unitsRequested > 2 || params.priorSickOccurrencesInTrailing8Weeks > 2;
+  return params.unitsRequested > 2 || params.priorSickOccurrencesInTrailing8Weeks >= 2;
 }
 
 // --- Family responsibility leave ---
@@ -190,9 +191,11 @@ export function isEligibleForFamilyResponsibilityLeave(params: {
   commencementDate: Date;
   asOf: Date;
 }): boolean {
-  const monthsEmployed = monthsOfService(params.commencementDate, params.asOf);
+  const afterMinService =
+    toUtcMidnight(params.asOf) >
+    addUtcMonths(params.commencementDate, LEAVE_RULES.familyResponsibilityMinServiceMonths);
   const worksAtLeastFourUnitsAWeek = employeeTypeConfig(params.employeeType).workUnitsPerWeek >= 4;
-  return monthsEmployed > LEAVE_RULES.familyResponsibilityMinServiceMonths && worksAtLeastFourUnitsAWeek;
+  return afterMinService && worksAtLeastFourUnitsAWeek;
 }
 
 // --- Parental leave ---
@@ -230,11 +233,23 @@ export function isLeaveTypeAvailable(leaveType: LeaveTypeCode, employeeType: Emp
 
 /** Observed dates (Sunday -> Monday) of every configured public holiday whose observed date falls within [startDate, endDate]. */
 export function publicHolidaysInRange(startDate: Date, endDate: Date): string[] {
-  const startKey = dateKey(startDate);
-  const endKey = dateKey(endDate);
-  return LEAVE_RULES.publicHolidays2026
-    .map(observedHolidayDate)
-    .filter((observed) => observed >= startKey && observed <= endKey);
+  const start = toUtcMidnight(startDate);
+  const end = toUtcMidnight(endDate);
+  const startKey = dateKey(start);
+  const endKey = dateKey(end);
+  if (endKey < startKey) return [];
+
+  const observed = new Set<string>();
+  for (let year = start.getUTCFullYear() - 1; year <= end.getUTCFullYear(); year++) {
+    for (const h of getStatutorySaPublicHolidays(year)) {
+      if (h.isObservedMonday) continue;
+      const obs = observedHolidayDate({ date: h.dateKey, name: h.name });
+      if (obs >= startKey && obs <= endKey) {
+        observed.add(obs);
+      }
+    }
+  }
+  return [...observed].sort();
 }
 
 // --- Balance ---

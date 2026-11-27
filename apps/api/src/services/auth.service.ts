@@ -11,6 +11,7 @@ import {
   type UserAuthScalars,
 } from "../lib/user-access.js";
 import {
+  generateRefreshJwtId,
   isRefreshTokenActive,
   persistRefreshToken,
   revokeAllUserRefreshTokens,
@@ -68,9 +69,13 @@ function issueJwtPair(user: TokenUser): AuthResult {
   const accessToken = jwt.sign(payload, config.jwt.accessSecret, {
     expiresIn: config.jwt.accessExpiry,
   });
-  const refreshToken = jwt.sign({ ...payload, type: "refresh" }, config.jwt.refreshSecret, {
-    expiresIn: config.jwt.refreshExpiry,
-  });
+  const refreshToken = jwt.sign(
+    { ...payload, type: "refresh", jti: generateRefreshJwtId() },
+    config.jwt.refreshSecret,
+    {
+      expiresIn: config.jwt.refreshExpiry,
+    }
+  );
   const decoded = jwt.decode(accessToken) as { exp?: number };
   const expiresIn = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 900;
   const isOwner = user.isOwner ?? user.company?.ownerUserId === user.id;
@@ -166,7 +171,10 @@ export async function refreshAccessToken(
 export async function logoutUser(userId?: string, refreshToken?: string): Promise<void> {
   if (refreshToken) {
     const { revokeRefreshToken } = await import("./refresh-token.service.js");
-    await revokeRefreshToken(refreshToken);
+    const revokedCount = await revokeRefreshToken(refreshToken, userId);
+    if (revokedCount === 0 && userId) {
+      await revokeAllUserRefreshTokens(userId);
+    }
   } else if (userId) {
     await revokeAllUserRefreshTokens(userId);
   }

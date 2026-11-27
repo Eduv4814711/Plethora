@@ -218,4 +218,30 @@ describe("SA Smart Rostering Solvers (HiGHS MILP + Heuristic LNS + SA Frameworks
     expect(res.metrics.restViolationsCount).toBe(0);
     expect(res.metrics.totalOvertimeHours).toBe(0);
   });
+
+  it("counts cross-site shifts toward the 48h weekly cap so guards cannot exceed statutory ordinary hours across sites", async () => {
+    const solver = new HighsMilpSolver();
+    // g1 already worked 3x12h = 36h Mon-Wed at another site; with allowOvertime: false, g1 can work at most 1 more 12h shift (48h total) this week
+    const req = makeBaseRequest({
+      days: makeDays("2026-06-01", 7), // Mon Jun 1 .. Sun Jun 7
+      allowOvertime: false,
+      guards: [
+        makeGuard("g1", "Cross-Site Guard", {
+          otherSiteShiftsByDate: {
+            "2026-06-01": [{ siteId: "s2", siteName: "Site B", shiftType: "day", startTimeIso: "2026-06-01T06:00:00+02:00", endTimeIso: "2026-06-01T18:00:00+02:00" }],
+            "2026-06-02": [{ siteId: "s2", siteName: "Site B", shiftType: "day", startTimeIso: "2026-06-02T06:00:00+02:00", endTimeIso: "2026-06-02T18:00:00+02:00" }],
+            "2026-06-03": [{ siteId: "s2", siteName: "Site B", shiftType: "day", startTimeIso: "2026-06-03T06:00:00+02:00", endTimeIso: "2026-06-03T18:00:00+02:00" }],
+          },
+        }),
+        makeGuard("g2", "Guard Two"),
+        makeGuard("g3", "Guard Three"),
+        makeGuard("g4", "Guard Four"),
+        makeGuard("g5", "Guard Five"),
+      ],
+    });
+
+    const res = await solver.solve(req);
+    const g1ShiftsThisSite = res.assignments.filter((a) => a.guardId === "g1");
+    expect(g1ShiftsThisSite.length).toBeLessThanOrEqual(1);
+  });
 });

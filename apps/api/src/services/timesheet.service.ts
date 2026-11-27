@@ -1,13 +1,13 @@
-import { toZonedTime } from "date-fns-tz";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { prisma } from "../lib/prisma.js";
 import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
 import { employeeTypeConfig } from "../lib/leave-rules.config.js";
 import { toLeaveConfigEmployeeType } from "./leave-v3.service.js";
 import {
+  addDaysToDateKey,
   buildEffectiveHolidaySet,
   parseLabourComplianceSettings,
   resolveEmployeeBceaCategory,
-  toSastDateKey,
 } from "../lib/sa-labour-rules.config.js";
 import {
   classifyEmployeePeriodShifts,
@@ -159,6 +159,14 @@ function anchorWorkDateToShiftStart(
   return new Date(`${datePart}T${hourPart}+02:00`);
 }
 
+function startOfUtcDay(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+function utcDateKey(d: Date): string {
+  return startOfUtcDay(d).toISOString().slice(0, 10);
+}
+
 /**
  * Aggregate hours from SiteTimesheet + Shift/Attendance for a period using
  * South African NBCPSS Main Collective Agreement + BCEA classification rules.
@@ -169,19 +177,16 @@ export async function aggregateTimesheets(
   periodEnd: Date
 ): Promise<TimesheetAggregate[]> {
   const timeZone = await getCompanyTimezone(companyId);
-  const periodEndExclusive = new Date(Date.UTC(
-    periodEnd.getUTCFullYear(),
-    periodEnd.getUTCMonth(),
-    periodEnd.getUTCDate() + 1
-  ));
+  const periodStartKey = utcDateKey(periodStart);
+  const periodEndKey = utcDateKey(periodEnd);
+  const periodEndExclusive = fromZonedTime(`${addDaysToDateKey(periodEndKey, 1)}T00:00:00`, timeZone);
   const borderStart = new Date(Date.UTC(
     periodStart.getUTCFullYear(),
     periodStart.getUTCMonth(),
     periodStart.getUTCDate() - 6
   ));
-  const periodStartKey = toSastDateKey(periodStart);
-  const periodEndKey = toSastDateKey(periodEnd);
-  const borderStartKey = toSastDateKey(borderStart);
+  const borderStartPrevDay = new Date(borderStart.getTime() - 86_400_000);
+  const borderStartKey = utcDateKey(borderStart);
 
   const [companyRow, siteMealRows, holidays] = await Promise.all([
     (prisma as any).company?.findUnique?.({
@@ -195,7 +200,7 @@ export async function aggregateTimesheets(
     prisma.publicHoliday.findMany({
       where: {
         companyId,
-        date: { gte: borderStart, lte: periodEnd },
+        date: { gte: borderStartPrevDay, lte: periodEndExclusive },
       },
     }),
   ]);
@@ -214,7 +219,8 @@ export async function aggregateTimesheets(
   }
 
   const holidayYears = new Set<number>();
-  for (let y = borderStart.getUTCFullYear(); y <= periodEnd.getUTCFullYear(); y++) {
+  const maxYear = Math.max(periodEnd.getUTCFullYear(), periodEndExclusive.getUTCFullYear());
+  for (let y = borderStart.getUTCFullYear(); y <= maxYear; y++) {
     holidayYears.add(y);
   }
   const effectiveHolidays = buildEffectiveHolidaySet(
@@ -300,6 +306,7 @@ export async function aggregateTimesheets(
         some: {
           clockIn: { not: null },
           clockOut: { not: null },
+          validationStatus: { not: "REJECTED_GEOFENCE" },
         },
       },
     },
@@ -309,22 +316,24 @@ export async function aggregateTimesheets(
         where: {
           clockIn: { not: null },
           clockOut: { not: null },
+          validationStatus: { not: "REJECTED_GEOFENCE" },
         },
       },
     },
   });
-  const shiftsWithAttendance = shiftsWithAttendanceRaw.filter(
-    (shift) =>
-      !approvedSourceShiftIds.has(shift.id) &&
-      !approvedFallbackShiftKeys.has(
-        siteTimesheetShiftMatchKey(
-          shift.siteId,
-          shift.employeeId,
-          dateKeyInTimeZone(shift.startTime, timeZone),
-          shift.shiftType
-        )
+  const shiftsWithAttendance = shiftsWithAttendanceRaw.filter((shift) => {
+    const dk = dateKeyInTimeZone(shift.startTime, timeZone);
+    if (approvedCoverage.has(`${shift.siteId}:${dk}`)) return false;
+    if (approvedSourceShiftIds.has(shift.id)) return false;
+    if (
+      approvedFallbackShiftKeys.has(
+        siteTimesheetShiftMatchKey(shift.siteId, shift.employeeId, dk, shift.shiftType)
       )
-  );
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   const approvedLeaveRequests = await prisma.leaveRequest.findMany({
     where: {
@@ -346,6 +355,9 @@ export async function aggregateTimesheets(
 
   const DAY_MS = 24 * 60 * 60 * 1000;
   const employeeLeaveHours = new Map<string, number>();
+  const employeeHoursPerUnit = new Map<string, number>();
+  const periodStartDay = startOfUtcDay(periodStart);
+  const periodEndDay = startOfUtcDay(periodEnd);
   const employeeLeaveByType = new Map<
     string,
     { annual: number; sick: number; family: number; study: number }
@@ -452,14 +464,17 @@ export async function aggregateTimesheets(
   }
 
   for (const request of approvedLeaveRequests) {
-    const overlapStart = request.startDate > periodStart ? request.startDate : periodStart;
-    const overlapEnd = request.endDate < periodEnd ? request.endDate : periodEnd;
+    const reqStartDay = startOfUtcDay(request.startDate);
+    const reqEndDay = startOfUtcDay(request.endDate);
+    const overlapStart = reqStartDay > periodStartDay ? reqStartDay : periodStartDay;
+    const overlapEnd = reqEndDay < periodEndDay ? reqEndDay : periodEndDay;
     if (overlapEnd < overlapStart) continue;
 
-    const totalDays = Math.round((request.endDate.getTime() - request.startDate.getTime()) / DAY_MS) + 1;
+    const totalDays = Math.round((reqEndDay.getTime() - reqStartDay.getTime()) / DAY_MS) + 1;
     const overlapDays = Math.round((overlapEnd.getTime() - overlapStart.getTime()) / DAY_MS) + 1;
     const ratio = totalDays > 0 ? overlapDays / totalDays : 0;
     const hoursPerUnit = employeeTypeConfig(toLeaveConfigEmployeeType(request.employee.employeeType)).hoursPerUnit;
+    employeeHoursPerUnit.set(request.employeeId, hoursPerUnit);
     const hours = Number(request.unitsRequested) * ratio * hoursPerUnit;
 
     addSourceLeaveRequest(request.employeeId, request.id);
@@ -500,6 +515,7 @@ export async function aggregateTimesheets(
 
   const employeeWorkedQueue = new Map<string, QueuedWorkedShift[]>();
   const employeeCredentialsMap = new Map<string, EmployeeCredentialCheckInput>();
+  const employeeDefaultCategoryMap = new Map<string, ReturnType<typeof resolveEmployeeBceaCategory>>();
   const totals = new Map<
     string,
     {
@@ -585,13 +601,28 @@ export async function aggregateTimesheets(
     const explicitOt = row.overtimeHours != null ? Number(row.overtimeHours) : 0;
     const totalShiftHours = hoursWorked + explicitOt;
     const siteMeal = siteMealMap.get(row.siteId);
-    const startTime = row.clockIn ?? anchorWorkDateToShiftStart(row.workDate, row.actualShiftType);
+    const startTime =
+      row.clockIn ?? anchorWorkDateToShiftStart(row.workDate, row.actualShiftType ?? row.plannedShiftType);
     const endTime = new Date(startTime.getTime() + Math.max(0, totalShiftHours) * 3_600_000);
     const scheduledEndTime =
       explicitOt > 0 ? new Date(startTime.getTime() + Math.max(0, hoursWorked) * 3_600_000) : undefined;
     const guardObj = (row as {
       actualGuard?: { employeeType?: string | null; bceaSectorOverride?: string | null } | null;
     }).actualGuard;
+    if (guardObj?.employeeType && !employeeHoursPerUnit.has(empId)) {
+      employeeHoursPerUnit.set(
+        empId,
+        employeeTypeConfig(toLeaveConfigEmployeeType(guardObj.employeeType)).hoursPerUnit,
+      );
+    }
+    const rowCat = resolveEmployeeBceaCategory(
+      guardObj?.employeeType,
+      guardObj?.bceaSectorOverride,
+      companyRow?.settings,
+    );
+    if (!employeeDefaultCategoryMap.has(empId)) {
+      employeeDefaultCategoryMap.set(empId, rowCat);
+    }
 
     const rowWorkDate = new Date(row.workDate);
     rowWorkDate.setUTCHours(0, 0, 0, 0);
@@ -614,11 +645,7 @@ export async function aggregateTimesheets(
         isScheduledOnRoster: !(row.attendanceStatus === "reliever" && !row.plannedGuardId && !row.sourceShiftId),
         mealIntervalPaid: siteMeal?.mealIntervalPaid ?? true,
         mealIntervalMinutes: siteMeal?.mealIntervalMinutes ?? 60,
-        employeeCategory: resolveEmployeeBceaCategory(
-          guardObj?.employeeType,
-          guardObj?.bceaSectorOverride,
-          companyRow?.settings,
-        ),
+        employeeCategory: rowCat,
         isCarryoverContextOnly: isCarryover,
       },
     });
@@ -626,7 +653,7 @@ export async function aggregateTimesheets(
 
   for (const shift of shiftsWithAttendance) {
     const empId = shift.employeeId;
-    const shiftStartKey = toSastDateKey(shift.startTime);
+    const shiftStartKey = dateKeyInTimeZone(shift.startTime, timeZone);
     if (shiftStartKey < borderStartKey || shiftStartKey > periodEndKey) continue;
     const isCarryover = shiftStartKey < periodStartKey;
 
@@ -649,15 +676,44 @@ export async function aggregateTimesheets(
     const empObj = (shift as {
       employee?: { employeeType?: string | null; bceaSectorOverride?: string | null } | null;
     }).employee;
+    if (empObj?.employeeType && !employeeHoursPerUnit.has(empId)) {
+      employeeHoursPerUnit.set(
+        empId,
+        employeeTypeConfig(toLeaveConfigEmployeeType(empObj.employeeType)).hoursPerUnit,
+      );
+    }
+    const shiftCat = resolveEmployeeBceaCategory(
+      empObj?.employeeType,
+      empObj?.bceaSectorOverride,
+      companyRow?.settings,
+    );
+    if (!employeeDefaultCategoryMap.has(empId)) {
+      employeeDefaultCategoryMap.set(empId, shiftCat);
+    }
 
     for (const att of shift.attendances) {
+      if (att.validationStatus === "REJECTED_GEOFENCE" || att.status === "absent") continue;
       const hoursWorked = att.hoursWorked != null ? Number(att.hoursWorked) : 0;
       const explicitOt = att.overtimeHours != null ? Number(att.overtimeHours) : 0;
       const totalShiftHours = hoursWorked + explicitOt;
-      const startTime = shift.startTime;
-      const endTime = new Date(startTime.getTime() + Math.max(0, totalShiftHours) * 3_600_000);
-      const scheduledEndTime =
-        explicitOt > 0 ? new Date(startTime.getTime() + Math.max(0, hoursWorked) * 3_600_000) : undefined;
+      const useActualTimestamps =
+        Boolean(att.clockIn && att.clockOut) &&
+        att.clockOut!.getTime() > att.clockIn!.getTime() &&
+        totalShiftHours > 0;
+      const startTime = useActualTimestamps ? att.clockIn! : shift.startTime;
+      const endTime = useActualTimestamps
+        ? att.clockOut!
+        : new Date(shift.startTime.getTime() + Math.max(0, totalShiftHours) * 3_600_000);
+      const scheduledStartTime = useActualTimestamps
+        ? shift.startTime
+        : explicitOt > 0
+          ? shift.startTime
+          : undefined;
+      const scheduledEndTime = useActualTimestamps
+        ? shift.endTime
+        : explicitOt > 0
+          ? new Date(shift.startTime.getTime() + Math.max(0, hoursWorked) * 3_600_000)
+          : undefined;
 
       enqueueWorked(empId, {
         siteId: shift.siteId,
@@ -668,16 +724,12 @@ export async function aggregateTimesheets(
           siteId: shift.siteId,
           startTime,
           endTime,
-          scheduledStartTime: explicitOt > 0 ? startTime : undefined,
+          scheduledStartTime,
           scheduledEndTime,
           isScheduledOnRoster: true,
           mealIntervalPaid: siteMeal?.mealIntervalPaid ?? true,
           mealIntervalMinutes: siteMeal?.mealIntervalMinutes ?? 60,
-          employeeCategory: resolveEmployeeBceaCategory(
-            empObj?.employeeType,
-            empObj?.bceaSectorOverride,
-            companyRow?.settings,
-          ),
+          employeeCategory: shiftCat,
           isCarryoverContextOnly: isCarryover,
         },
       });
@@ -694,6 +746,7 @@ export async function aggregateTimesheets(
       holidays: effectiveHolidays,
       settings: labourSettings,
       employeeCredentials: employeeCredentialsMap.get(empId),
+      defaultCategory: employeeDefaultCategoryMap.get(empId),
     });
 
     const t = ensureTotalsEntry(empId);
@@ -752,6 +805,7 @@ export async function aggregateTimesheets(
   for (const [employeeId, t] of totals) {
     seen.add(employeeId);
     const leaveHours = Math.round((employeeLeaveHours.get(employeeId) ?? 0) * 100) / 100;
+    const hpUnit = employeeHoursPerUnit.get(employeeId) ?? 8;
     result.push({
       employeeId,
       basicHours: Math.round(t.basicHours * 100) / 100,
@@ -766,7 +820,7 @@ export async function aggregateTimesheets(
       uifLeaveHours: Math.round((employeeUifLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       iodLeaveHours: Math.round((employeeIodLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       informationLeaveHours: Math.round((employeeInformationLeaveHours.get(employeeId) ?? 0) * 100) / 100,
-      leaveDays: Math.round((leaveHours / 8) * 100) / 100,
+      leaveDays: Math.round((leaveHours / hpUnit) * 100) / 100,
       workedShiftsCount: t.workedShiftsCount,
       ...buildMetaFields(employeeId),
       segments: getSegments(employeeId),
@@ -779,6 +833,7 @@ export async function aggregateTimesheets(
     if (seen.has(employeeId) || leaveHoursRaw <= 0) continue;
     seen.add(employeeId);
     const leaveHours = Math.round(leaveHoursRaw * 100) / 100;
+    const hpUnit = employeeHoursPerUnit.get(employeeId) ?? 8;
     result.push({
       employeeId,
       basicHours: 0,
@@ -793,7 +848,7 @@ export async function aggregateTimesheets(
       uifLeaveHours: Math.round((employeeUifLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       iodLeaveHours: Math.round((employeeIodLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       informationLeaveHours: Math.round((employeeInformationLeaveHours.get(employeeId) ?? 0) * 100) / 100,
-      leaveDays: Math.round((leaveHours / 8) * 100) / 100,
+      leaveDays: Math.round((leaveHours / hpUnit) * 100) / 100,
       workedShiftsCount: 0,
       ...buildMetaFields(employeeId),
       segments: getSegments(employeeId),
@@ -804,6 +859,7 @@ export async function aggregateTimesheets(
   // Include authorised unpaid leave for fixed-salary employees with no worked or paid-leave hours.
   for (const [employeeId, unpaidLeaveHoursRaw] of employeeUnpaidLeaveHours) {
     if (seen.has(employeeId) || unpaidLeaveHoursRaw <= 0) continue;
+    seen.add(employeeId);
     result.push({
       employeeId,
       basicHours: 0,

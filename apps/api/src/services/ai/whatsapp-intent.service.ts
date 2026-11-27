@@ -39,6 +39,23 @@ export const extractedLeaveParamsSchema = z.object({
   startDateIso: optionalIsoDateSchema,
   endDateIso: optionalIsoDateSchema,
   reason: z.preprocess(emptyOrNullToUndefined, z.string().max(240).optional()),
+  familyResponsibilityReason: z.preprocess(
+    emptyOrNullToUndefined,
+    z
+      .enum([
+        "CHILD_BIRTH",
+        "CHILD_SICK",
+        "SPOUSE_OR_LIFE_PARTNER_DEATH",
+        "PARENT_DEATH",
+        "ADOPTIVE_PARENT_DEATH",
+        "GRANDPARENT_DEATH",
+        "CHILD_DEATH",
+        "ADOPTED_CHILD_DEATH",
+        "GRANDCHILD_DEATH",
+        "SIBLING_DEATH",
+      ])
+      .optional()
+  ),
 });
 
 export const extractedIncidentParamsSchema = z.object({
@@ -90,6 +107,7 @@ function buildSystemPrompt(todayIso: string): string {
     "  - leaveType: ANNUAL | SICK | FAMILY_RESPONSIBILITY | STUDY",
     `  - startDateIso / endDateIso: YYYY-MM-DD resolved relative to ${todayIso} (if single day, set endDateIso = startDateIso)`,
     "  - reason: concise English reason if stated",
+    "  - familyResponsibilityReason: if FAMILY_RESPONSIBILITY, map to CHILD_BIRTH | CHILD_SICK | SPOUSE_OR_LIFE_PARTNER_DEATH | PARENT_DEATH | ADOPTIVE_PARENT_DEATH | GRANDPARENT_DEATH | CHILD_DEATH | ADOPTED_CHILD_DEATH | GRANDCHILD_DEATH | SIBLING_DEATH when clear",
     "When intent is INCIDENT_REPORT, extract `incidentParams` if mentioned:",
     "  - categoryKey: '1' (Site Emergency/Safety), '2' (Break-in/Theft/Trespass), '3' (Guard Misconduct/Absence), '4' (Equipment/Fence/Gate/Power Damage), '5' (Client Complaint/Other)",
     "  - siteHint: site or post name if mentioned",

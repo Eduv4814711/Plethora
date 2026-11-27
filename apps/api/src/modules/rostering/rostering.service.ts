@@ -1,4 +1,5 @@
 import { Prisma, type ShiftStatus } from "@prisma/client";
+import { fromZonedTime } from "date-fns-tz";
 import { prisma } from "../../lib/prisma.js";
 import { canTransitionShift } from "../../lib/state-machines.js";
 import { createAuditLog } from "../../lib/audit.js";
@@ -270,19 +271,25 @@ export const rosteringModuleService = {
     userId: string,
     input: ResetInput
   ): Promise<{ deleted: number } | RosteringServiceError> {
-    const start = new Date(`${input.startDate.slice(0, 10)}T00:00:00.000Z`);
-    const end = new Date(`${input.endDate.slice(0, 10)}T23:59:59.999Z`);
+    const startKey = input.startDate.slice(0, 10);
+    const endKey = input.endDate.slice(0, 10);
+    const start = parseDateOnly(startKey);
+    const end = parseDateOnlyEnd(endKey);
     if (start > end) {
       return {
         status: 400,
         body: { error: "Validation error", message: "endDate must be on or after startDate" },
       };
     }
+    const timeZone = await getCompanyTimezone(companyId);
+    const nextDay = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate() + 1));
+    const nextDayKey = nextDay.toISOString().slice(0, 10);
+    const rangeStartUtc = fromZonedTime(`${startKey}T00:00:00`, timeZone);
+    const rangeEndExclusiveUtc = fromZonedTime(`${nextDayKey}T00:00:00`, timeZone);
     const where: Prisma.ShiftWhereInput = {
       companyId,
       status: { in: ["created", "assigned"] },
-      startTime: { lt: end },
-      endTime: { gt: start },
+      startTime: { gte: rangeStartUtc, lt: rangeEndExclusiveUtc },
       ...(input.employeeId && { employeeId: input.employeeId }),
       ...(input.siteId && { siteId: input.siteId }),
     };
@@ -414,13 +421,18 @@ export const rosteringModuleService = {
     const timeZone = await getCompanyTimezone(companyId);
     const postAssignmentByEmployee = buildEmployeePostAssignmentMap(postsWithAssignments);
     const roundRobin = { day: 0, night: 0 };
+    const startKey = params.start.toISOString().slice(0, 10);
+    const nextEndDay = new Date(
+      Date.UTC(params.end.getUTCFullYear(), params.end.getUTCMonth(), params.end.getUTCDate() + 1)
+    );
+    const rangeStartUtc = fromZonedTime(`${startKey}T00:00:00`, timeZone);
+    const rangeEndExclusiveUtc = fromZonedTime(`${nextEndDay.toISOString().slice(0, 10)}T00:00:00`, timeZone);
     const deleteWhere: Prisma.ShiftWhereInput = {
       companyId,
       employeeId: params.employeeId,
       siteId: params.siteId,
       status: { in: ["created", "assigned"] },
-      startTime: { lt: params.end },
-      endTime: { gt: params.start },
+      startTime: { gte: rangeStartUtc, lt: rangeEndExclusiveUtc },
     };
     const replaceableShiftIds = await prisma.shift.findMany({
       where: deleteWhere,
@@ -438,7 +450,7 @@ export const rosteringModuleService = {
         assignmentByEmployee: postAssignmentByEmployee,
         roundRobin,
       });
-      const { shiftStart, shiftEnd } = getShiftTimes(date, shiftType, timeZone);
+      const { shiftStart, shiftEnd } = getShiftTimes(date, shiftType, timeZone, site);
       try {
         await validateShiftAssignment({
           companyId,
@@ -535,14 +547,19 @@ export const rosteringModuleService = {
     const shiftType = (inferPostShiftType(post.coverageRequirements) ?? "day") as "day" | "night";
     const dates = computeDatesFromPattern(params.start, params.end, params.pattern, params.customDays);
     const timeZone = await getCompanyTimezone(companyId);
+    const startKey = params.start.toISOString().slice(0, 10);
+    const nextEndDay = new Date(
+      Date.UTC(params.end.getUTCFullYear(), params.end.getUTCMonth(), params.end.getUTCDate() + 1)
+    );
+    const rangeStartUtc = fromZonedTime(`${startKey}T00:00:00`, timeZone);
+    const rangeEndExclusiveUtc = fromZonedTime(`${nextEndDay.toISOString().slice(0, 10)}T00:00:00`, timeZone);
     const deleteWhere: Prisma.ShiftWhereInput = {
       companyId,
       employeeId: params.employeeId,
       siteId: post.siteId,
       shiftType,
       status: { in: ["created", "assigned"] },
-      startTime: { lt: params.end },
-      endTime: { gt: params.start },
+      startTime: { gte: rangeStartUtc, lt: rangeEndExclusiveUtc },
     };
     const replaceableShiftIds = await prisma.shift.findMany({
       where: deleteWhere,
@@ -552,7 +569,7 @@ export const rosteringModuleService = {
     const shiftsToCreate: BulkShiftCreateInput[] = [];
     const errors: string[] = [];
     for (const date of dates) {
-      const { shiftStart, shiftEnd } = getShiftTimes(date, shiftType, timeZone);
+      const { shiftStart, shiftEnd } = getShiftTimes(date, shiftType, timeZone, post.site);
       try {
         await validateShiftAssignment({
           companyId,
@@ -763,7 +780,8 @@ export const rosteringModuleService = {
     const leaveByEmployee = await getLeaveDateKeysByEmployee(
       candidates.map((e) => e.id),
       shift.startTime,
-      shift.startTime
+      shift.startTime,
+      companyId
     );
     const site = shift.site;
     const postShiftType = shift.shiftType;

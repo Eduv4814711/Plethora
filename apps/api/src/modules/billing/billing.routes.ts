@@ -91,6 +91,32 @@ export async function billingRoutes(app: FastifyInstance) {
     return prisma.client.findFirst({ where: { id: clientId, companyId } });
   }
 
+  /** Ensures every non-null line item siteId belongs to the company (and client when known). */
+  async function validateLineSiteIds(
+    companyId: string,
+    clientId: string | null | undefined,
+    items: readonly LineInput[],
+  ): Promise<string | null> {
+    const lineSiteIds = [
+      ...new Set(items.map((item) => item.siteId).filter((id): id is string => Boolean(id))),
+    ];
+    if (lineSiteIds.length === 0) return null;
+    const sites = await prisma.site.findMany({
+      where: {
+        id: { in: lineSiteIds },
+        companyId,
+        ...(clientId ? { clientId } : {}),
+      },
+      select: { id: true },
+    });
+    if (sites.length !== lineSiteIds.length) {
+      return clientId
+        ? "One or more line item siteId values do not belong to this client"
+        : "One or more line item siteId values were not found";
+    }
+    return null;
+  }
+
   // -------------------------------------------------------------------------
   // Summary & client views
   // -------------------------------------------------------------------------
@@ -199,6 +225,9 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Client not found" });
     }
     const asOfDate = asOf ? new Date(asOf) : new Date();
+    if (Number.isNaN(asOfDate.getTime())) {
+      return reply.code(400).send({ error: "Validation error", message: "Invalid asOf date" });
+    }
     const billing = await calculateClientBilling(companyId, clientId, asOfDate);
 
     const siteConfigs = await prisma.siteBillingConfig.findMany({
@@ -264,6 +293,9 @@ export async function billingRoutes(app: FastifyInstance) {
     }
 
     const asOfDate = asOf ? new Date(asOf) : new Date();
+    if (Number.isNaN(asOfDate.getTime())) {
+      return reply.code(400).send({ error: "Validation error", message: "Invalid asOf date" });
+    }
     const [siteBilling, activeGuards, history, numberingConfig, quotePreview, invoicePreview] = await Promise.all([
       calculateSiteBilling(companyId, siteId, asOfDate),
       getActiveBillableGuards(companyId, siteId, asOfDate),
@@ -703,6 +735,11 @@ export async function billingRoutes(app: FastifyInstance) {
       }
     }
 
+    const lineSiteError = await validateLineSiteIds(companyId, data.clientId, data.items);
+    if (lineSiteError) {
+      return reply.code(400).send({ error: "Validation error", message: lineSiteError });
+    }
+
     const lines = buildLineRows(data.items);
     const totals = computeDocumentTotals(lines, toDec(data.discountAmount), toDec(data.vatRate));
     if (totals.subtotal.sub(totals.discountAmount).lt(0)) {
@@ -818,7 +855,15 @@ export async function billingRoutes(app: FastifyInstance) {
     if (data.clientId && !(await findClient(companyId, data.clientId))) {
       return reply.code(400).send({ error: "Validation error", message: "clientId not found" });
     }
+    const effectiveProspectName = data.prospectName !== undefined ? data.prospectName : existing.prospectName;
+    if (!targetClientId && !effectiveProspectName?.trim()) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "Either an existing client or a business name for a potential client is required",
+      });
+    }
 
+    let resolvedPatchSiteId: string | null | undefined = data.siteId;
     if (data.siteId !== undefined && data.siteId !== null) {
       const site = await prisma.site.findFirst({
         where: { id: data.siteId, companyId, ...(targetClientId ? { clientId: targetClientId } : {}) },
@@ -826,12 +871,34 @@ export async function billingRoutes(app: FastifyInstance) {
       if (!site) {
         return reply.code(400).send({ error: "Validation error", message: "siteId not found for this client" });
       }
+    } else if (data.clientId !== undefined && existing.siteId) {
+      const existingSiteValid = await prisma.site.findFirst({
+        where: {
+          id: existing.siteId,
+          companyId,
+          ...(targetClientId ? { clientId: targetClientId } : {}),
+        },
+        select: { id: true },
+      });
+      if (!existingSiteValid) {
+        resolvedPatchSiteId = null;
+      }
+    }
+
+    if (data.items) {
+      const lineSiteError = await validateLineSiteIds(companyId, targetClientId, data.items);
+      if (lineSiteError) {
+        return reply.code(400).send({ error: "Validation error", message: lineSiteError });
+      }
     }
 
     const quoteDate = data.quoteDate ? parseDate(data.quoteDate) : existing.quoteDate;
     const validUntil = data.validUntil ? parseDate(data.validUntil) : existing.validUntil;
     if (!quoteDate || !validUntil) {
       return reply.code(400).send({ error: "Validation error", message: "Invalid quoteDate or validUntil" });
+    }
+    if (validUntil < quoteDate) {
+      return reply.code(400).send({ error: "Validation error", message: "validUntil must be on or after quoteDate" });
     }
 
     const lines = data.items
@@ -859,7 +926,7 @@ export async function billingRoutes(app: FastifyInstance) {
         where: { id },
         data: {
           ...(data.clientId !== undefined ? { clientId: data.clientId } : {}),
-          ...(data.siteId !== undefined ? { siteId: data.siteId } : {}),
+          ...(resolvedPatchSiteId !== undefined ? { siteId: resolvedPatchSiteId } : {}),
           ...(data.prospectName !== undefined ? { prospectName: data.prospectName } : {}),
           ...(data.prospectEmail !== undefined ? { prospectEmail: data.prospectEmail } : {}),
           ...(data.prospectPhone !== undefined ? { prospectPhone: data.prospectPhone } : {}),
@@ -1005,34 +1072,14 @@ export async function billingRoutes(app: FastifyInstance) {
       });
     }
 
-    let clientId = quote.clientId;
-    let paymentTermsDays = quote.client?.paymentTermsDays ?? 30;
-
-    if (!clientId) {
-      const newClient = await prisma.client.create({
-        data: {
-          companyId,
-          name: quote.prospectName?.trim() || "Unnamed Client",
-          email: quote.prospectEmail?.trim() || null,
-          phone: quote.prospectPhone?.trim() || null,
-          billingEmail: quote.prospectEmail?.trim() || null,
-          billingAddress: quote.prospectAddress?.trim() || null,
-          paymentTermsDays: 30,
-        },
-      });
-      clientId = newClient.id;
-      paymentTermsDays = newClient.paymentTermsDays;
-
-      await prisma.clientQuote.update({
-        where: { id: quote.id },
-        data: { clientId: newClient.id },
-      });
-    }
-
     const targetSiteId = (conversionData.siteId !== undefined ? conversionData.siteId : quote.siteId) ?? null;
     if (targetSiteId) {
       const site = await prisma.site.findFirst({
-        where: { id: targetSiteId, companyId, ...(clientId ? { clientId } : {}) },
+        where: {
+          id: targetSiteId,
+          companyId,
+          ...(quote.clientId ? { clientId: quote.clientId } : {}),
+        },
       });
       if (!site) {
         return reply.code(400).send({ error: "Validation error", message: "siteId not found for this client" });
@@ -1048,12 +1095,36 @@ export async function billingRoutes(app: FastifyInstance) {
       }
     }
 
-    const invoiceDate = startOfUtcDay(new Date());
-    const dueDate = new Date(invoiceDate);
-    dueDate.setUTCDate(dueDate.getUTCDate() + paymentTermsDays);
-
     try {
       const invoice = await prisma.$transaction(async (tx) => {
+        let clientId = quote.clientId;
+        let paymentTermsDays = quote.client?.paymentTermsDays ?? 30;
+
+        if (!clientId) {
+          const newClient = await tx.client.create({
+            data: {
+              companyId,
+              name: quote.prospectName?.trim() || "Unnamed Client",
+              email: quote.prospectEmail?.trim() || null,
+              phone: quote.prospectPhone?.trim() || null,
+              billingEmail: quote.prospectEmail?.trim() || null,
+              billingAddress: quote.prospectAddress?.trim() || null,
+              paymentTermsDays: 30,
+            },
+          });
+          clientId = newClient.id;
+          paymentTermsDays = newClient.paymentTermsDays;
+
+          await tx.clientQuote.update({
+            where: { id: quote.id },
+            data: { clientId: newClient.id },
+          });
+        }
+
+        const invoiceDate = startOfUtcDay(new Date());
+        const dueDate = new Date(invoiceDate);
+        dueDate.setUTCDate(dueDate.getUTCDate() + paymentTermsDays);
+
         const finalInvoiceNumber =
           manualInvoiceNumber ??
           (await generateNextInvoiceNumber(companyId, {
@@ -1133,10 +1204,6 @@ export async function billingRoutes(app: FastifyInstance) {
     const validUntil = new Date(quoteDate);
     validUntil.setUTCDate(validUntil.getUTCDate() + 30);
 
-    const quoteNumber = await generateNextQuoteNumber(companyId, {
-      siteId: existing.siteId,
-      clientId: existing.clientId,
-    });
     const lines = existing.items.map((item) => ({
       siteId: item.siteId,
       description: item.description,
@@ -1146,45 +1213,59 @@ export async function billingRoutes(app: FastifyInstance) {
       sortOrder: item.sortOrder,
     }));
 
-    const duplicate = await prisma.clientQuote.create({
-      data: {
+    try {
+      const duplicate = await prisma.$transaction(async (tx) => {
+        const quoteNumber = await generateNextQuoteNumber(companyId, {
+          siteId: existing.siteId,
+          clientId: existing.clientId,
+          tx,
+        });
+        return tx.clientQuote.create({
+          data: {
+            companyId,
+            clientId: existing.clientId,
+            siteId: existing.siteId,
+            prospectName: existing.prospectName,
+            prospectEmail: existing.prospectEmail,
+            prospectPhone: existing.prospectPhone,
+            prospectAddress: existing.prospectAddress,
+            quoteNumber,
+            quoteDate,
+            validUntil,
+            reference: existing.reference ? `Copy of ${existing.reference}` : `Copy of ${existing.quoteNumber}`,
+            notes: existing.notes,
+            vatRate: existing.vatRate,
+            subtotal: existing.subtotal,
+            discountAmount: existing.discountAmount,
+            vatAmount: existing.vatAmount,
+            totalAmount: existing.totalAmount,
+            status: "draft",
+            items: { create: lines },
+          },
+          include: {
+            client: { select: { id: true, name: true } },
+            site: { select: { id: true, name: true } },
+            items: { orderBy: { sortOrder: "asc" } },
+          },
+        });
+      });
+
+      await createAuditLog({
+        userId: request.user!.sub,
         companyId,
-        clientId: existing.clientId,
-        siteId: existing.siteId,
-        prospectName: existing.prospectName,
-        prospectEmail: existing.prospectEmail,
-        prospectPhone: existing.prospectPhone,
-        prospectAddress: existing.prospectAddress,
-        quoteNumber,
-        quoteDate,
-        validUntil,
-        reference: existing.reference ? `Copy of ${existing.reference}` : `Copy of ${existing.quoteNumber}`,
-        notes: existing.notes,
-        vatRate: existing.vatRate,
-        subtotal: existing.subtotal,
-        discountAmount: existing.discountAmount,
-        vatAmount: existing.vatAmount,
-        totalAmount: existing.totalAmount,
-        status: "draft",
-        items: { create: lines },
-      },
-      include: {
-        client: { select: { id: true, name: true } },
-        site: { select: { id: true, name: true } },
-        items: { orderBy: { sortOrder: "asc" } },
-      },
-    });
+        action: "billing.quote.duplicate",
+        entityType: "client_quote",
+        entityId: duplicate.id,
+        metadata: { originalQuoteId: existing.id, quoteNumber: duplicate.quoteNumber, siteId: existing.siteId },
+      });
 
-    await createAuditLog({
-      userId: request.user!.sub,
-      companyId,
-      action: "billing.quote.duplicate",
-      entityType: "client_quote",
-      entityId: duplicate.id,
-      metadata: { originalQuoteId: existing.id, quoteNumber: duplicate.quoteNumber, siteId: existing.siteId },
-    });
-
-    return reply.code(201).send(serializeDocument(duplicate as unknown as Record<string, unknown>));
+      return reply.code(201).send(serializeDocument(duplicate as unknown as Record<string, unknown>));
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        return reply.code(409).send({ error: "Conflict", message: "Quote number already exists" });
+      }
+      throw err;
+    }
   });
 
   // -------------------------------------------------------------------------
@@ -1286,6 +1367,11 @@ export async function billingRoutes(app: FastifyInstance) {
       if (!site) {
         return reply.code(400).send({ error: "Validation error", message: "siteId not found for this client" });
       }
+    }
+
+    const lineSiteError = await validateLineSiteIds(companyId, data.clientId, data.items);
+    if (lineSiteError) {
+      return reply.code(400).send({ error: "Validation error", message: lineSiteError });
     }
 
     let dueDate: Date;
@@ -1423,12 +1509,28 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Validation error", message: "clientId not found" });
     }
 
+    let resolvedInvoiceSiteId: string | null | undefined = data.siteId;
     if (data.siteId !== undefined && data.siteId !== null) {
       const site = await prisma.site.findFirst({
         where: { id: data.siteId, companyId, clientId: targetClientId },
       });
       if (!site) {
         return reply.code(400).send({ error: "Validation error", message: "siteId not found for this client" });
+      }
+    } else if (data.clientId !== undefined && existing.siteId) {
+      const existingSiteValid = await prisma.site.findFirst({
+        where: { id: existing.siteId, companyId, clientId: targetClientId },
+        select: { id: true },
+      });
+      if (!existingSiteValid) {
+        resolvedInvoiceSiteId = null;
+      }
+    }
+
+    if (data.items) {
+      const lineSiteError = await validateLineSiteIds(companyId, targetClientId, data.items);
+      if (lineSiteError) {
+        return reply.code(400).send({ error: "Validation error", message: lineSiteError });
       }
     }
 
@@ -1466,7 +1568,7 @@ export async function billingRoutes(app: FastifyInstance) {
         where: { id },
         data: {
           ...(data.clientId ? { clientId: data.clientId } : {}),
-          ...(data.siteId !== undefined ? { siteId: data.siteId } : {}),
+          ...(resolvedInvoiceSiteId !== undefined ? { siteId: resolvedInvoiceSiteId } : {}),
           invoiceDate,
           dueDate,
           ...(data.reference !== undefined ? { reference: data.reference } : {}),
@@ -1606,10 +1708,6 @@ export async function billingRoutes(app: FastifyInstance) {
     const dueDate = new Date(invoiceDate);
     dueDate.setUTCDate(dueDate.getUTCDate() + (existing.client.paymentTermsDays ?? 30));
 
-    const invoiceNumber = await generateNextInvoiceNumber(companyId, {
-      siteId: existing.siteId,
-      clientId: existing.clientId,
-    });
     const lines = existing.items.map((item) => ({
       siteId: item.siteId,
       description: item.description,
@@ -1619,41 +1717,55 @@ export async function billingRoutes(app: FastifyInstance) {
       sortOrder: item.sortOrder,
     }));
 
-    const duplicate = await prisma.clientInvoice.create({
-      data: {
+    try {
+      const duplicate = await prisma.$transaction(async (tx) => {
+        const invoiceNumber = await generateNextInvoiceNumber(companyId, {
+          siteId: existing.siteId,
+          clientId: existing.clientId,
+          tx,
+        });
+        return tx.clientInvoice.create({
+          data: {
+            companyId,
+            clientId: existing.clientId,
+            siteId: existing.siteId,
+            invoiceNumber,
+            invoiceDate,
+            dueDate,
+            reference: existing.reference ? `Copy of ${existing.reference}` : `Copy of ${existing.invoiceNumber}`,
+            notes: existing.notes,
+            vatRate: existing.vatRate,
+            subtotal: existing.subtotal,
+            discountAmount: existing.discountAmount,
+            vatAmount: existing.vatAmount,
+            totalAmount: existing.totalAmount,
+            status: "draft",
+            items: { create: lines },
+          },
+          include: {
+            client: { select: { id: true, name: true } },
+            site: { select: { id: true, name: true } },
+            items: { orderBy: { sortOrder: "asc" } },
+          },
+        });
+      });
+
+      await createAuditLog({
+        userId: request.user!.sub,
         companyId,
-        clientId: existing.clientId,
-        siteId: existing.siteId,
-        invoiceNumber,
-        invoiceDate,
-        dueDate,
-        reference: existing.reference ? `Copy of ${existing.reference}` : `Copy of ${existing.invoiceNumber}`,
-        notes: existing.notes,
-        vatRate: existing.vatRate,
-        subtotal: existing.subtotal,
-        discountAmount: existing.discountAmount,
-        vatAmount: existing.vatAmount,
-        totalAmount: existing.totalAmount,
-        status: "draft",
-        items: { create: lines },
-      },
-      include: {
-        client: { select: { id: true, name: true } },
-        site: { select: { id: true, name: true } },
-        items: { orderBy: { sortOrder: "asc" } },
-      },
-    });
+        action: "billing.invoice.duplicate",
+        entityType: "client_invoice",
+        entityId: duplicate.id,
+        metadata: { originalInvoiceId: existing.id, invoiceNumber: duplicate.invoiceNumber, siteId: existing.siteId },
+      });
 
-    await createAuditLog({
-      userId: request.user!.sub,
-      companyId,
-      action: "billing.invoice.duplicate",
-      entityType: "client_invoice",
-      entityId: duplicate.id,
-      metadata: { originalInvoiceId: existing.id, invoiceNumber: duplicate.invoiceNumber, siteId: existing.siteId },
-    });
-
-    return reply.code(201).send(serializeDocument(duplicate as unknown as Record<string, unknown>));
+      return reply.code(201).send(serializeDocument(duplicate as unknown as Record<string, unknown>));
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        return reply.code(409).send({ error: "Conflict", message: "Invoice number already exists" });
+      }
+      throw err;
+    }
   });
 
   // -------------------------------------------------------------------------
@@ -1674,24 +1786,28 @@ export async function billingRoutes(app: FastifyInstance) {
     if (!paymentDate) {
       return reply.code(400).send({ error: "Validation error", message: "Invalid paymentDate" });
     }
-    const amount = toDec(data.amount);
+    const amount = toDec(data.amount).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
     if (amount.lte(0)) {
       return reply.code(400).send({ error: "Validation error", message: "Payment amount must be greater than zero" });
     }
 
-    const invoice = await prisma.clientInvoice.findFirst({ where: { id, companyId } });
-    if (!invoice) return reply.code(404).send({ error: "Invoice not found" });
-    if (invoice.status === "draft" || invoice.status === "cancelled") {
-      return reply.code(409).send({
-        error: "Cannot record payment",
-        message: `Payments cannot be recorded against a ${invoice.status} invoice`,
-      });
-    }
-
     const result = await prisma.$transaction(async (tx) => {
+      const lockKey = `billing-invoice-pay:${companyId}:${id}`;
+      try {
+        await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+      } catch {
+        // In mock/test environments without pg_advisory_xact_lock, continue
+      }
+
+      const invoice = await tx.clientInvoice.findFirst({ where: { id, companyId } });
+      if (!invoice) return { outcome: "not_found" } as const;
+      if (invoice.status === "draft" || invoice.status === "cancelled") {
+        return { outcome: "invalid_status", status: invoice.status } as const;
+      }
+
       const alreadyPaid = await getInvoicePaidAmount(tx, id);
       if (alreadyPaid.add(amount).gt(invoice.totalAmount)) {
-        return { overpaid: true, remaining: invoice.totalAmount.sub(alreadyPaid) } as const;
+        return { outcome: "overpaid", remaining: invoice.totalAmount.sub(alreadyPaid) } as const;
       }
 
       const payment = await tx.clientPayment.create({
@@ -1720,10 +1836,19 @@ export async function billingRoutes(app: FastifyInstance) {
       });
 
       const status = await syncInvoicePaymentStatus(tx, id);
-      return { overpaid: false, payment, receipt, status } as const;
+      return { outcome: "ok", invoice, payment, receipt, status } as const;
     });
 
-    if (result.overpaid) {
+    if (result.outcome === "not_found") {
+      return reply.code(404).send({ error: "Invoice not found" });
+    }
+    if (result.outcome === "invalid_status") {
+      return reply.code(409).send({
+        error: "Cannot record payment",
+        message: `Payments cannot be recorded against a ${result.status} invoice`,
+      });
+    }
+    if (result.outcome === "overpaid") {
       return reply.code(400).send({
         error: "Overpayment",
         message: `Payment exceeds the outstanding balance of ${decimalJson(result.remaining)}`,
@@ -1738,7 +1863,7 @@ export async function billingRoutes(app: FastifyInstance) {
       entityId: result.payment.id,
       metadata: {
         invoiceId: id,
-        invoiceNumber: invoice.invoiceNumber,
+        invoiceNumber: result.invoice.invoiceNumber,
         amount: decimalJson(amount),
         receiptNumber: result.receipt.receiptNumber,
         invoiceStatus: result.status,

@@ -1,5 +1,4 @@
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
-import { addDays } from "date-fns";
 import { prisma } from "./prisma.js";
 
 const DEFAULT_TIMEZONE = "Africa/Johannesburg";
@@ -54,10 +53,11 @@ export function localTimeInZone(
   timeZone: string
 ): Date {
   const y = date.getUTCFullYear();
-  const m = date.getUTCMonth();
-  const d = date.getUTCDate();
-  const dUtc = new Date(Date.UTC(y, m, d, hour, minute, 0, 0));
-  return fromZonedTime(dUtc, timeZone);
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  const hh = String(hour).padStart(2, "0");
+  const mm = String(minute).padStart(2, "0");
+  return fromZonedTime(`${y}-${m}-${d}T${hh}:${mm}:00`, timeZone);
 }
 
 export interface SiteShiftTimeConfig {
@@ -85,6 +85,10 @@ export function parseHourMinute(timeStr?: string | null, defaultHour = 6, defaul
  * Night shift: default 18:00–06:00 (next day) in company timezone.
  * Site-specific shift hours are respected if configured.
  */
+function addUtcDays(date: Date, days: number): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
+}
+
 export function getShiftTimes(
   date: Date,
   shiftType: "day" | "night",
@@ -97,7 +101,7 @@ export function getShiftTimes(
     const endsNextDay = end.hour < start.hour || (end.hour === start.hour && end.minute <= start.minute);
     return {
       shiftStart: localTimeInZone(date, start.hour, start.minute, timeZone),
-      shiftEnd: localTimeInZone(endsNextDay ? addDays(date, 1) : date, end.hour, end.minute, timeZone),
+      shiftEnd: localTimeInZone(endsNextDay ? addUtcDays(date, 1) : date, end.hour, end.minute, timeZone),
     };
   }
   const start = parseHourMinute(siteConfig?.rosterDayShiftStartTime, 6, 0);
@@ -105,7 +109,7 @@ export function getShiftTimes(
   const endsNextDay = end.hour < start.hour || (end.hour === start.hour && end.minute <= start.minute);
   return {
     shiftStart: localTimeInZone(date, start.hour, start.minute, timeZone),
-    shiftEnd: localTimeInZone(endsNextDay ? addDays(date, 1) : date, end.hour, end.minute, timeZone),
+    shiftEnd: localTimeInZone(endsNextDay ? addUtcDays(date, 1) : date, end.hour, end.minute, timeZone),
   };
 }
 

@@ -545,7 +545,7 @@ function summarizeLines(lines: NormalizedExportLine[]) {
     uniqueEmployees.add(line.employeeId);
     totalBasicHours += line.basicHours;
     totalOvertimeHours += line.overtimeHours;
-    totalSundayHours += line.sundayHours;
+    totalSundayHours += line.sundayHours + (line.sundayDoubleHours ?? 0);
     totalPublicHolidayHours += line.publicHolidayHours;
     totalNightShiftHours += line.nightShiftHours;
     totalPaidLeaveHours +=
@@ -1005,8 +1005,12 @@ export async function lockBatch(
   }
 
   const sourceSiteTimesheetIds = new Set<string>();
+  const sourceLeaveRequestIds = new Set<string>();
   for (const line of batch.lines) {
-    const meta = line.sourceSummaryJson as { sourceSiteTimesheetIds?: unknown } | null;
+    const meta = line.sourceSummaryJson as {
+      sourceSiteTimesheetIds?: unknown;
+      sourceLeaveRequestIds?: unknown;
+    } | null;
     if (Array.isArray(meta?.sourceSiteTimesheetIds)) {
       for (const id of meta.sourceSiteTimesheetIds) {
         if (typeof id === "string" && id.trim()) {
@@ -1014,12 +1018,53 @@ export async function lockBatch(
         }
       }
     }
+    if (Array.isArray(meta?.sourceLeaveRequestIds)) {
+      for (const id of meta.sourceLeaveRequestIds) {
+        if (typeof id === "string" && id.trim()) {
+          sourceLeaveRequestIds.add(id.trim());
+        }
+      }
+    }
   }
 
   const now = new Date();
   const locked = await prisma.$transaction(async (tx) => {
-    const updated = await tx.payrollExportBatch.update({
-      where: { id: batch.id },
+    const lockKey = `payroll-export-lock:${companyId}:${batch.periodKey}`;
+    try {
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+    } catch {
+      // In mock/test environments without pg_advisory_xact_lock, continue
+    }
+
+    const activeConflict = await tx.payrollExportBatch.findFirst({
+      where: {
+        companyId,
+        periodKey: batch.periodKey,
+        id: { not: batch.id },
+        status: { in: ["LOCKED", "EXPORTED"] },
+      },
+      select: { id: true, status: true },
+    });
+    if (activeConflict) {
+      throw new PayrollExportError(
+        409,
+        "ACTIVE_BATCH_EXISTS",
+        `Another ${activeConflict.status.toLowerCase()} batch already exists for ${batch.periodKey}. Void it before locking a replacement.`
+      );
+    }
+
+    for (const line of batch.lines) {
+      const liveCode = line.employee.externalPayrollCode?.trim() || line.externalPayrollCode;
+      if (liveCode !== line.externalPayrollCode) {
+        await tx.payrollExportLine.update({
+          where: { id: line.id },
+          data: { externalPayrollCode: liveCode },
+        });
+      }
+    }
+
+    const claimed = await tx.payrollExportBatch.updateMany({
+      where: { id: batch.id, companyId, status: "DRAFT" },
       data: {
         status: "LOCKED",
         lockedBy: userId,
@@ -1032,6 +1077,17 @@ export async function lockBatch(
           blockers,
         } as Prisma.InputJsonValue,
       },
+    });
+    if (claimed.count === 0) {
+      throw new PayrollExportError(
+        409,
+        "INVALID_BATCH_STATUS",
+        "Batch is no longer in draft status and cannot be locked"
+      );
+    }
+
+    const updated = await tx.payrollExportBatch.findUniqueOrThrow({
+      where: { id: batch.id },
       include: {
         profile: { select: { id: true, name: true, provider: true } },
       },
@@ -1053,7 +1109,8 @@ export async function lockBatch(
       batch.id,
       batch.periodStart,
       batch.periodEnd,
-      tx
+      tx,
+      Array.from(sourceLeaveRequestIds)
     );
 
     await auditFromRequest(
@@ -1094,7 +1151,7 @@ export async function downloadBatch(
           employee: { select: { employeeNumber: true } },
           site: { select: { name: true } },
         },
-        orderBy: [{ employeeFullName: "asc" }],
+        orderBy: [{ employeeFullName: "asc" }, { siteId: "asc" }],
       },
     },
   });
@@ -1128,8 +1185,10 @@ export async function downloadBatch(
     basicHours: Number(l.basicHours),
     overtimeHours: Number(l.overtimeHours),
     sundayHours: Number(l.sundayHours),
+    sundayDoubleHours: Number(l.sundayDoubleHours ?? 0),
     publicHolidayHours: Number(l.publicHolidayHours),
     nightShiftHours: Number(l.nightShiftHours),
+    nightShiftCount: l.nightShiftCount ?? 0,
     annualLeaveHours: Number(l.annualLeaveHours),
     sickLeaveHours: Number(l.sickLeaveHours),
     familyLeaveHours: Number(l.familyLeaveHours),
@@ -1151,10 +1210,11 @@ export async function downloadBatch(
     dateFormat: batch.profile.dateFormat,
     codeMapping: resolvePayCodeMapping(batch.profile.codeMappingJson),
     customColumns: resolveCustomColumns(batch.profile.customColumnsJson),
-    generatedAt: new Date().toISOString(),
+    generatedAt: (batch.lockedAt ?? batch.createdAt).toISOString(),
   };
 
   const rendered = renderPayrollExport(context, normalizedLines);
+  const checksumSha256 = createHash("sha256").update(rendered.content, "utf8").digest("hex");
 
   const isFirstExport = batch.status === "LOCKED";
   if (isFirstExport) {
@@ -1177,7 +1237,7 @@ export async function downloadBatch(
             periodKey: batch.periodKey,
             provider: batch.profile.provider,
             filename: rendered.filename,
-            checksumSha256: batch.checksumSha256,
+            checksumSha256,
           },
         },
         tx
@@ -1192,13 +1252,14 @@ export async function downloadBatch(
         periodKey: batch.periodKey,
         provider: batch.profile.provider,
         filename: rendered.filename,
+        checksumSha256,
       },
     });
   }
 
   return {
     ...rendered,
-    checksumSha256: batch.checksumSha256,
+    checksumSha256,
   };
 }
 
@@ -1220,13 +1281,30 @@ export async function voidBatch(
 
   const batch = await prisma.payrollExportBatch.findFirst({
     where: { id: batchId, companyId },
-    select: { id: true, status: true, periodKey: true },
+    select: {
+      id: true,
+      status: true,
+      periodKey: true,
+      lines: { select: { sourceSummaryJson: true } },
+    },
   });
   if (!batch) {
     throw new PayrollExportError(404, "BATCH_NOT_FOUND", "Payroll export batch not found");
   }
   if (batch.status === "VOIDED") {
     throw new PayrollExportError(409, "ALREADY_VOIDED", "Batch is already voided");
+  }
+
+  const sourceSiteTimesheetIds = new Set<string>();
+  for (const line of batch.lines) {
+    const meta = line.sourceSummaryJson as { sourceSiteTimesheetIds?: unknown } | null;
+    if (Array.isArray(meta?.sourceSiteTimesheetIds)) {
+      for (const id of meta.sourceSiteTimesheetIds) {
+        if (typeof id === "string" && id.trim()) {
+          sourceSiteTimesheetIds.add(id.trim());
+        }
+      }
+    }
   }
 
   const voided = await prisma.$transaction(async (tx) => {
@@ -1244,6 +1322,18 @@ export async function voidBatch(
     });
 
     const cleared = await unmarkLeaveExported(companyId, batch.id, tx);
+    let unlockedSiteTimesheets = 0;
+    if (sourceSiteTimesheetIds.size > 0) {
+      const unlocked = await tx.siteTimesheet.updateMany({
+        where: {
+          companyId,
+          id: { in: Array.from(sourceSiteTimesheetIds) },
+          status: "locked",
+        },
+        data: { status: "approved" },
+      });
+      unlockedSiteTimesheets = unlocked.count;
+    }
 
     await auditFromRequest(
       request,
@@ -1256,6 +1346,7 @@ export async function voidBatch(
           previousStatus: batch.status,
           reason: trimmedReason,
           clearedLeaveRequests: cleared.cleared,
+          unlockedSiteTimesheets,
         },
       },
       tx

@@ -67,11 +67,39 @@ export async function getObligation(companyId: string, id: string) {
   });
 }
 
+async function validateObligationCompanyRefs(
+  companyId: string,
+  refs: { ownerUserId?: unknown; primaryEvidenceDocumentId?: unknown }
+) {
+  if (typeof refs.ownerUserId === "string" && refs.ownerUserId) {
+    const owner = await prisma.user.findFirst({
+      where: { id: refs.ownerUserId, companyId },
+      select: { id: true },
+    });
+    if (!owner) {
+      throw Object.assign(new Error("Referenced owner user not found"), { statusCode: 400 });
+    }
+  }
+  if (typeof refs.primaryEvidenceDocumentId === "string" && refs.primaryEvidenceDocumentId) {
+    const doc = await prisma.managedDocument.findFirst({
+      where: { id: refs.primaryEvidenceDocumentId, companyId },
+      select: { id: true },
+    });
+    if (!doc) {
+      throw Object.assign(new Error("Referenced evidence document not found"), { statusCode: 400 });
+    }
+  }
+}
+
 export async function createObligation(
   companyId: string,
   data: Omit<Prisma.ComplianceObligationUncheckedCreateInput, "companyId">,
   actorUserId?: string
 ) {
+  await validateObligationCompanyRefs(companyId, {
+    ownerUserId: data.ownerUserId,
+    primaryEvidenceDocumentId: data.primaryEvidenceDocumentId,
+  });
   const obligation = await prisma.complianceObligation.create({
     data: {
       ...data,
@@ -102,6 +130,10 @@ export async function updateObligation(
   data: Prisma.ComplianceObligationUncheckedUpdateInput,
   actorUserId?: string
 ) {
+  await validateObligationCompanyRefs(companyId, {
+    ownerUserId: data.ownerUserId,
+    primaryEvidenceDocumentId: data.primaryEvidenceDocumentId,
+  });
   const obligation = await prisma.complianceObligation.update({
     where: { id, companyId },
     data,
@@ -125,6 +157,9 @@ export async function markObligationCompliant(
   data: { primaryEvidenceDocumentId?: string; notes?: string },
   actorUserId?: string
 ) {
+  await validateObligationCompanyRefs(companyId, {
+    primaryEvidenceDocumentId: data.primaryEvidenceDocumentId,
+  });
   const obligation = await prisma.complianceObligation.update({
     where: { id, companyId },
     data: {
@@ -243,13 +278,46 @@ export async function listEmploymentExits(
   return { items, total, limit, offset };
 }
 
+async function validateExitCompanyRefs(
+  companyId: string,
+  refs: { employeeId?: unknown; siteId?: unknown; newSiteId?: unknown }
+) {
+  if (typeof refs.employeeId === "string" && refs.employeeId) {
+    const emp = await prisma.employee.findFirst({
+      where: { id: refs.employeeId, companyId },
+      select: { id: true },
+    });
+    if (!emp) {
+      throw Object.assign(new Error("Referenced employee not found"), { statusCode: 400 });
+    }
+  }
+  if (typeof refs.siteId === "string" && refs.siteId) {
+    const site = await prisma.site.findFirst({
+      where: { id: refs.siteId, companyId },
+      select: { id: true },
+    });
+    if (!site) {
+      throw Object.assign(new Error("Referenced site not found"), { statusCode: 400 });
+    }
+  }
+  if (typeof refs.newSiteId === "string" && refs.newSiteId) {
+    const newSite = await prisma.site.findFirst({
+      where: { id: refs.newSiteId, companyId },
+      select: { id: true },
+    });
+    if (!newSite) {
+      throw Object.assign(new Error("Referenced new site not found"), { statusCode: 400 });
+    }
+  }
+}
+
 export async function getEmploymentExit(companyId: string, id: string) {
   return prisma.employmentExit.findFirst({
     where: { id, companyId },
     include: {
-      employee: true,
-      site: true,
-      newSite: true,
+      employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
+      site: { select: { id: true, name: true } },
+      newSite: { select: { id: true, name: true } },
       processedBy: { select: { id: true, name: true } },
     },
   });
@@ -260,6 +328,11 @@ export async function createEmploymentExit(
   data: Omit<Prisma.EmploymentExitUncheckedCreateInput, "companyId">,
   actorUserId?: string
 ) {
+  await validateExitCompanyRefs(companyId, {
+    employeeId: data.employeeId,
+    siteId: data.siteId,
+    newSiteId: data.newSiteId,
+  });
   const exit = await prisma.employmentExit.create({
     data: {
       ...data,
@@ -289,6 +362,11 @@ export async function updateEmploymentExit(
   data: Prisma.EmploymentExitUncheckedUpdateInput,
   actorUserId?: string
 ) {
+  await validateExitCompanyRefs(companyId, {
+    employeeId: data.employeeId,
+    siteId: data.siteId,
+    newSiteId: data.newSiteId,
+  });
   const exit = await prisma.employmentExit.update({
     where: { id, companyId },
     data,

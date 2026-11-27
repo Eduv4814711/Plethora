@@ -60,6 +60,18 @@ const createLeaveRequestMock = vi.fn().mockResolvedValue({
 vi.mock("../../services/leave-v3.service.js", () => ({
   getLeaveBalances: (...args: any[]) => getLeaveBalancesMock(...args),
   createLeaveRequest: (...args: any[]) => createLeaveRequestMock(...args),
+  previewLeaveRequest: vi.fn().mockResolvedValue({
+    leaveType: "SICK",
+    deductibleUnits: 2,
+    availableUnits: 10,
+    exceedsBalance: false,
+    documentRequired: false,
+    documentRequirementReason: null,
+    studyProofRequired: false,
+    maxDaysForScenario: null,
+  }),
+  attachLeaveSupportingDocument: vi.fn().mockResolvedValue({ id: "doc-1" }),
+  defaultDocumentKindForLeaveType: vi.fn().mockReturnValue("SICK_NOTE"),
   LeaveV3Error: class LeaveV3Error extends Error {},
 }));
 
@@ -84,6 +96,7 @@ import { classifyWhatsAppIntent } from "../../services/ai/whatsapp-intent.servic
 import {
   parseUserDate,
   startSmartLeaveFlow,
+  handleLeaveAwaitingDocumentText,
   handleLeaveConfirm,
 } from "../services/leave-flow.service.js";
 import {
@@ -145,7 +158,7 @@ describe("AI WhatsApp Upgrade (Kimi K3.1 entity extraction, fast-track flows & g
     expect(friday?.getDay()).toBe(5);
   });
 
-  it("jumps directly to LEAVE_CONFIRM in startSmartLeaveFlow and transitions SICK leave to LEAVE_AWAITING_CERTIFICATE", async () => {
+  it("routes SICK leave through LEAVE_AWAITING_DOCUMENT (optional <=2d BCEA) to LEAVE_CONFIRM and LEAVE_AWAITING_CERTIFICATE", async () => {
     const phone = "27829990001";
     const step = await startSmartLeaveFlow(phone, "emp-1", "co-1", {
       leaveType: "SICK",
@@ -154,10 +167,18 @@ describe("AI WhatsApp Upgrade (Kimi K3.1 entity extraction, fast-track flows & g
       reason: "Medical clinic visit",
     });
 
-    expect(step.reply).toMatch(/AI Pre-Filled Leave Application/i);
-    expect(step.reply).toMatch(/2 days/i);
-    expect(sessionManager.getSession(phone)?.state).toBe("LEAVE_CONFIRM");
+    expect(step.reply).toMatch(/Attach Sick Note/i);
+    expect(sessionManager.getSession(phone)?.state).toBe("LEAVE_AWAITING_DOCUMENT");
     expect(createLeaveRequestMock).not.toHaveBeenCalled();
+
+    const afterSkip = await handleLeaveAwaitingDocumentText(
+      phone,
+      "skip",
+      sessionManager.getSession(phone)!
+    );
+    expect(afterSkip.reply).toMatch(/AI Pre-Filled Leave Application/i);
+    expect(afterSkip.reply).toMatch(/2 days/i);
+    expect(sessionManager.getSession(phone)?.state).toBe("LEAVE_CONFIRM");
 
     const session = sessionManager.getSession(phone)!;
     const confirmed = await handleLeaveConfirm(phone, "leave_confirm_yes", session);

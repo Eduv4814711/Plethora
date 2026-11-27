@@ -114,6 +114,7 @@ export const rosteringRepository = {
       where: { id: siteId, companyId },
       include: {
         assignedGuards: {
+          where: { isActive: true },
           include: {
             employee: {
               select: { id: true, status: true, employeeType: true },

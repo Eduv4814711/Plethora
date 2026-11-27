@@ -8,11 +8,13 @@ import { sendPrivateStoredFile } from "../lib/private-download.js";
 import { persistWithUploadedFileRollback, readStreamToBuffer, storage } from "../lib/storage.js";
 import { matchesMagicBytes, sanitizeUploadFilename } from "../lib/upload-validation.js";
 import {
+  attachLeaveSupportingDocument,
   attachMedicalCertificate,
   cancelLeaveRequest,
   createLeaveAdjustment,
   createLeaveRequest,
   decideLeaveRequest,
+  defaultDocumentKindForLeaveType,
   getLeaveBalances,
   LeaveV3Error,
   previewLeaveRequest,
@@ -118,7 +120,18 @@ export async function leaveV3Routes(app: FastifyInstance) {
   });
 
   app.get("/", { preHandler: readProtect }, async (request, reply) => {
-    const query = request.query as { employeeId?: string; status?: string; leaveType?: string; start?: string; end?: string };
+    const querySchema = z.object({
+      employeeId: z.string().min(1).optional(),
+      status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELLED"]).optional(),
+      leaveType: leaveType.optional(),
+      start: z.string().regex(DATE).optional(),
+      end: z.string().regex(DATE).optional(),
+    });
+    const parsed = querySchema.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
+    }
+    const query = parsed.data;
     const data = await prisma.leaveRequest.findMany({
       where: {
         companyId: request.user!.companyId,
@@ -128,7 +141,11 @@ export async function leaveV3Routes(app: FastifyInstance) {
         ...(query.start ? { endDate: { gte: toDate(query.start) } } : {}),
         ...(query.end ? { startDate: { lte: toDate(query.end) } } : {}),
       },
-      include: { employee: { select: { id: true, firstName: true, lastName: true, employeeType: true } }, medicalCertificate: true },
+      include: {
+        employee: { select: { id: true, firstName: true, lastName: true, employeeType: true } },
+        medicalCertificate: true,
+        supportingDocuments: { orderBy: { createdAt: "desc" } },
+      },
       orderBy: { createdAt: "desc" },
     });
     return reply.send({ data });
@@ -295,6 +312,73 @@ export async function leaveV3Routes(app: FastifyInstance) {
       allowedPrefixes: [`leave-medical-certificates/${request.user!.companyId}`],
       fileName: sanitizeUploadFilename(`medical-certificate.${ext}`, mimeType),
       mimeType,
+    });
+  });
+
+  app.post("/:id/documents", { preHandler: manageProtect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const leaveRequest = await prisma.leaveRequest.findFirst({ where: { id, companyId: request.user!.companyId } });
+    if (!leaveRequest) return reply.code(404).send({ error: "Not found", message: "Leave request not found" });
+
+    const data = await request.file();
+    if (!data) return reply.code(400).send({ error: "No file", message: "Please attach a supporting document" });
+    const ext = ALLOWED_CERTIFICATE_TYPES[data.mimetype];
+    if (!ext) return reply.code(400).send({ error: "Invalid file type", message: "Allowed file types: PDF, JPEG, PNG, or WebP" });
+
+    let buffer: Buffer;
+    try {
+      buffer = await readStreamToBuffer(data.file, MAX_CERTIFICATE_BYTES);
+    } catch {
+      return reply.code(400).send({ error: "File too large", message: "Maximum file size is 10MB" });
+    }
+    if (!matchesMagicBytes(buffer, data.mimetype)) {
+      return reply.code(400).send({ error: "Invalid file", message: "File content does not match the declared type" });
+    }
+
+    const fields = data.fields as Record<string, { value?: unknown } | undefined>;
+    const rawKind = typeof fields.kind?.value === "string" ? fields.kind.value.trim() : "";
+    const parsedKind = z
+      .enum(["SICK_NOTE", "STUDY_PROOF", "FAMILY_RESPONSIBILITY_PROOF", "PARENTAL_PROOF", "OTHER"])
+      .safeParse(rawKind);
+    const kind = parsedKind.success
+      ? parsedKind.data
+      : defaultDocumentKindForLeaveType(leaveRequest.leaveType as never);
+
+    const safeName = sanitizeUploadFilename(data.filename || `supporting-document.${ext}`, data.mimetype);
+    const key = `leave-documents/${request.user!.companyId}/${leaveRequest.id}/${randomUUID()}.${ext}`;
+    await storage.uploadFile({ key, body: buffer, contentType: data.mimetype });
+    try {
+      const document = await persistWithUploadedFileRollback(
+        key,
+        () =>
+          attachLeaveSupportingDocument({
+            companyId: request.user!.companyId,
+            actorUserId: request.user!.sub,
+            leaveRequestId: leaveRequest.id,
+            kind,
+            fileName: safeName,
+            mimeType: data.mimetype,
+            fileReference: storage.getAssetUrl(key),
+          }),
+        { onCleanupError: (cleanupError) => request.log.error({ err: cleanupError, key }, "Failed to remove supporting document after database rollback") },
+      );
+      return reply.code(201).send({ data: document });
+    } catch (error) {
+      return sendLeaveV3Error(reply, error);
+    }
+  });
+
+  app.get("/:id/documents/:docId", { preHandler: readProtect }, async (request, reply) => {
+    const { id, docId } = request.params as { id: string; docId: string };
+    const doc = await prisma.leaveSupportingDocument.findFirst({
+      where: { id: docId, leaveRequestId: id, companyId: request.user!.companyId },
+    });
+    if (!doc) return reply.code(404).send({ error: "Not found", message: "Supporting document not found" });
+    return sendPrivateStoredFile(reply, {
+      storedReference: doc.fileReference,
+      allowedPrefixes: [`leave-documents/${request.user!.companyId}`],
+      fileName: sanitizeUploadFilename(doc.fileName, doc.mimeType),
+      mimeType: doc.mimeType,
     });
   });
 }

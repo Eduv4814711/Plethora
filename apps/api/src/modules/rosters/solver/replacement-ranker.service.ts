@@ -3,7 +3,7 @@ import {
   addDaysToDateKey,
   getIsoWeekStartKey,
   hasMinimumPsiraGrade,
-  parseLabourComplianceSettings,
+  resolveEmployeeBceaCategory,
   resolveSitePsiraMode,
   SA_NBCPSS_RULES,
   toSastDateKey,
@@ -78,6 +78,8 @@ export async function rankReplacementCandidates(params: {
         lastName: true,
         employeeNumber: true,
         status: true,
+        employeeType: true,
+        bceaSectorOverride: true,
         gender: true,
         psiraGrade: true,
         psiraRegistrationExpiry: true,
@@ -93,16 +95,32 @@ export async function rankReplacementCandidates(params: {
   }
 
   const psiraMode = resolveSitePsiraMode(company?.settings, site.psiraEnforcementMode);
-  const labourSettings = parseLabourComplianceSettings(company?.settings);
   const post = params.postId ? site.posts.find((p) => p.id === params.postId) : site.posts[0] ?? null;
   const requiredGrade = post?.requiredPsiraGrade ?? null;
   const requiresFirearm = Boolean(post?.requiresFirearm);
-  const requiredGender = (post?.requiredGender as "M" | "F" | "any" | null) ?? null;
+  const siteShiftGender =
+    params.shiftType === "night" ? site.rosterNightShiftGender : site.rosterDayShiftGender;
+  const requiredGender =
+    post?.requiredGender && post.requiredGender !== "any"
+      ? normalizeGenderCode(post.requiredGender)
+      : normalizeGenderCode(siteShiftGender);
 
   const weekStartKey = getIsoWeekStartKey(params.workDate);
   const weekEndKey = addDaysToDateKey(weekStartKey, 6);
-  const queryStart = new Date(`${addDaysToDateKey(weekStartKey, -1)}T00:00:00+02:00`);
-  const queryEnd = new Date(`${addDaysToDateKey(weekEndKey, 2)}T00:00:00+02:00`);
+  const queryStartKey = addDaysToDateKey(
+    weekStartKey < addDaysToDateKey(params.workDate, -6)
+      ? weekStartKey
+      : addDaysToDateKey(params.workDate, -6),
+    -1,
+  );
+  const queryEndKey = addDaysToDateKey(
+    weekEndKey > addDaysToDateKey(params.workDate, 6)
+      ? weekEndKey
+      : addDaysToDateKey(params.workDate, 6),
+    2,
+  );
+  const queryStart = new Date(`${queryStartKey}T00:00:00+02:00`);
+  const queryEnd = new Date(`${queryEndKey}T00:00:00+02:00`);
 
   const targetBounds = buildShiftUtcBounds(params.workDate, params.shiftType, {
     dayStartTime: site.rosterDayShiftStartTime ?? "06:00",
@@ -161,9 +179,11 @@ export async function rankReplacementCandidates(params: {
     let weekHoursBefore = 0;
     let overlapReason: string | undefined;
     let restReason: string | undefined;
+    const workedDateKeys = new Set<string>();
 
     for (const s of empShifts) {
       const sDk = toSastDateKey(s.startTime);
+      workedDateKeys.add(sDk);
       if (sDk >= weekStartKey && sDk <= weekEndKey) {
         weekHoursBefore += Math.max(0, (s.endTime.getTime() - s.startTime.getTime()) / 3_600_000);
       }
@@ -181,11 +201,32 @@ export async function rankReplacementCandidates(params: {
       }
     }
 
+    if (!overlapReason && !restReason) {
+      let streak = 1;
+      for (let off = 1; off <= 6; off++) {
+        if (!workedDateKeys.has(addDaysToDateKey(params.workDate, -off))) break;
+        streak += 1;
+      }
+      for (let off = 1; off <= 6; off++) {
+        if (!workedDateKeys.has(addDaysToDateKey(params.workDate, off))) break;
+        streak += 1;
+      }
+      if (streak > 6) {
+        restReason = "Would exceed 6 consecutive working days";
+      }
+    }
+
     weekHoursBefore = Math.round(weekHoursBefore * 10) / 10;
     const weekHoursAfter = Math.round((weekHoursBefore + targetBounds.durationHours) * 10) / 10;
-    const ordCap = labourSettings.averagingEnabled
-      ? SA_NBCPSS_RULES.securityOfficerMaxWeeklyOrdinaryHours * labourSettings.averagingWeeks
-      : SA_NBCPSS_RULES.securityOfficerMaxWeeklyOrdinaryHours;
+    const empCategory = resolveEmployeeBceaCategory(
+      emp.employeeType,
+      emp.bceaSectorOverride,
+      company?.settings,
+    );
+    const ordCap =
+      empCategory === "general"
+        ? SA_NBCPSS_RULES.generalStaffMaxWeeklyOrdinaryHours
+        : SA_NBCPSS_RULES.securityOfficerMaxWeeklyOrdinaryHours;
     const projectedOvertimeHours = Math.max(0, Math.round((weekHoursAfter - ordCap) * 10) / 10);
 
     let eligible = true;
@@ -204,7 +245,7 @@ export async function rankReplacementCandidates(params: {
       ineligibleReason = restReason;
     }
 
-    if (eligible && requiredGender && requiredGender !== "any") {
+    if (eligible && requiredGender) {
       if (normalizeGenderCode(emp.gender) !== requiredGender) {
         eligible = false;
         ineligibleReason = `Post requires ${requiredGender === "M" ? "Male" : "Female"} guard`;

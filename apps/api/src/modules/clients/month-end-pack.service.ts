@@ -1,4 +1,6 @@
+import { formatInTimeZone } from "date-fns-tz";
 import { prisma } from "../../lib/prisma.js";
+import { getCompanyTimezone } from "../../lib/timezone.js";
 import type { RenderPdfJob } from "../../lib/render-pdf.js";
 import type { BillingPartyDetails } from "../../services/billing-pdf.service.js";
 import {
@@ -275,7 +277,8 @@ export async function buildMonthEndPackPdf(
   const plan = planMonthEndPack(clientSites, options.siteIds);
   if (!plan.ok) return { ok: false, statusCode: 400, message: plan.message };
 
-  const generatedAt = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+  const timeZone = await getCompanyTimezone(companyId);
+  const generatedAt = formatInTimeZone(new Date(), timeZone, "yyyy-MM-dd HH:mm zzz");
   const reports: { report: SiteMonthReport; sheet: TimesheetSheet }[] = [];
 
   for (const site of plan.sites) {
@@ -387,6 +390,9 @@ export async function buildMonthEndTimesheetsCsv(
   const csvs: string[] = [];
   for (const site of plan.sites) {
     const sheet = await getSiteTimesheet(companyId, site.id, period.periodStart, period.periodEnd);
+    if (!sheet) {
+      return { ok: false, statusCode: 404, message: `Site not found: ${site.name}` };
+    }
     csvs.push(buildSiteTimesheetCsv(sheet));
   }
 

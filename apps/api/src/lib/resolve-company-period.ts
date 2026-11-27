@@ -34,8 +34,13 @@ export async function resolveCompanyPeriodRange(
   }
 
   if (query.periodStart && query.periodEnd) {
-    const periodStart = startOfUtcDay(new Date(query.periodStart));
-    const periodEnd = endOfUtcDay(new Date(query.periodEnd));
+    const rawStart = new Date(query.periodStart);
+    const rawEnd = new Date(query.periodEnd);
+    if (Number.isNaN(rawStart.getTime()) || Number.isNaN(rawEnd.getTime())) {
+      return { error: "Invalid periodStart or periodEnd date" };
+    }
+    const periodStart = startOfUtcDay(rawStart);
+    const periodEnd = endOfUtcDay(rawEnd);
     if (periodStart >= periodEnd) {
       return { error: "periodEnd must be after periodStart" };
     }

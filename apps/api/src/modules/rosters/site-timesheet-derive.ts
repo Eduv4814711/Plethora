@@ -193,7 +193,8 @@ export function buildConfirmAsScheduledPatch(
     plannedShiftType: string | null;
     plannedShiftCode: string | null;
   },
-  timeZone: string
+  timeZone: string,
+  siteConfig?: SiteShiftHoursConfig | null
 ): ConfirmAsScheduledPatch | null {
   if (!row.plannedGuardId) return null;
 
@@ -202,7 +203,7 @@ export function buildConfirmAsScheduledPatch(
 
   const workDate =
     typeof row.workDate === "string" ? row.workDate.slice(0, 10) : row.workDate.toISOString().slice(0, 10);
-  const { clockIn, clockOut, hoursWorked } = defaultShiftClockTimes(workDate, shiftType, timeZone);
+  const { clockIn, clockOut, hoursWorked } = defaultShiftClockTimes(workDate, shiftType, timeZone, siteConfig);
   if (!clockIn || !clockOut || hoursWorked == null) return null;
 
   const actualShiftCode = shiftType === "night" ? "N" : "D";

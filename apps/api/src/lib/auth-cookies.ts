@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "./env.js";
 
@@ -64,7 +64,12 @@ export function assertCsrfForCookieAuth(request: FastifyRequest): boolean {
   const headerRaw = request.headers[CSRF_HEADER_NAME];
   const header = Array.isArray(headerRaw) ? headerRaw[0] : headerRaw;
   const cookie = request.cookies[CSRF_COOKIE_NAME];
-  return typeof header === "string" && typeof cookie === "string" && header.length > 0 && header === cookie;
+  if (typeof header !== "string" || typeof cookie !== "string" || header.length === 0) {
+    return false;
+  }
+  const a = Buffer.from(header, "utf8");
+  const b = Buffer.from(cookie, "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 /** Public auth JSON — refresh token is never returned to browser clients. */

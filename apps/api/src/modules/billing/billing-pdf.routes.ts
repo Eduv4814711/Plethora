@@ -216,7 +216,7 @@ export async function registerBillingPdfRoutes(
 
     return reply
       .header("Content-Type", "application/pdf")
-      .header("Content-Disposition", `attachment; filename="${receipt.receiptNumber}.pdf"`)
+      .header("Content-Disposition", `attachment; filename="${safeFilenamePart(receipt.receiptNumber, "receipt")}.pdf"`)
       .send(pdf);
   });
 

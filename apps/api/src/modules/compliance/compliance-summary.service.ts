@@ -15,12 +15,22 @@ export async function getComplianceSummary(companyId: string) {
     },
   });
 
+  const now = new Date();
+  const isExpiredObligation = (o: { status: string; expiryDate: Date | null }) =>
+    o.status !== "NOT_APPLICABLE" && o.expiryDate !== null && o.expiryDate < now;
+
   const obligationCounts = {
     total: obligations.length,
-    compliant: obligations.filter((o) => o.status === "COMPLIANT").length,
-    attentionRequired: obligations.filter((o) => o.status === "ATTENTION_REQUIRED").length,
-    nonCompliant: obligations.filter((o) => o.status === "NON_COMPLIANT").length,
-    pendingVerification: obligations.filter((o) => o.status === "PENDING_VERIFICATION").length,
+    compliant: obligations.filter((o) => o.status === "COMPLIANT" && !isExpiredObligation(o)).length,
+    attentionRequired: obligations.filter(
+      (o) => o.status === "ATTENTION_REQUIRED" && !isExpiredObligation(o)
+    ).length,
+    nonCompliant: obligations.filter(
+      (o) => o.status === "NON_COMPLIANT" || isExpiredObligation(o)
+    ).length,
+    pendingVerification: obligations.filter(
+      (o) => o.status === "PENDING_VERIFICATION" && !isExpiredObligation(o)
+    ).length,
     notApplicable: obligations.filter((o) => o.status === "NOT_APPLICABLE").length,
   };
 

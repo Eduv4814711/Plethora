@@ -28,6 +28,8 @@ export type AccessChangePayload =
 
 /** Snapshot of the target when the request was raised, used to detect drift. */
 export interface AccessBeforeState {
+  name?: string | null;
+  email?: string | null;
   accountType?: string | null;
   jobTitle?: string | null;
   isActive?: boolean | null;
@@ -37,6 +39,8 @@ export interface AccessBeforeState {
 export function beforeStateOf(target: AccessTarget | null): AccessBeforeState {
   if (!target) return { capabilities: {} };
   return {
+    name: target.name,
+    email: target.email,
     accountType: target.accountType,
     jobTitle: target.jobTitle,
     isActive: target.isActive,
@@ -90,6 +94,14 @@ export function describeAccessChange(row: AccessChangeRow) {
 
 export type AccessChangeView = ReturnType<typeof describeAccessChange>;
 
+function canonicalCapabilitiesKey(raw: unknown): string {
+  const normalized = normalizeCapabilities(raw);
+  const sortedEntries = Object.keys(normalized)
+    .sort()
+    .map((path) => [path, [...normalized[path]].sort()]);
+  return JSON.stringify(sortedEntries);
+}
+
 /**
  * True when the target moved on since the request was raised. Applying a stale
  * proposal would silently re-grant access somebody has already revoked, so the
@@ -99,8 +111,7 @@ export function hasDrifted(before: AccessBeforeState, current: AccessTarget | nu
   if (!current) return false;
   const now = beforeStateOf(current);
   return (
-    JSON.stringify(normalizeCapabilities(before.capabilities)) !==
-      JSON.stringify(now.capabilities) ||
+    canonicalCapabilitiesKey(before.capabilities) !== canonicalCapabilitiesKey(now.capabilities) ||
     (before.isActive ?? null) !== now.isActive ||
     (before.accountType ?? null) !== now.accountType
   );
@@ -109,6 +120,12 @@ export function hasDrifted(before: AccessBeforeState, current: AccessTarget | nu
 export class PendingRequestExistsError extends Error {
   constructor(public readonly existingId: string) {
     super("This user already has an access change awaiting approval");
+  }
+}
+
+export class AccessRequestAlreadyReviewedError extends Error {
+  constructor(public readonly currentStatus: AccessChangeStatus) {
+    super(`This request was already ${currentStatus.toLowerCase()}.`);
   }
 }
 
@@ -260,14 +277,29 @@ export async function closeAccessChangeRequest(
         ? "user.access.request.declined"
         : "user.access.request.cancelled";
 
-  const updated = await tx.accessChangeRequest.update({
-    where: { id: params.row.id },
+  const claimed = await tx.accessChangeRequest.updateMany({
+    where: {
+      id: params.row.id,
+      companyId: params.row.companyId,
+      status: "PENDING",
+    },
     data: {
       status: params.status,
       reviewedById: request.user!.sub,
       reviewedAt: new Date(),
       reviewNote: params.reviewNote ?? null,
     },
+  });
+  if (claimed.count !== 1) {
+    const latest = await tx.accessChangeRequest.findUnique({
+      where: { id: params.row.id },
+      select: { status: true },
+    });
+    throw new AccessRequestAlreadyReviewedError(latest?.status ?? params.row.status);
+  }
+
+  const updated = await tx.accessChangeRequest.findUniqueOrThrow({
+    where: { id: params.row.id },
     include: requestInclude,
   });
 

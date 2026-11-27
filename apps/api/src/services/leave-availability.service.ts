@@ -31,7 +31,8 @@ export function formatLeaveDateKey(d: Date): string {
 export async function getLeaveDateKeysByEmployee(
   employeeIds: string[],
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  companyId?: string
 ): Promise<Map<string, Set<string>>> {
   const result = new Map<string, Set<string>>();
   if (employeeIds.length === 0) return result;
@@ -41,6 +42,7 @@ export async function getLeaveDateKeysByEmployee(
 
   const requests = await prisma.leaveRequest.findMany({
     where: {
+      ...(companyId ? { companyId } : {}),
       employeeId: { in: employeeIds },
       status: "APPROVED",
       startDate: { lte: end },

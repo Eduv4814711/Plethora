@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { config } from "../../lib/config.js";
 import { prisma } from "../../lib/prisma.js";
 import { verifyWhatsAppWebhookSignature } from "../../lib/whatsapp-signature.js";
@@ -213,7 +214,12 @@ export async function webhookRoutes(app: FastifyInstance) {
       if (
         mode === "subscribe" &&
         configuredToken &&
-        token === configuredToken
+        typeof token === "string" &&
+        (() => {
+          const tokBuf = Buffer.from(token, "utf8");
+          const cfgBuf = Buffer.from(configuredToken, "utf8");
+          return tokBuf.length === cfgBuf.length && timingSafeEqual(tokBuf, cfgBuf);
+        })()
       ) {
         return reply.code(200).send(challenge);
       }

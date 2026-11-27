@@ -9,6 +9,7 @@ export interface PayCodeMapping {
   regularHours: string;
   overtimeHours: string;
   sundayHours: string;
+  sundayDoubleHours?: string;
   publicHolidayHours: string;
   nightShiftHours: string;
   annualLeaveHours: string;
@@ -22,6 +23,7 @@ export const DEFAULT_PAY_CODE_MAPPING: PayCodeMapping = {
   regularHours: "1000",
   overtimeHours: "1010",
   sundayHours: "1020",
+  sundayDoubleHours: "1025",
   publicHolidayHours: "1030",
   nightShiftHours: "1040",
   annualLeaveHours: "2000",
@@ -98,6 +100,7 @@ export function resolvePayCodeMapping(raw: unknown): PayCodeMapping {
     regularHours: pick("regularHours", DEFAULT_PAY_CODE_MAPPING.regularHours),
     overtimeHours: pick("overtimeHours", DEFAULT_PAY_CODE_MAPPING.overtimeHours),
     sundayHours: pick("sundayHours", DEFAULT_PAY_CODE_MAPPING.sundayHours),
+    sundayDoubleHours: pick("sundayDoubleHours", DEFAULT_PAY_CODE_MAPPING.sundayDoubleHours ?? "1025"),
     publicHolidayHours: pick("publicHolidayHours", DEFAULT_PAY_CODE_MAPPING.publicHolidayHours),
     nightShiftHours: pick("nightShiftHours", DEFAULT_PAY_CODE_MAPPING.nightShiftHours),
     annualLeaveHours: pick("annualLeaveHours", DEFAULT_PAY_CODE_MAPPING.annualLeaveHours),
@@ -147,7 +150,9 @@ export function formatHours(value: number): string {
 }
 
 export function escapeDelimitedCell(value: unknown, delimiter: string): string {
-  const text = value == null ? "" : String(value);
+  const raw = value == null ? "" : String(value);
+  const text =
+    /^[=+\-@\t\r]/.test(raw) && !/^-?\d+(\.\d+)?$/.test(raw) ? `'${raw}` : raw;
   if (
     text.includes('"') ||
     text.includes("\n") ||

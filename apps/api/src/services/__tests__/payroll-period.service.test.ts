@@ -103,6 +103,28 @@ describe("payroll-period.service", () => {
     expect(formatDateKey(period.periodEnd)).toBe("2026-06-30");
     expect(period.periodKey).toBe("2026-06");
   });
+
+  it("handles exact 25th vs 26th cycle boundary and February rollover without host-TZ drift", () => {
+    const on25th = getCurrentPayPeriod(settings2625, new Date("2026-02-25T23:30:00.000Z"));
+    expect(formatDateKey(on25th.periodStart)).toBe("2026-01-26");
+    expect(formatDateKey(on25th.periodEnd)).toBe("2026-02-25");
+    expect(on25th.periodKey).toBe("2026-02");
+
+    const on26th = getCurrentPayPeriod(settings2625, new Date("2026-02-26T00:30:00.000Z"));
+    expect(formatDateKey(on26th.periodStart)).toBe("2026-02-26");
+    expect(formatDateKey(on26th.periodEnd)).toBe("2026-03-25");
+    expect(on26th.periodKey).toBe("2026-03");
+
+    // Leap-year calendar month rollover
+    const calFebLeap: PayrollCalendarSettings = {
+      ...settings2625,
+      payPeriodStartDay: 1,
+      payPeriodEndDay: 31,
+    };
+    const feb2028 = getCurrentPayPeriod(calFebLeap, new Date("2028-02-15T12:00:00.000Z"));
+    expect(formatDateKey(feb2028.periodStart)).toBe("2028-02-01");
+    expect(formatDateKey(feb2028.periodEnd)).toBe("2028-02-29");
+  });
 });
 
 describe("parsePayrollCalendarSettings", () => {

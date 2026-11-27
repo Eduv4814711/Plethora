@@ -1,6 +1,6 @@
-import { addDays, startOfDay } from "date-fns";
+import { addDays } from "date-fns";
 import { prisma } from "../lib/prisma.js";
-import { dateKeyInTimeZone } from "../lib/timezone.js";
+import { dateKeyInTimeZone, parseDateOnly } from "../lib/timezone.js";
 
 /** Attendance statuses that mean a guard was on post (incl. partial capture). */
 export const ON_DUTY_ATTENDANCE_STATUSES = [
@@ -98,8 +98,9 @@ export async function getGuardsOnDutyNow(
     onDuty.add(row.shift.employeeId);
   }
 
-  const windowStart = addDays(startOfDay(now), -1);
-  const windowEnd = addDays(startOfDay(now), 2);
+  const todayDateOnly = parseDateOnly(dateKeyInTimeZone(now, "Africa/Johannesburg"));
+  const windowStart = addDays(todayDateOnly, -1);
+  const windowEnd = addDays(todayDateOnly, 2);
 
   const openTimesheetRows = await prisma.siteTimesheetRow.findMany({
     where: {
@@ -143,13 +144,15 @@ export async function getGuardsOnDutyByDay(
 ): Promise<{ name: string; value: number }[]> {
   const weekEnd = addDays(weekStart, 7);
   const dayKeys = weekDayKeys(weekStart, timeZone);
+  const workWeekStart = parseDateOnly(dayKeys[0]!);
+  const workWeekEnd = addDays(workWeekStart, 7);
   const guardsByDay = new Map<number, Set<string>>();
   for (let i = 0; i < 7; i++) guardsByDay.set(i, new Set());
 
   const timesheetRows = await prisma.siteTimesheetRow.findMany({
     where: {
       companyId,
-      workDate: { gte: weekStart, lt: weekEnd },
+      workDate: { gte: workWeekStart, lt: workWeekEnd },
       attendanceStatus: { in: [...ON_DUTY_ATTENDANCE_STATUSES] },
       ...(siteIds?.length ? { siteId: { in: siteIds } } : {}),
     },

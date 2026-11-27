@@ -10,6 +10,7 @@ import {
   assertWithinSiteGeofence,
   findApprovedLeaveConflict,
 } from "../services/attendance.service.js";
+import { evaluateSiteGeofence, siteHasGeofence } from "../lib/geo.js";
 import { AttendanceValidationError } from "../services/attendance.service.js";
 import { createAuditLog } from "../lib/audit.js";
 import { triggerPostClockExceptionSync } from "../modules/attendance-exceptions/post-clock-sync.js";
@@ -408,6 +409,25 @@ export async function attendanceRoutes(app: FastifyInstance) {
         });
       }
 
+      const timeZone = await getCompanyTimezone(companyId);
+      const shiftDateOnly = normalizeLeaveDate(dateKeyInTimeZone(shift.startTime, timeZone));
+      const lockedSheet = await prisma.siteTimesheet.findFirst({
+        where: {
+          companyId,
+          siteId: shift.siteId,
+          status: { in: ["approved", "locked"] },
+          periodStart: { lte: shiftDateOnly },
+          periodEnd: { gte: shiftDateOnly },
+        },
+        select: { id: true, status: true },
+      });
+      if (lockedSheet) {
+        return reply.code(409).send({
+          error: "Timesheet locked",
+          message: `Cannot mark absent because the site timesheet is ${lockedSheet.status}.`,
+        });
+      }
+
       const beforeSnapshot = attendanceSnapshot(existingAttendance);
 
       const result = await prisma.$transaction(async (tx) => {
@@ -471,7 +491,6 @@ export async function attendanceRoutes(app: FastifyInstance) {
       });
 
       // Sync absent status to SiteTimesheetRow if exists
-      const timeZone = await getCompanyTimezone(shift.companyId);
       const workDate = new Date(`${dateKeyInTimeZone(shift.startTime, timeZone)}T00:00:00.000Z`);
       const row = await prisma.siteTimesheetRow.findFirst({
         where: {
@@ -572,6 +591,33 @@ export async function attendanceRoutes(app: FastifyInstance) {
         });
       }
 
+      if (shift.attendances[0]?.clockIn) {
+        return reply.code(400).send({
+          error: "Cannot replace guard",
+          message: "Guard has already clocked in for this shift.",
+        });
+      }
+
+      const timeZone = await getCompanyTimezone(companyId);
+      const shiftDateKey = dateKeyInTimeZone(shift.startTime, timeZone);
+      const shiftDate = normalizeLeaveDate(shiftDateKey);
+      const lockedSheet = await prisma.siteTimesheet.findFirst({
+        where: {
+          companyId,
+          siteId: shift.siteId,
+          status: { in: ["approved", "locked"] },
+          periodStart: { lte: shiftDate },
+          periodEnd: { gte: shiftDate },
+        },
+        select: { id: true, status: true },
+      });
+      if (lockedSheet) {
+        return reply.code(409).send({
+          error: "Timesheet locked",
+          message: `Cannot replace guard because the site timesheet is ${lockedSheet.status}.`,
+        });
+      }
+
       const replacementEmployee = await prisma.employee.findFirst({
         where: { id: replacementEmployeeId, companyId },
         select: { id: true, firstName: true, lastName: true, employeeNumber: true, status: true },
@@ -592,7 +638,6 @@ export async function attendanceRoutes(app: FastifyInstance) {
       }
 
       // Leave conflict check for replacement guard
-      const shiftDate = normalizeLeaveDate(dateKeyInTimeZone(shift.startTime, await getCompanyTimezone(companyId)));
       const leaveConflict = await findApprovedLeaveConflict(companyId, replacementEmployeeId, shiftDate);
       if (leaveConflict) {
         return reply.code(409).send({
@@ -610,7 +655,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
           id: { not: shiftId },
           startTime: { lt: shift.endTime },
           endTime: { gt: shift.startTime },
-          status: { in: ["assigned", "active"] },
+          status: { in: ["created", "assigned", "active", "completed", "verified"] },
         },
         include: { site: { select: { name: true } } },
       });
@@ -628,16 +673,22 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
       const replacementGuardName = `${replacementEmployee.firstName} ${replacementEmployee.lastName}`.trim();
 
-      // Update shift to assign the replacement guard
-      const updatedShift = await prisma.shift.update({
-        where: { id: shiftId },
-        data: {
-          employeeId: replacementEmployeeId,
-        },
-        include: {
-          employee: { select: { id: true, firstName: true, lastName: true, phone: true } },
-          site: true,
-        },
+      // Remove any stale pending/absent row and assign the replacement guard atomically
+      const updatedShift = await prisma.$transaction(async (tx) => {
+        await tx.attendance.deleteMany({
+          where: { shiftId, clockIn: null },
+        });
+        return tx.shift.update({
+          where: { id: shiftId },
+          data: {
+            employeeId: replacementEmployeeId,
+            status: "assigned",
+          },
+          include: {
+            employee: { select: { id: true, firstName: true, lastName: true, phone: true } },
+            site: true,
+          },
+        });
       });
 
       // Record immutable audit event safely
@@ -678,7 +729,6 @@ export async function attendanceRoutes(app: FastifyInstance) {
       });
 
       // Sync to draft SiteTimesheetRow: planned stays original, actual becomes replacement with reliever status
-      const timeZone = await getCompanyTimezone(companyId);
       const workDate = new Date(`${dateKeyInTimeZone(shift.startTime, timeZone)}T00:00:00.000Z`);
       const row = await prisma.siteTimesheetRow.findFirst({
         where: {
@@ -892,9 +942,24 @@ export async function attendanceRoutes(app: FastifyInstance) {
     );
 
     const attendance = await prisma.$transaction(async (tx) => {
-      const created = await tx.attendance.create({ data: { shiftId, clockIn, clockOut, hoursWorked, overtimeHours, status: "completed", source: "manual" }, include: { shift: { include: { employee: { select: { id: true, firstName: true, lastName: true } }, site: true } } } });
+      const existingAtt = await tx.attendance.findFirst({ where: { shiftId } });
+      const attInclude = { shift: { include: { employee: { select: { id: true, firstName: true, lastName: true } }, site: true } } };
+      const rec = existingAtt
+        ? await tx.attendance.update({
+            where: { id: existingAtt.id },
+            data: { clockIn, clockOut, hoursWorked, overtimeHours, status: "completed", source: "manual" },
+            include: attInclude,
+          })
+        : await tx.attendance.create({
+            data: { shiftId, clockIn, clockOut, hoursWorked, overtimeHours, status: "completed", source: "manual" },
+            include: attInclude,
+          });
       await tx.shift.update({ where: { id: shiftId }, data: { status: "completed" } });
-      return created;
+      return rec;
+    });
+
+    await syncAttendanceToTimesheetRow(attendance.shift, attendance).catch((err) => {
+      request.log.warn({ err, shiftId }, "Failed to sync missed attendance to site timesheet row");
     });
 
     await createAuditLog({
@@ -924,29 +989,53 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
       const shiftWithSite = await prisma.shift.findFirst({
         where: { id: parsed.data.shiftId, companyId: request.user!.companyId },
-        include: { site: true },
+        include: { site: true, employee: { select: { geofenceExempt: true } } },
       });
       const site = shiftWithSite?.site;
       const lat = parsed.data.latitude;
       const lng = parsed.data.longitude;
-      if (site && lat !== undefined && lng !== undefined) {
+      if (site && siteHasGeofence(site) && !shiftWithSite?.employee?.geofenceExempt) {
+        if (lat === undefined || lng === undefined) {
+          throw new AttendanceValidationError("GPS coordinates are required to clock in at this geofenced site");
+        }
+        assertWithinSiteGeofence(site, lat, lng);
+      } else if (site && lat !== undefined && lng !== undefined) {
         assertWithinSiteGeofence(site, lat, lng);
       }
+      const geoEval = site && lat !== undefined && lng !== undefined ? evaluateSiteGeofence(site, lat, lng) : null;
 
       const attendance = await prisma.$transaction(async (tx) => {
-        const created = await tx.attendance.create({
-          data: {
-            shiftId: parsed.data.shiftId,
-            clockIn: now,
-            status: "clocked_in",
-            clockInLat: lat !== undefined ? lat : undefined,
-            clockInLng: lng !== undefined ? lng : undefined,
-          },
-          include: { shift: { include: { employee: { select: { id: true, firstName: true, lastName: true } }, site: true } } },
-        });
+        const existingAtt = await tx.attendance.findFirst({ where: { shiftId: parsed.data.shiftId } });
+        const attInclude = { shift: { include: { employee: { select: { id: true, firstName: true, lastName: true } }, site: true } } };
+        const attData = {
+          clockIn: now,
+          status: "clocked_in",
+          clockInLat: lat !== undefined ? lat : undefined,
+          clockInLng: lng !== undefined ? lng : undefined,
+          ...(geoEval
+            ? {
+                withinGeofence: geoEval.withinGeofence,
+                distanceMeters: geoEval.distanceMeters,
+                geofenceRadiusMeters: geoEval.radiusMeters,
+                validationStatus: geoEval.withinGeofence ? "VERIFIED" : undefined,
+              }
+            : {}),
+        };
+        const created = existingAtt
+          ? await tx.attendance.update({
+              where: { id: existingAtt.id },
+              data: attData,
+              include: attInclude,
+            })
+          : await tx.attendance.create({
+              data: { shiftId: parsed.data.shiftId, ...attData },
+              include: attInclude,
+            });
         await tx.shift.update({ where: { id: parsed.data.shiftId }, data: { status: "active" } });
         return created;
       });
+
+      await syncAttendanceToTimesheetRow(attendance.shift, attendance).catch(() => undefined);
 
       await createAuditLog({
         userId: request.user!.sub,
@@ -997,7 +1086,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         id: parsed.data.attendanceId,
         shift: { companyId: user.companyId },
       },
-      include: { shift: { include: { site: true } } },
+      include: { shift: { include: { site: true, employee: { select: { geofenceExempt: true } } } } },
     });
 
     if (!attendance) {
@@ -1007,7 +1096,25 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const outLat = parsed.data.latitude;
     const outLng = parsed.data.longitude;
     const outSite = attendance.shift.site;
-    if (outSite && outLat !== undefined && outLng !== undefined) {
+    if (outSite && siteHasGeofence(outSite) && !attendance.shift.employee?.geofenceExempt) {
+      if (outLat === undefined || outLng === undefined) {
+        return reply.code(400).send({
+          error: "Clock-out validation failed",
+          message: "GPS coordinates are required to clock out at this geofenced site",
+        });
+      }
+      try {
+        assertWithinSiteGeofence(outSite, outLat, outLng);
+      } catch (err) {
+        if (err instanceof AttendanceValidationError) {
+          return reply.code(400).send({
+            error: "Clock-out validation failed",
+            message: err.message,
+          });
+        }
+        throw err;
+      }
+    } else if (outSite && outLat !== undefined && outLng !== undefined) {
       try {
         assertWithinSiteGeofence(outSite, outLat, outLng);
       } catch (err) {
@@ -1042,31 +1149,45 @@ export async function attendanceRoutes(app: FastifyInstance) {
       attendance.shift.startTime,
       attendance.shift.endTime
     );
+    const geoEval = outSite && outLat !== undefined && outLng !== undefined ? evaluateSiteGeofence(outSite, outLat, outLng) : null;
 
-    const updated = await prisma.attendance.update({
-      where: { id: parsed.data.attendanceId },
-      data: {
-        clockOut: now,
-        hoursWorked,
-        overtimeHours,
-        status: "completed",
-        clockOutLat: outLat !== undefined ? outLat : undefined,
-        clockOutLng: outLng !== undefined ? outLng : undefined,
-      },
-      include: {
-        shift: {
-          include: {
-            employee: { select: { id: true, firstName: true, lastName: true } },
-            site: true,
+    const updated = await prisma.$transaction(async (tx) => {
+      const rec = await tx.attendance.update({
+        where: { id: parsed.data.attendanceId },
+        data: {
+          clockOut: now,
+          hoursWorked,
+          overtimeHours,
+          status: "completed",
+          clockOutLat: outLat !== undefined ? outLat : undefined,
+          clockOutLng: outLng !== undefined ? outLng : undefined,
+          ...(geoEval
+            ? {
+                withinGeofence: geoEval.withinGeofence,
+                distanceMeters: geoEval.distanceMeters,
+                geofenceRadiusMeters: geoEval.radiusMeters,
+              }
+            : {}),
+        },
+        include: {
+          shift: {
+            include: {
+              employee: { select: { id: true, firstName: true, lastName: true } },
+              site: true,
+            },
           },
         },
-      },
+      });
+
+      await tx.shift.update({
+        where: { id: attendance.shiftId },
+        data: { status: "completed" },
+      });
+
+      return rec;
     });
 
-    await prisma.shift.update({
-      where: { id: attendance.shiftId },
-      data: { status: "completed" },
-    });
+    await syncAttendanceToTimesheetRow(updated.shift, updated).catch(() => undefined);
 
     await createAuditLog({
       userId: user.sub,
@@ -1102,7 +1223,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         clockOut: null,
         status: "clocked_in",
       },
-      include: { shift: { include: { site: true } } },
+      include: { shift: { include: { site: true, employee: { select: { geofenceExempt: true } } } } },
     });
 
     if (!attendance) {
@@ -1115,7 +1236,25 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const byShiftLat = parsed.data.latitude;
     const byShiftLng = parsed.data.longitude;
     const byShiftSite = attendance.shift.site;
-    if (byShiftSite && byShiftLat !== undefined && byShiftLng !== undefined) {
+    if (byShiftSite && siteHasGeofence(byShiftSite) && !attendance.shift.employee?.geofenceExempt) {
+      if (byShiftLat === undefined || byShiftLng === undefined) {
+        return reply.code(400).send({
+          error: "Clock-out validation failed",
+          message: "GPS coordinates are required to clock out at this geofenced site",
+        });
+      }
+      try {
+        assertWithinSiteGeofence(byShiftSite, byShiftLat, byShiftLng);
+      } catch (err) {
+        if (err instanceof AttendanceValidationError) {
+          return reply.code(400).send({
+            error: "Clock-out validation failed",
+            message: err.message,
+          });
+        }
+        throw err;
+      }
+    } else if (byShiftSite && byShiftLat !== undefined && byShiftLng !== undefined) {
       try {
         assertWithinSiteGeofence(byShiftSite, byShiftLat, byShiftLng);
       } catch (err) {
@@ -1143,31 +1282,48 @@ export async function attendanceRoutes(app: FastifyInstance) {
       attendance.shift.startTime,
       attendance.shift.endTime
     );
+    const geoEval =
+      byShiftSite && byShiftLat !== undefined && byShiftLng !== undefined
+        ? evaluateSiteGeofence(byShiftSite, byShiftLat, byShiftLng)
+        : null;
 
-    const updated = await prisma.attendance.update({
-      where: { id: attendance.id },
-      data: {
-        clockOut: now,
-        hoursWorked,
-        overtimeHours,
-        status: "completed",
-        clockOutLat: byShiftLat !== undefined ? byShiftLat : undefined,
-        clockOutLng: byShiftLng !== undefined ? byShiftLng : undefined,
-      },
-      include: {
-        shift: {
-          include: {
-            employee: { select: { id: true, firstName: true, lastName: true } },
-            site: true,
+    const updated = await prisma.$transaction(async (tx) => {
+      const rec = await tx.attendance.update({
+        where: { id: attendance.id },
+        data: {
+          clockOut: now,
+          hoursWorked,
+          overtimeHours,
+          status: "completed",
+          clockOutLat: byShiftLat !== undefined ? byShiftLat : undefined,
+          clockOutLng: byShiftLng !== undefined ? byShiftLng : undefined,
+          ...(geoEval
+            ? {
+                withinGeofence: geoEval.withinGeofence,
+                distanceMeters: geoEval.distanceMeters,
+                geofenceRadiusMeters: geoEval.radiusMeters,
+              }
+            : {}),
+        },
+        include: {
+          shift: {
+            include: {
+              employee: { select: { id: true, firstName: true, lastName: true } },
+              site: true,
+            },
           },
         },
-      },
+      });
+
+      await tx.shift.update({
+        where: { id: attendance.shiftId },
+        data: { status: "completed" },
+      });
+
+      return rec;
     });
 
-    await prisma.shift.update({
-      where: { id: attendance.shiftId },
-      data: { status: "completed" },
-    });
+    await syncAttendanceToTimesheetRow(updated.shift, updated).catch(() => undefined);
 
     await createAuditLog({
       userId: user.sub,
@@ -1387,12 +1543,15 @@ export async function attendanceRoutes(app: FastifyInstance) {
     }
 
     if (newClockIn && newClockOut) {
-      const { hoursWorked, overtimeHours } = calculateHours(
-        newClockIn,
-        newClockOut,
-        attendance.shift.startTime,
-        attendance.shift.endTime
-      );
+      const { hoursWorked, overtimeHours } =
+        attendance.source === "manual"
+          ? calculateManualEntryHours(newClockIn, newClockOut)
+          : calculateHours(
+              newClockIn,
+              newClockOut,
+              attendance.shift.startTime,
+              attendance.shift.endTime
+            );
       updateData.hoursWorked = hoursWorked;
       updateData.overtimeHours = overtimeHours;
       updateData.status = "completed";
@@ -1406,17 +1565,27 @@ export async function attendanceRoutes(app: FastifyInstance) {
       updateData.status = "pending";
     }
 
-    const updated = await prisma.attendance.update({
-      where: { id },
-      data: updateData,
-      include: {
-        shift: {
-          include: {
-            employee: { select: { id: true, firstName: true, lastName: true } },
-            site: true,
+    const updated = await prisma.$transaction(async (tx) => {
+      const rec = await tx.attendance.update({
+        where: { id },
+        data: updateData,
+        include: {
+          shift: {
+            include: {
+              employee: { select: { id: true, firstName: true, lastName: true } },
+              site: true,
+            },
           },
         },
-      },
+      });
+      const nextShiftStatus = newClockOut ? "completed" : newClockIn ? "active" : "assigned";
+      if (attendance.shift.status !== nextShiftStatus) {
+        await tx.shift.update({
+          where: { id: attendance.shiftId },
+          data: { status: nextShiftStatus },
+        });
+      }
+      return rec;
     });
 
     // Record audit event with before and after snapshots

@@ -212,4 +212,63 @@ describe("sa-hours-classifier.service (South African NBCPSS + BCEA compliance)",
     expect(summary.flags.some((f) => f.code === "DAILY_REST_UNDER_12H")).toBe(true);
     expect(summary.flags.some((f) => f.code === "PSIRA_EXPIRED")).toBe(true);
   });
+
+  it("caps general staff daily ordinary hours at 9h (spilling excess to overtime) and enforces daily cap across midnight_split segments", () => {
+    const generalSummary = classifyEmployeePeriodShifts({
+      employeeId: "gen-1",
+      defaultCategory: "general",
+      shifts: [
+        {
+          id: "gs1",
+          employeeId: "gen-1",
+          startTime: sastDate("2026-04-13T08:00:00"),
+          endTime: sastDate("2026-04-13T19:00:00"), // 11h worked -> 9h basic + 2h OT
+        },
+      ],
+      holidays: new Map(),
+      settings: DEFAULT_LABOUR_COMPLIANCE_SETTINGS,
+    });
+    expect(generalSummary.basicHours).toBe(9);
+    expect(generalSummary.overtimeHours).toBe(2);
+
+    // Security officer working 14h overnight under midnight_split: 12h ordinary cap per shift, 2h overtime
+    const splitSummary = classifyEmployeePeriodShifts({
+      employeeId: "g-split",
+      shifts: [
+        {
+          id: "sp1",
+          employeeId: "g-split",
+          startTime: sastDate("2026-04-13T18:00:00"),
+          endTime: sastDate("2026-04-14T08:00:00"), // 14h shift -> 12h ordinary + 2h OT
+        },
+      ],
+      holidays: new Map(),
+      settings: parseLabourComplianceSettings({ overnightBoundaryMode: "midnight_split" }),
+    });
+    expect(splitSummary.basicHours).toBe(12);
+    expect(splitSummary.overtimeHours).toBe(2);
+  });
+
+  it("spills hours exceeding BCEA s12 multi-week averaging cap into overtime", () => {
+    const settings = parseLabourComplianceSettings({ averagingEnabled: true, averagingWeeks: 2 });
+    // 2 active weeks * 48h = 96h ordinary cap; 9 shifts * 12h = 108h -> 96h basic/sunday + 12h OT
+    const shifts = [
+      "2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17",
+      "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23",
+    ].map((d, idx) => ({
+      id: `av-${idx}`,
+      employeeId: "g-avg",
+      startTime: sastDate(`${d}T06:00:00`),
+      endTime: sastDate(`${d}T18:00:00`),
+    }));
+
+    const summary = classifyEmployeePeriodShifts({
+      employeeId: "g-avg",
+      shifts,
+      holidays: new Map(),
+      settings,
+    });
+    expect(summary.basicHours).toBe(96);
+    expect(summary.overtimeHours).toBe(12);
+  });
 });

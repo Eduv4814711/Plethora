@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
-import { startOfMonth, addDays } from "date-fns";
+import { addDays } from "date-fns";
 import { getAlertCounts } from "../modules/alerts/alerts.service.js";
 import { getPeriodExportReadiness } from "../modules/attendance-exceptions/exceptions.service.js";
 import { syncContractExpiryAlerts } from "../modules/documents/documents.service.js";
@@ -73,6 +73,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       : { companyId };
 
     const payPeriod = getCurrentPayPeriod(parsePayrollCalendarSettings(companyRow?.settings));
+    const startOfCurrentMonth = zonedMidnight(`${todayKey.slice(0, 7)}-01`, timeZone);
 
     const [
       guardsOnDutyByDay,
@@ -100,7 +101,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         where: {
           ...activeSitesWhere,
           siteStatus: "ACTIVE",
-          createdAt: { lt: startOfMonth(now) },
+          createdAt: { lt: startOfCurrentMonth },
         },
       }),
       // Employee has no siteId in the schema, so headcount is always
@@ -191,12 +192,14 @@ export async function dashboardRoutes(app: FastifyInstance) {
             companyId,
             severity: "CRITICAL",
             status: { in: ["SUBMITTED", "UNDER_REVIEW"] },
+            ...(siteIds?.length ? { siteId: { in: siteIds } } : {}),
           },
         }),
         prisma.siteTimesheetRow.count({
           where: {
             companyId,
             approvalStatus: { in: ["pending", "partially_reviewed"] },
+            workDate: { gte: payPeriod.periodStart, lte: payPeriod.periodEnd },
             ...(siteIds?.length ? { siteId: { in: siteIds } } : {}),
           },
         }),

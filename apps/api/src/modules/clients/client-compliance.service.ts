@@ -188,17 +188,19 @@ export async function evaluateClientCompliance(
   }
 
   // 4. Contract Coverage Check
-  const activeContracts = client.contracts.filter((c) => c.status === "ACTIVE");
+  const isContractExpiredByDate = (c: { effectiveTo: Date | null }) =>
+    Boolean(c.effectiveTo && c.effectiveTo.getTime() < now.getTime());
+  const activeContracts = client.contracts.filter(
+    (c) => c.status === "ACTIVE" && !isContractExpiredByDate(c)
+  );
   const expiringContracts = activeContracts.filter((c) => {
     if (!c.effectiveTo) return false;
     const diffDays = Math.ceil((c.effectiveTo.getTime() - now.getTime()) / (24 * 3600_000));
     return diffDays > 0 && diffDays <= 60;
   });
-  const expiredContracts = client.contracts.filter((c) => {
-    if (c.status === "EXPIRED") return true;
-    if (!c.effectiveTo) return false;
-    return c.effectiveTo.getTime() < now.getTime();
-  });
+  const expiredContracts = client.contracts.filter(
+    (c) => c.status === "EXPIRED" || isContractExpiredByDate(c)
+  );
 
   if (activeContracts.length > 0) {
     if (expiringContracts.length > 0) {
@@ -280,10 +282,22 @@ export async function evaluateClientCompliance(
   // 6. POPIA / Privacy & Operator Agreement Check
   const popiaProfile = client.dataProcessingProfile;
   const operatorDoc = client.managedDocuments.find(
-    (d) => d.documentType === "popia_operator_agreement" && d.verificationStatus === "VERIFIED"
+    (d) =>
+      d.documentType === "popia_operator_agreement" &&
+      d.verificationStatus === "VERIFIED" &&
+      d.status !== "EXPIRED" &&
+      !(d.expiryDate && d.expiryDate < now)
+  );
+  const expiredOperatorDoc = client.managedDocuments.find(
+    (d) =>
+      d.documentType === "popia_operator_agreement" &&
+      (d.status === "EXPIRED" || (d.expiryDate != null && d.expiryDate < now))
   );
 
-  if (popiaProfile?.operatorAgreementStatus === "SIGNED" || operatorDoc) {
+  if (
+    (popiaProfile?.operatorAgreementStatus === "SIGNED" && !expiredOperatorDoc) ||
+    operatorDoc
+  ) {
     checks.push({
       key: "popia_compliance",
       title: "POPIA Operator Agreement",
@@ -298,6 +312,14 @@ export async function evaluateClientCompliance(
       status: "NOT_APPLICABLE",
       requirementType: "OPTIONAL",
       message: "Data processing operator agreement marked not applicable",
+    });
+  } else if (popiaProfile?.operatorAgreementStatus === "EXPIRED" || expiredOperatorDoc) {
+    checks.push({
+      key: "popia_compliance",
+      title: "POPIA Operator Agreement",
+      status: "ATTENTION",
+      requirementType: "STATUTORY",
+      message: "POPIA Section 21 Operator Agreement has expired and requires renewal",
     });
   } else {
     checks.push({

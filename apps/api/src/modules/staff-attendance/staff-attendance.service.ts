@@ -163,7 +163,7 @@ export async function getStaffAttendanceDay(
     absent: rows.filter((row) => row.status === "absent").length,
     onLeave: rows.filter((row) => row.onApprovedLeave || row.status === "leave" || row.status === "sick_leave")
       .length,
-    notCaptured: rows.filter((row) => row.status === null).length,
+    notCaptured: rows.filter((row) => row.status === null && !row.onApprovedLeave).length,
   };
 
   return {
@@ -199,6 +199,10 @@ async function resolveEntry(
     return { code: "ON_APPROVED_LEAVE" };
   }
 
+  if (!AT_WORK_STATUSES.has(entry.status) && (entry.timeIn || entry.timeOut)) {
+    return { code: "INVALID_TIMES" };
+  }
+
   const timeIn = toInstant(date, entry.timeIn, context.timeZone);
   const timeOut = toInstant(date, entry.timeOut, context.timeZone);
   if (timeIn && timeOut && timeOut.getTime() <= timeIn.getTime()) {
@@ -228,7 +232,11 @@ async function loadEntryContext(
   const [timeZone, employees, leave] = await Promise.all([
     getCompanyTimezone(companyId),
     prisma.employee.findMany({
-      where: { companyId, id: { in: employeeIds } },
+      where: {
+        companyId,
+        id: { in: employeeIds },
+        status: { notIn: INACTIVE_EMPLOYEE_STATUSES as never },
+      },
       select: { id: true, employeeType: true },
     }),
     prisma.leaveRequest.findMany({

@@ -228,6 +228,14 @@ export async function documentsRoutes(app: FastifyInstance) {
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as Record<string, string | undefined>;
+    const allowClientSensitive =
+      user.isOwner ||
+      canAccessSensitiveData(user, "/clients") ||
+      hasCapability(user, "/documents", "view_sensitive");
+    const allowEmployeeSensitive =
+      user.isOwner ||
+      canAccessSensitiveData(user, "/employees") ||
+      hasCapability(user, "/documents", "view_sensitive");
     const result = await listDocuments(user.companyId, {
       category: q.category as never,
       documentCategory: q.documentCategory,
@@ -240,12 +248,16 @@ export async function documentsRoutes(app: FastifyInstance) {
       clientId: q.clientId,
       search: q.q || q.search,
       expiringWithinDays: q.expiringWithinDays ? Number(q.expiringWithinDays) : undefined,
+      sensitivityScope: {
+        allowEmployeeSensitive,
+        allowClientSensitive,
+      },
       limit: q.limit ? Number(q.limit) : 50,
       offset: q.offset ? Number(q.offset) : 0,
     });
 
     const canExport = hasCapability(user, "/documents", "export");
-    // Filter sensitive documents if user does not have sensitive capability
+    // Defense in depth: filter sensitive documents if user does not have sensitive capability
     const items = result.items
       .filter((doc) => canUserAccessDocument(user, doc))
       .map((document) => forUser(document, canExport));
@@ -253,7 +265,6 @@ export async function documentsRoutes(app: FastifyInstance) {
     return reply.send({
       ...result,
       items,
-      total: items.length,
     });
   });
 
@@ -745,6 +756,14 @@ export async function documentsRoutes(app: FastifyInstance) {
     const user = request.user!;
     const { id } = request.params as { id: string };
 
+    const doc = await prisma.managedDocument.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+    if (!doc) return reply.code(404).send({ error: "Not found", message: "Document not found" });
+    if (!canUserAccessDocument(user, doc)) {
+      return reply.code(403).send({ error: "Forbidden", message: "Access to this sensitive document is restricted" });
+    }
+
     try {
       const result = await regenerateDocumentPdf(user.companyId, id, user.sub);
       return reply.send(forUser(result.document, hasCapability(user, "/documents", "export")));
@@ -764,6 +783,9 @@ export async function documentsRoutes(app: FastifyInstance) {
       where: { id, companyId: user.companyId },
     });
     if (!doc) return reply.code(404).send({ error: "Not found", message: "Document not found" });
+    if (!canUserAccessDocument(user, doc)) {
+      return reply.code(403).send({ error: "Forbidden", message: "Access to this sensitive document is restricted" });
+    }
 
     const updated = await prisma.managedDocument.update({
       where: { id },
@@ -800,6 +822,67 @@ export async function documentsRoutes(app: FastifyInstance) {
       });
     }
 
+    const existing = await prisma.managedDocument.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+    if (!existing) {
+      return reply.code(404).send({ error: "Not found", message: "Document not found" });
+    }
+    if (!canUserAccessDocument(user, existing)) {
+      return reply.code(403).send({ error: "Forbidden", message: "Access to this sensitive document is restricted" });
+    }
+
+    if (
+      !canUserAccessDocument(user, {
+        isSensitive: parsed.data.isSensitive ?? existing.isSensitive,
+        category: parsed.data.category ?? existing.category,
+        documentCategory:
+          parsed.data.documentCategory !== undefined
+            ? parsed.data.documentCategory
+            : existing.documentCategory,
+        documentType: parsed.data.documentType ?? existing.documentType,
+        clientId: existing.clientId,
+        clientContractId:
+          parsed.data.clientContractId !== undefined
+            ? parsed.data.clientContractId
+            : existing.clientContractId,
+      })
+    ) {
+      return reply.code(403).send({
+        error: "Forbidden",
+        message: "Sensitive access permissions required for this document",
+      });
+    }
+
+    if (parsed.data.clientContractId) {
+      const refError = await validateDocumentReferences(user.companyId, {
+        clientContractId: parsed.data.clientContractId,
+      });
+      if (refError) {
+        return reply.code(400).send({ error: "Validation error", message: refError });
+      }
+    }
+
+    const parsedIssueDate =
+      parsed.data.issueDate === undefined
+        ? undefined
+        : parsed.data.issueDate === null || parsed.data.issueDate === ""
+        ? null
+        : new Date(parsed.data.issueDate);
+    if (parsedIssueDate instanceof Date && Number.isNaN(parsedIssueDate.getTime())) {
+      return reply.code(400).send({ error: "Validation error", message: "Invalid issueDate" });
+    }
+
+    const parsedExpiryDate =
+      parsed.data.expiryDate === undefined
+        ? undefined
+        : parsed.data.expiryDate === null || parsed.data.expiryDate === ""
+        ? null
+        : new Date(parsed.data.expiryDate);
+    if (parsedExpiryDate instanceof Date && Number.isNaN(parsedExpiryDate.getTime())) {
+      return reply.code(400).send({ error: "Validation error", message: "Invalid expiryDate" });
+    }
+
     const updated = await updateDocumentMetadata(user.companyId, id, user.sub, {
       title: parsed.data.title,
       category: parsed.data.category ?? undefined,
@@ -807,8 +890,8 @@ export async function documentsRoutes(app: FastifyInstance) {
       documentCategory: parsed.data.documentCategory,
       documentNumber: parsed.data.documentNumber,
       issuingAuthority: parsed.data.issuingAuthority,
-      issueDate: parsed.data.issueDate ? new Date(parsed.data.issueDate) : undefined,
-      expiryDate: parsed.data.expiryDate ? new Date(parsed.data.expiryDate) : undefined,
+      issueDate: parsedIssueDate,
+      expiryDate: parsedExpiryDate,
       doesNotExpire: parsed.data.doesNotExpire,
       isSensitive: parsed.data.isSensitive,
       clientContractId: parsed.data.clientContractId,
@@ -822,31 +905,59 @@ export async function documentsRoutes(app: FastifyInstance) {
     return reply.send(forUser(updated, hasCapability(user, "/documents", "export")));
   });
 
-  app.post("/:id/verify", { preHandler: protect }, async (request, reply) => {
-    const user = request.user!;
-    const { id } = request.params as { id: string };
+  app.post(
+    "/:id/verify",
+    { preHandler: [authMiddleware, requireCapability("/documents", "approve")] },
+    async (request, reply) => {
+      const user = request.user!;
+      const { id } = request.params as { id: string };
 
-    const updated = await verifyDocument(user.companyId, id, user.sub);
-    if (!updated) {
-      return reply.code(404).send({ error: "Not found", message: "Document not found" });
+      const existing = await prisma.managedDocument.findFirst({
+        where: { id, companyId: user.companyId },
+      });
+      if (!existing) {
+        return reply.code(404).send({ error: "Not found", message: "Document not found" });
+      }
+      if (!canUserAccessDocument(user, existing)) {
+        return reply.code(403).send({ error: "Forbidden", message: "Access to this sensitive document is restricted" });
+      }
+
+      const updated = await verifyDocument(user.companyId, id, user.sub);
+      if (!updated) {
+        return reply.code(404).send({ error: "Not found", message: "Document not found" });
+      }
+
+      return reply.send(forUser(updated, hasCapability(user, "/documents", "export")));
     }
+  );
 
-    return reply.send(forUser(updated, hasCapability(user, "/documents", "export")));
-  });
+  app.post(
+    "/:id/reject",
+    { preHandler: [authMiddleware, requireCapability("/documents", "approve")] },
+    async (request, reply) => {
+      const user = request.user!;
+      const { id } = request.params as { id: string };
+      const body = request.body as { rejectionReason?: string } | undefined;
+      const reason = body?.rejectionReason?.trim() || "Document details or authenticity could not be verified";
 
-  app.post("/:id/reject", { preHandler: protect }, async (request, reply) => {
-    const user = request.user!;
-    const { id } = request.params as { id: string };
-    const body = request.body as { rejectionReason?: string } | undefined;
-    const reason = body?.rejectionReason?.trim() || "Document details or authenticity could not be verified";
+      const existing = await prisma.managedDocument.findFirst({
+        where: { id, companyId: user.companyId },
+      });
+      if (!existing) {
+        return reply.code(404).send({ error: "Not found", message: "Document not found" });
+      }
+      if (!canUserAccessDocument(user, existing)) {
+        return reply.code(403).send({ error: "Forbidden", message: "Access to this sensitive document is restricted" });
+      }
 
-    const updated = await rejectDocument(user.companyId, id, user.sub, reason);
-    if (!updated) {
-      return reply.code(404).send({ error: "Not found", message: "Document not found" });
+      const updated = await rejectDocument(user.companyId, id, user.sub, reason);
+      if (!updated) {
+        return reply.code(404).send({ error: "Not found", message: "Document not found" });
+      }
+
+      return reply.send(forUser(updated, hasCapability(user, "/documents", "export")));
     }
-
-    return reply.send(forUser(updated, hasCapability(user, "/documents", "export")));
-  });
+  );
 
   app.patch("/:id/archive", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -856,6 +967,9 @@ export async function documentsRoutes(app: FastifyInstance) {
     });
     if (!doc) {
       return reply.code(404).send({ error: "Not found", message: "Document not found" });
+    }
+    if (!canUserAccessDocument(user, doc)) {
+      return reply.code(403).send({ error: "Forbidden", message: "Access to this sensitive document is restricted" });
     }
     const updated = await prisma.managedDocument.update({
       where: { id },

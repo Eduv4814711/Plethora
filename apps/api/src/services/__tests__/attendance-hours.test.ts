@@ -53,6 +53,13 @@ describe("calculateHours", () => {
     const result = calculateHours(clockIn, clockOut, shiftStart, shiftEnd);
     expect(result).toEqual({ hoursWorked: 0, overtimeHours: 0 });
   });
+
+  it("does not inflate overtime with unworked gap when clockIn occurs after scheduled shiftEnd", () => {
+    const clockIn = new Date("2026-05-06T17:00:00.000Z"); // 1h after shiftEnd
+    const clockOut = new Date("2026-05-06T18:30:00.000Z"); // 1.5h actual work after shiftEnd
+    const result = calculateHours(clockIn, clockOut, shiftStart, shiftEnd);
+    expect(result).toEqual({ hoursWorked: 0, overtimeHours: 1.5 });
+  });
 });
 
 describe("calculateManualEntryHours", () => {

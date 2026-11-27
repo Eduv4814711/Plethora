@@ -71,7 +71,16 @@ describe("attendance exception analytics contract", () => {
     expect(vi.mocked(prisma.attendanceException.count).mock.calls[1]?.[0]).toEqual({
       where: {
         companyId: "company-1",
-        shiftId: { in: ["shift-period"] },
+        OR: [
+          { shiftId: { in: ["shift-period"] } },
+          {
+            shiftId: null,
+            detectedAt: {
+              gte: periodStart,
+              lte: periodEnd,
+            },
+          },
+        ],
         status: { in: ["OPEN", "UNDER_REVIEW"] },
       },
     });
@@ -107,7 +116,16 @@ describe("attendance exception analytics contract", () => {
 
     expect(vi.mocked(prisma.attendanceException.findMany).mock.calls[0]?.[0]?.where).toEqual({
       companyId: "company-1",
-      shiftId: { in: ["shift-1"] },
+      OR: [
+        { shiftId: { in: ["shift-1"] } },
+        {
+          shiftId: null,
+          detectedAt: {
+            gte: new Date("2026-07-01T00:00:00.000Z"),
+            lte: new Date("2026-07-31T23:59:59.999Z"),
+          },
+        },
+      ],
     });
     expect(prisma.shift.findMany).toHaveBeenNthCalledWith(3, {
       where: { companyId: "company-1", id: { in: ["shift-1"] } },

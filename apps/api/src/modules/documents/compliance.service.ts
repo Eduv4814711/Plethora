@@ -330,7 +330,13 @@ export function getRequiredRulesForEmployee(employee: {
   }
 
   const roleText = `${employee.jobRole ?? ""} ${employee.securityServiceType ?? ""}`.toLowerCase();
-  const isArmed = roleText.includes("armed") || roleText.includes("reaction") || roleText.includes("cit") || roleText.includes("cash in transit");
+  const hasArmedToken = /(?:^|[\s_/,-])armed(?:$|[\s_/,-])/.test(roleText);
+  const isArmed =
+    hasArmedToken ||
+    roleText.includes("reaction") ||
+    /\bcit\b/.test(roleText) ||
+    roleText.includes("cash in transit") ||
+    roleText.includes("cash_in_transit");
   if (isArmed) {
     rules.push({
       type: "firearm_competency_certificate",
@@ -599,6 +605,7 @@ export async function getCompanyComplianceSummary(companyId: string): Promise<Co
       employeeId: { not: null },
       status: { not: "ARCHIVED" },
     },
+    orderBy: { createdAt: "desc" },
     select: {
       id: true,
       employeeId: true,
@@ -696,6 +703,7 @@ export interface ComplianceReportFilters {
   psiraGrade?: string;
   groupId?: string;
   search?: string;
+  includeSensitiveSearch?: boolean;
   expiryFilter?: "expired" | "expiring_30d" | "expiring_60d" | "missing_required";
   limit?: number;
   offset?: number;
@@ -717,7 +725,9 @@ export async function getCompanyComplianceReport(
             { firstName: { contains: filters.search, mode: "insensitive" } },
             { lastName: { contains: filters.search, mode: "insensitive" } },
             { employeeNumber: { contains: filters.search, mode: "insensitive" } },
-            { idNumber: { contains: filters.search, mode: "insensitive" } },
+            ...(filters.includeSensitiveSearch
+              ? [{ idNumber: { contains: filters.search, mode: "insensitive" as const } }]
+              : []),
             { psiraRegistrationNumber: { contains: filters.search, mode: "insensitive" } },
           ],
         }
@@ -744,7 +754,32 @@ export async function getCompanyComplianceReport(
     if (filters.expiryFilter === "expired" && comp.summary.expiredCount === 0) {
       continue;
     }
-    if (filters.expiryFilter === "expiring_30d" && comp.summary.expiringCount === 0) {
+    if (
+      filters.expiryFilter === "expiring_30d" &&
+      !comp.requirements.some(
+        (r) =>
+          r.status !== "MISSING" &&
+          r.status !== "EXPIRED" &&
+          r.status !== "REJECTED" &&
+          r.daysUntilExpiry != null &&
+          r.daysUntilExpiry >= 0 &&
+          r.daysUntilExpiry <= 30
+      )
+    ) {
+      continue;
+    }
+    if (
+      filters.expiryFilter === "expiring_60d" &&
+      !comp.requirements.some(
+        (r) =>
+          r.status !== "MISSING" &&
+          r.status !== "EXPIRED" &&
+          r.status !== "REJECTED" &&
+          r.daysUntilExpiry != null &&
+          r.daysUntilExpiry >= 0 &&
+          r.daysUntilExpiry <= 60
+      )
+    ) {
       continue;
     }
     if (filters.expiryFilter === "missing_required" && comp.summary.missingCount === 0) {

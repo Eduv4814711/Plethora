@@ -10,6 +10,8 @@ import { runAutoRosterForCompany } from "../services/auto-roster.service.js";
 import { parsePayrollCalendarSettings } from "../lib/payroll-calendar-settings.js";
 import { storage } from "../lib/storage.js";
 import { verifyPassword } from "../services/auth.service.js";
+import { clearAuthCookies } from "../lib/auth-cookies.js";
+import { env } from "../lib/env.js";
 const businessDetailsSchema = z.object({
   legalName: z.string().optional(),
   registrationNumber: z.string().optional(),
@@ -90,17 +92,18 @@ const SAFE_FILENAME_RE = /^[A-Za-z0-9._-]+$/;
 
 function buildKnownCompanyLogoFilenames(companyId: string, logoUrl?: string | null): string[] {
   const filenames = new Set<string>();
+  const prefix = `company-${companyId}.`;
 
   if (logoUrl) {
     const withoutQuery = logoUrl.split("?")[0]?.split("#")[0] ?? logoUrl;
     const extracted = basename(withoutQuery);
-    if (extracted && SAFE_FILENAME_RE.test(extracted)) {
+    if (extracted && SAFE_FILENAME_RE.test(extracted) && extracted.startsWith(prefix)) {
       filenames.add(extracted);
     }
   }
 
   for (const ext of COMPANY_LOGO_EXTENSIONS) {
-    filenames.add(`company-${companyId}.${ext}`);
+    filenames.add(`${prefix}${ext}`);
   }
 
   return Array.from(filenames);
@@ -202,6 +205,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       if (d.payeReference !== undefined) updateData.payeReference = d.payeReference || null;
       if (d.sdlReference !== undefined) updateData.sdlReference = d.sdlReference || null;
     }
+    let calendarChanged = false;
     if (data.businessSettings !== undefined) {
       const companyBefore = await prisma.company.findUnique({
         where: { id: companyId },
@@ -213,20 +217,11 @@ export async function settingsRoutes(app: FastifyInstance) {
       updateData.settings = currentSettings;
 
       const afterCalendar = parsePayrollCalendarSettings(currentSettings);
-      const calendarChanged =
+      calendarChanged =
         beforeCalendar.payrollPeriod !== afterCalendar.payrollPeriod ||
         beforeCalendar.payPeriodStartDay !== afterCalendar.payPeriodStartDay ||
         beforeCalendar.payPeriodEndDay !== afterCalendar.payPeriodEndDay ||
         beforeCalendar.autoRosterHorizonPeriods !== afterCalendar.autoRosterHorizonPeriods;
-
-      if (calendarChanged) {
-        void runAutoRosterForCompany(companyId, {
-          triggeredBy: "settings_changed",
-          userId: request.user!.sub,
-        }).catch((err) => {
-          request.log.error({ err }, "auto-roster after settings change failed");
-        });
-      }
     }
 
     const company = await prisma.company.update({
@@ -252,6 +247,15 @@ export async function settingsRoutes(app: FastifyInstance) {
       },
     });
 
+    if (calendarChanged) {
+      void runAutoRosterForCompany(companyId, {
+        triggeredBy: "settings_changed",
+        userId: request.user!.sub,
+      }).catch((err) => {
+        request.log.error({ err }, "auto-roster after settings change failed");
+      });
+    }
+
     await createAuditLog({
       userId: request.user!.sub,
       companyId,
@@ -263,7 +267,13 @@ export async function settingsRoutes(app: FastifyInstance) {
     return reply.send(company);
   });
 
-  app.post("/factory-reset", { preHandler: [authMiddleware, requireOwner()] }, async (request, reply) => {
+  app.post(
+    "/factory-reset",
+    {
+      preHandler: [authMiddleware, requireOwner()],
+      config: { rateLimit: { max: 30, timeWindow: "15 minutes" as const } },
+    },
+    async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
 
@@ -277,6 +287,18 @@ export async function settingsRoutes(app: FastifyInstance) {
     const modules = parsed.data.modules;
     const attendanceEmployeeId = parsed.data.attendanceEmployeeId;
     const attendanceFromDate = parsed.data.attendanceFromDate;
+    let parsedAttendanceFromDate: Date | undefined;
+    if (attendanceFromDate) {
+      const d = new Date(attendanceFromDate);
+      if (Number.isNaN(d.getTime())) {
+        return reply.code(400).send({
+          error: "Validation error",
+          message: "attendanceFromDate must be a valid date",
+        });
+      }
+      d.setUTCHours(0, 0, 0, 0);
+      parsedAttendanceFromDate = d;
+    }
     const owner = await prisma.user.findFirst({
       where: { id: userId, companyId, isActive: true },
       select: { passwordHash: true },
@@ -302,14 +324,24 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (runAll) {
       try {
         await prisma.$transaction(async (tx) => {
+          await tx.company.update({
+            where: { id: companyId },
+            data: { ownerUserId: null },
+          });
           await tx.company.delete({ where: { id: companyId } });
         });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Factory reset failed";
+        request.log.error({ err, companyId }, "Full factory reset failed");
+        const msg = env.isProduction
+          ? "Factory reset failed"
+          : err instanceof Error
+            ? err.message
+            : "Factory reset failed";
         return reply.code(400).send({ error: "Factory reset failed", message: msg });
       }
 
       await cleanupKnownCompanyLogoFiles(companyId, company.logoUrl, request.log);
+      clearAuthCookies(reply);
       return reply.send({ companyDeleted: true });
     }
 
@@ -388,10 +420,8 @@ export async function settingsRoutes(app: FastifyInstance) {
           }
           shiftWhere.employeeId = attendanceEmployeeId;
         }
-        if (attendanceFromDate) {
-          const fromDate = new Date(attendanceFromDate);
-          fromDate.setUTCHours(0, 0, 0, 0);
-          shiftWhere.startTime = { gte: fromDate };
+        if (parsedAttendanceFromDate) {
+          shiftWhere.startTime = { gte: parsedAttendanceFromDate };
         }
         const shiftsToReset = await tx.shift.findMany({
           where: shiftWhere,
@@ -494,7 +524,12 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
     }, { maxWait: 10000, timeout: 120000 });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Factory reset failed";
+      request.log.error({ err, companyId }, "Module factory reset failed");
+      const msg = env.isProduction
+        ? "Factory reset failed"
+        : err instanceof Error
+          ? err.message
+          : "Factory reset failed";
       return reply.code(400).send({ error: "Factory reset failed", message: msg });
     }
 

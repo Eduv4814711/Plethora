@@ -217,7 +217,7 @@ describe("getStaffAttendanceDay", () => {
     const result = await getStaffAttendanceDay("co-1", { date: DATE });
 
     expect(result.totalGeneralEmployees).toBe(2);
-    expect(result.counts).toMatchObject({ present: 1, absent: 0, onLeave: 1, notCaptured: 1 });
+    expect(result.counts).toMatchObject({ present: 1, absent: 0, onLeave: 1, notCaptured: 0 });
     expect(result.rows[1]).toMatchObject({
       employeeId: "e-2",
       status: null,

@@ -50,6 +50,9 @@ export async function rollCallRoutes(app: FastifyInstance) {
       }
 
       const date = parsed.data.date ? new Date(parsed.data.date) : undefined;
+      if (date && Number.isNaN(date.getTime())) {
+        return reply.code(400).send({ error: "Invalid date parameter" });
+      }
       const [summary, recipients] = await Promise.all([
         aggregateShiftRollCall(companyId, {
           shiftType: parsed.data.shiftType,
@@ -79,8 +82,12 @@ export async function rollCallRoutes(app: FastifyInstance) {
       }
 
       const date = parsed.data.date ? new Date(parsed.data.date) : undefined;
+      if (date && Number.isNaN(date.getTime())) {
+        return reply.code(400).send({ error: "Invalid date parameter" });
+      }
       const result = await dispatchShiftRollCall(companyId, {
         shiftType: parsed.data.shiftType,
+        date,
         siteId: parsed.data.siteId,
         overrideRecipients: parsed.data.overrideRecipients,
       });

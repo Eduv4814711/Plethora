@@ -7,11 +7,12 @@ export async function syncComplianceAlerts(companyId: string) {
   let createdCount = 0;
   let scannedCount = 0;
 
-  // 1. Scan obligations expiring or expired
+  // 1. Scan obligations expiring or expired (including COMPLIANT ones whose expiryDate has lapsed/is nearing)
   const obligations = await prisma.complianceObligation.findMany({
     where: {
       companyId,
-      status: { notIn: ["COMPLIANT", "NOT_APPLICABLE"] },
+      status: { not: "NOT_APPLICABLE" },
+      expiryDate: { not: null },
     },
   });
 

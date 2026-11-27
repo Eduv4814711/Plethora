@@ -47,7 +47,7 @@ export function validatePassword(
     }
   }
 
-  if (/^(.)\1{5,}/.test(password)) {
+  if (/(.)\1{5,}/.test(password)) {
     return { valid: false, message: "Password cannot repeat the same character excessively." };
   }
 

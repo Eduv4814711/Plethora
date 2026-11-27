@@ -168,4 +168,44 @@ describe("payroll export adapters", () => {
     expect(parsed.lines).toHaveLength(1);
     expect(parsed.lines[0].externalPayrollCode).toBe("SAGE-001");
   });
+
+  it("handles sundayDoubleHours (2.0x unscheduled Sunday) across all adapters and neutralizes CSV formula injection", () => {
+    const doubleSundayAndFormulaLine: NormalizedExportLine = {
+      ...sampleLine,
+      employeeFullName: "=SUM(A1:A10)",
+      siteName: "@DangerSite",
+      sundayHours: 8,
+      sundayDoubleHours: 6,
+    };
+
+    const bcZa = renderPayrollExport(
+      baseContext({ provider: "SAGE_BUSINESS_CLOUD_ZA" }),
+      [doubleSundayAndFormulaLine]
+    );
+    // Emits dedicated sundayDoubleHours code (1025) and prefixes formula cells with single quote
+    expect(bcZa.content).toContain(",1025,Sunday Double-Time Hours,6.00");
+    expect(bcZa.content).toContain("'=SUM(A1:A10)");
+    expect(bcZa.content).toContain("'@DangerSite");
+
+    const vip = renderPayrollExport(
+      baseContext({ provider: "SAGE_VIP", delimiter: ";" }),
+      [doubleSundayAndFormulaLine]
+    );
+    // Folds sundayHours (8) + sundayDoubleHours (6) = 14.00 in SundayHours column
+    expect(vip.content).toContain(";160.00;12.50;14.00;0.00;");
+
+    const generic = renderPayrollExport(
+      baseContext({ provider: "GENERIC_CSV", delimiter: "|" }),
+      [doubleSundayAndFormulaLine]
+    );
+    // Total paid hours = 160 + 12.5 + (8 + 6) + 0 + 8 = 194.50
+    expect(generic.content).toContain("|16|194.50");
+
+    const webhook = renderPayrollExport(
+      baseContext({ provider: "JSON_WEBHOOK" }),
+      [doubleSundayAndFormulaLine]
+    );
+    const parsed = JSON.parse(webhook.content);
+    expect(parsed.totals.sundayDoubleHours).toBe(6);
+  });
 });

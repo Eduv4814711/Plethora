@@ -2,7 +2,7 @@ import { format } from "date-fns";
 import type { Prisma, SiteRosterShiftCode, SiteTimesheetAttendance, SiteTimesheetRowStatus } from "@prisma/client";
 import { createAuditLog } from "../../lib/audit.js";
 import { prisma } from "../../lib/prisma.js";
-import { getCompanyTimezone, inferShiftTypeFromStartTime } from "../../lib/timezone.js";
+import { dateKeyInTimeZone, getCompanyTimezone, inferShiftTypeFromStartTime } from "../../lib/timezone.js";
 import { findApprovedLeaveConflict } from "../../services/attendance.service.js";
 import { dateKey, dateOnly, ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX } from "./rosters.service.js";
 import { buildConfirmAsScheduledPatch, type ConfirmAsScheduledPatch } from "./site-timesheet-derive.js";
@@ -327,7 +327,7 @@ async function seedRows(tx: Tx, companyId: string, timesheetId: string, siteId: 
   for (const shift of shifts) {
     const type =
       normalizeShiftType(shift.shiftType) ?? inferShiftTypeFromStartTime(shift.startTime, timeZone);
-    shiftByGuardDateType.set(shiftMatchKey(shift.employeeId, shift.startTime, type), shift);
+    shiftByGuardDateType.set(shiftMatchKey(shift.employeeId, dateKeyInTimeZone(shift.startTime, timeZone), type), shift);
   }
 
   const workingPlanned = planned.filter((p) => WORKING_CODES.has(p.shiftCode));
@@ -341,6 +341,8 @@ async function seedRows(tx: Tx, companyId: string, timesheetId: string, siteId: 
     const plannedType = normalizeShiftType(p.shiftType) ?? (p.shiftCode === "N" ? "night" : "day");
     const shift = shiftByGuardDateType.get(shiftMatchKey(p.guardId, p.rosterDate, plannedType));
     const attendance = shift?.attendances[0];
+    const isAbsent = attendance?.status === "absent";
+    const hasShift = Boolean(shift && !isAbsent);
     rows.push({
       companyId,
       siteTimesheetId: timesheetId,
@@ -350,19 +352,21 @@ async function seedRows(tx: Tx, companyId: string, timesheetId: string, siteId: 
       actualGuardId: placeholderGuardIds.has(p.guardId) ? null : p.guardId,
       plannedShiftCode: p.shiftCode,
       plannedShiftType: p.shiftType,
-      actualShiftCode: shift ? p.shiftCode : null,
-      actualShiftType: shift ? p.shiftType : null,
-      clockIn: attendance?.clockIn ?? null,
-      clockOut: attendance?.clockOut ?? null,
-      hoursWorked: attendance?.hoursWorked ?? null,
-      overtimeHours: attendance?.overtimeHours ?? null,
-      attendanceStatus: inferredAttendanceStatus({
-        plannedShiftCode: p.shiftCode,
-        actualShiftCode: shift ? p.shiftCode : null,
-        clockIn: attendance?.clockIn,
-        clockOut: attendance?.clockOut,
-        isOnApprovedLeave: Boolean(leaveConflicts[index]),
-      }),
+      actualShiftCode: hasShift ? p.shiftCode : null,
+      actualShiftType: hasShift ? p.shiftType : null,
+      clockIn: isAbsent ? null : attendance?.clockIn ?? null,
+      clockOut: isAbsent ? null : attendance?.clockOut ?? null,
+      hoursWorked: isAbsent ? 0 : attendance?.hoursWorked ?? null,
+      overtimeHours: isAbsent ? 0 : attendance?.overtimeHours ?? null,
+      attendanceStatus: isAbsent
+        ? "absent"
+        : inferredAttendanceStatus({
+            plannedShiftCode: p.shiftCode,
+            actualShiftCode: hasShift && (attendance?.clockIn || attendance?.clockOut || p.shiftCode !== "R") ? p.shiftCode : null,
+            clockIn: attendance?.clockIn,
+            clockOut: attendance?.clockOut,
+            isOnApprovedLeave: Boolean(leaveConflicts[index]),
+          }),
       sourceShiftId: shift?.id ?? null,
       sourceAttendanceId: attendance?.id ?? null,
     });
@@ -401,7 +405,7 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
   for (const shift of shifts) {
     const type =
       normalizeShiftType(shift.shiftType) ?? inferShiftTypeFromStartTime(shift.startTime, timeZone);
-    shiftByGuardDateType.set(shiftMatchKey(shift.employeeId, shift.startTime, type), shift);
+    shiftByGuardDateType.set(shiftMatchKey(shift.employeeId, dateKeyInTimeZone(shift.startTime, timeZone), type), shift);
   }
 
   const rowByPlanned = new Map<string, (typeof existingRows)[number]>();
@@ -433,6 +437,8 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
     const key = shiftMatchKey(p.guardId, p.rosterDate, plannedType);
     const shift = shiftByGuardDateType.get(key);
     const attendance = shift?.attendances[0];
+    const isAbsent = attendance?.status === "absent";
+    const hasShift = Boolean(shift && !isAbsent);
     toCreate.push({
       companyId,
       siteTimesheetId: timesheetId,
@@ -442,19 +448,21 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
       actualGuardId: placeholderGuardIds.has(p.guardId) ? null : p.guardId,
       plannedShiftCode: p.shiftCode,
       plannedShiftType: p.shiftType,
-      actualShiftCode: shift ? p.shiftCode : null,
-      actualShiftType: shift ? p.shiftType : null,
-      clockIn: attendance?.clockIn ?? null,
-      clockOut: attendance?.clockOut ?? null,
-      hoursWorked: attendance?.hoursWorked ?? null,
-      overtimeHours: attendance?.overtimeHours ?? null,
-      attendanceStatus: inferredAttendanceStatus({
-        plannedShiftCode: p.shiftCode,
-        actualShiftCode: shift ? p.shiftCode : null,
-        clockIn: attendance?.clockIn,
-        clockOut: attendance?.clockOut,
-        isOnApprovedLeave: Boolean(newPlannedLeaveConflicts[index]),
-      }),
+      actualShiftCode: hasShift ? p.shiftCode : null,
+      actualShiftType: hasShift ? p.shiftType : null,
+      clockIn: isAbsent ? null : attendance?.clockIn ?? null,
+      clockOut: isAbsent ? null : attendance?.clockOut ?? null,
+      hoursWorked: isAbsent ? 0 : attendance?.hoursWorked ?? null,
+      overtimeHours: isAbsent ? 0 : attendance?.overtimeHours ?? null,
+      attendanceStatus: isAbsent
+        ? "absent"
+        : inferredAttendanceStatus({
+            plannedShiftCode: p.shiftCode,
+            actualShiftCode: hasShift && (attendance?.clockIn || attendance?.clockOut || p.shiftCode !== "R") ? p.shiftCode : null,
+            clockIn: attendance?.clockIn,
+            clockOut: attendance?.clockOut,
+            isOnApprovedLeave: Boolean(newPlannedLeaveConflicts[index]),
+          }),
       sourceShiftId: shift?.id ?? null,
       sourceAttendanceId: attendance?.id ?? null,
     });
@@ -509,6 +517,7 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
     const shift = shiftByGuardDateType.get(shiftMatchKey(row.plannedGuardId, row.workDate, rowType));
     if (!shift) continue;
     const attendance = shift.attendances[0];
+    if (attendance?.status === "absent") continue;
     const worked =
       attendance?.clockIn || attendance?.clockOut || shift.status === "completed" || shift.status === "verified";
     if (!worked) continue;
@@ -960,14 +969,18 @@ export async function getSiteTimesheet(companyId: string, siteId: string, startD
           }
         : undefined,
     });
+    const effectiveSunday = labourSettings.sundayDoubleRateSplit
+      ? summary.sundayHours
+      : Math.round((summary.sundayHours + summary.sundayDoubleHours) * 100) / 100;
+    const effectiveSundayDouble = labourSettings.sundayDoubleRateSplit ? summary.sundayDoubleHours : 0;
     guardSummaries.push({
       employeeId,
       guardName: sampleGuard ? `${sampleGuard.firstName} ${sampleGuard.lastName}`.trim() : "Guard",
       employeeNumber: sampleGuard?.employeeNumber ?? "",
       basicHours: summary.basicHours,
       overtimeHours: summary.overtimeHours,
-      sundayHours: summary.sundayHours,
-      sundayDoubleHours: summary.sundayDoubleHours,
+      sundayHours: effectiveSunday,
+      sundayDoubleHours: effectiveSundayDouble,
       publicHolidayHours: summary.publicHolidayHours,
       nightShiftHours: summary.nightShiftHours,
       nightShiftCount: summary.nightShiftCount,
@@ -992,7 +1005,7 @@ export async function getSiteTimesheet(companyId: string, siteId: string, startD
       if (row.actualShiftType === "night") acc.nightShifts += 1;
       if (row.attendanceStatus === "reliever") acc.relieverShifts += 1;
       if (row.attendanceStatus === "absent") acc.absences += 1;
-      acc.totalHours += row.hoursWorked ?? 0;
+      acc.totalHours += (row.hoursWorked ?? 0) + (row.overtimeHours ?? 0);
       acc.overtimeHours += row.overtimeHours ?? 0;
       if (row.discrepancyCodes.length > 0) acc.discrepancies += 1;
       return acc;
@@ -1088,11 +1101,13 @@ export function rowRequiresObNumbers(params: {
   if (!rowNeedsObNumbers(params.attendanceStatus)) return false;
   if (params.obBookMode === "OPTIONAL") return false;
   if (params.obBookMode === "OPTIONAL_WHEN_DIGITAL") {
-    const hasDigital =
-      Boolean(params.hasDigitalAttendance) ||
-      Boolean(params.sourceAttendanceId) ||
-      Boolean(params.clockIn && params.clockOut);
-    return !hasDigital;
+    if (params.hasDigitalAttendance !== undefined) {
+      return !params.hasDigitalAttendance;
+    }
+    if (params.sourceAttendanceId !== undefined) {
+      return !Boolean(params.sourceAttendanceId && params.clockIn && params.clockOut);
+    }
+    return !Boolean(params.clockIn && params.clockOut);
   }
   return true;
 }
@@ -1158,9 +1173,9 @@ function validateWorkedTime(input: {
   if (
     input.hoursWorked != null &&
     input.overtimeHours != null &&
-    input.overtimeHours > input.hoursWorked
+    input.hoursWorked + input.overtimeHours > 24
   ) {
-    return "Overtime hours cannot exceed total hours worked.";
+    return "Combined hours worked and overtime hours cannot exceed 24 hours per shift.";
   }
 
   const clockIn = input.clockIn == null ? null : new Date(input.clockIn);
@@ -1701,7 +1716,11 @@ export async function bulkConfirmSiteTimesheetRows(
       fail(rowId, "ROW_NOT_FOUND");
       continue;
     }
-    if (isRowFullyReviewed(row.approvalStatus)) {
+    if (
+      isRowFullyReviewed(row.approvalStatus) ||
+      row.sourceAttendanceId != null ||
+      row.attendanceStatus !== "pending"
+    ) {
       fail(rowId, "ALREADY_REVIEWED");
       continue;
     }
@@ -1714,7 +1733,7 @@ export async function bulkConfirmSiteTimesheetRows(
       continue;
     }
 
-    const patch = buildConfirmAsScheduledPatch(row, timeZone);
+    const patch = buildConfirmAsScheduledPatch(row, timeZone, sheet.site);
     if (!patch) {
       // Never guess a shift type here — see buildConfirmAsScheduledPatch for why a null
       // actualShiftType causes payroll to count the underlying Shift twice.
@@ -1756,7 +1775,7 @@ export async function bulkConfirmSiteTimesheetRows(
         obBookMode,
         clockIn: patch.clockIn,
         clockOut: patch.clockOut,
-        sourceAttendanceId: row.sourceAttendanceId,
+        sourceAttendanceId: row.sourceAttendanceId ?? null,
       }) &&
       (!resolvedDutyOn || !resolvedDutyOff)
     ) {
@@ -1985,7 +2004,7 @@ export async function approveSiteTimesheet(
 
   const targetIds = targetRows.map((r) => r.id);
   const remainingPending = sheet.rows.filter(
-    (r) => !targetIds.includes(r.id) && isRowPendingReview(r.approvalStatus)
+    (r) => !targetIds.includes(r.id) && r.approvalStatus !== "approved"
   );
   const lockSheet = remainingPending.length === 0;
 

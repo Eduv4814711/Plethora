@@ -2,6 +2,17 @@ import { Prisma, type DocumentCategory, type DocumentStatus, type DocumentOrigin
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { upsertAlert } from "../alerts/alerts.service.js";
+import { DOCUMENT_TAXONOMY } from "./compliance.service.js";
+
+const SENSITIVE_DOCUMENT_CATEGORIES = [
+  "LEAVE_MEDICAL",
+  "DISCIPLINARY",
+  "FIREARM",
+  "CLIENT_IDENTITY",
+];
+const SENSITIVE_DOCUMENT_TYPES = DOCUMENT_TAXONOMY.filter((d) => d.isSensitive).map(
+  (d) => d.type
+);
 
 export function contractExpiryPriority(daysUntil: number): "CRITICAL" | "MEDIUM" | "LOW" | null {
   if (daysUntil < 0) return "CRITICAL";
@@ -41,7 +52,13 @@ export async function syncContractExpiryAlerts(companyId: string, siteId?: strin
     const priority = contractExpiryPriority(days);
     if (!priority) continue;
 
-    const bucket = priority === "CRITICAL" ? "7d" : priority === "MEDIUM" ? "30d" : "60d";
+    const bucket = hasExpired
+      ? "expired"
+      : priority === "CRITICAL"
+      ? "7d"
+      : priority === "MEDIUM"
+      ? "30d"
+      : "60d";
     const result = await upsertAlert({
       companyId,
       title: "Site contract expiring soon",
@@ -62,51 +79,72 @@ export async function syncContractExpiryAlerts(companyId: string, siteId?: strin
 }
 
 export async function syncDocumentExpiryAlerts(companyId: string) {
-  const docs = await prisma.managedDocument.findMany({
-    where: {
-      companyId,
-      expiryDate: { not: null },
-      doesNotExpire: false,
-      status: { in: ["ACTIVE", "PENDING_REVIEW"] },
-    },
-    take: 500,
-    include: {
-      employee: { select: { firstName: true, lastName: true, employeeNumber: true } },
-    },
-  });
   const now = new Date();
+  let scanned = 0;
   let created = 0;
-  for (const doc of docs) {
-    if (!doc.expiryDate || doc.doesNotExpire) continue;
-    const diffMs = doc.expiryDate.getTime() - now.getTime();
-    const hasExpired = diffMs <= 0;
-    const days = Math.ceil(diffMs / (24 * 3600_000));
-    const priority = documentExpiryPriority(days);
-    if (!priority) continue;
+  let lastId: string | undefined;
 
-    if (hasExpired && doc.status === "ACTIVE") {
-      await prisma.managedDocument.update({
-        where: { id: doc.id },
-        data: { status: "EXPIRED" },
+  while (true) {
+    const docs = await prisma.managedDocument.findMany({
+      where: {
+        companyId,
+        expiryDate: { not: null },
+        doesNotExpire: false,
+        status: { in: ["ACTIVE", "PENDING_REVIEW"] },
+        ...(lastId ? { id: { gt: lastId } } : {}),
+      },
+      orderBy: { id: "asc" },
+      take: 500,
+      include: {
+        employee: { select: { firstName: true, lastName: true, employeeNumber: true } },
+      },
+    });
+    if (docs.length === 0) break;
+
+    scanned += docs.length;
+    lastId = docs[docs.length - 1]!.id;
+
+    for (const doc of docs) {
+      if (!doc.expiryDate || doc.doesNotExpire) continue;
+      const diffMs = doc.expiryDate.getTime() - now.getTime();
+      const hasExpired = diffMs <= 0;
+      const days = Math.ceil(diffMs / (24 * 3600_000));
+      const priority = documentExpiryPriority(days);
+      if (!priority) continue;
+
+      if (hasExpired && doc.status === "ACTIVE") {
+        await prisma.managedDocument.update({
+          where: { id: doc.id },
+          data: { status: "EXPIRED" },
+        });
+      }
+
+      const bucket = hasExpired
+        ? "expired"
+        : priority === "CRITICAL"
+        ? "7d"
+        : priority === "MEDIUM"
+        ? "30d"
+        : "60d";
+      const empInfo = doc.employee ? ` for ${doc.employee.firstName} ${doc.employee.lastName} (${doc.employee.employeeNumber})` : "";
+      const result = await upsertAlert({
+        companyId,
+        title: hasExpired ? "Document expired" : "Document expiring soon",
+        message: `${doc.title} (${doc.documentType})${empInfo} ${hasExpired ? "has expired" : `expires in ${days} day(s)`}`,
+        priority,
+        sourceModule: "DOCUMENTS",
+        dedupeKey: `doc_expiry:${doc.id}:${bucket}`,
+        sourceId: doc.id,
+        siteId: doc.siteId,
+        employeeId: doc.employeeId,
       });
+      if (result.created) created += 1;
     }
 
-    const bucket = priority === "CRITICAL" ? "7d" : priority === "MEDIUM" ? "30d" : "60d";
-    const empInfo = doc.employee ? ` for ${doc.employee.firstName} ${doc.employee.lastName} (${doc.employee.employeeNumber})` : "";
-    const result = await upsertAlert({
-      companyId,
-      title: hasExpired ? "Document expired" : "Document expiring soon",
-      message: `${doc.title} (${doc.documentType})${empInfo} ${hasExpired ? "has expired" : `expires in ${days} day(s)`}`,
-      priority,
-      sourceModule: "DOCUMENTS",
-      dedupeKey: `doc_expiry:${doc.id}:${bucket}`,
-      sourceId: doc.id,
-      siteId: doc.siteId,
-      employeeId: doc.employeeId,
-    });
-    if (result.created) created += 1;
+    if (docs.length < 500) break;
   }
-  return { scanned: docs.length, created };
+
+  return { scanned, created };
 }
 
 export const VALID_DOCUMENT_CATEGORIES = new Set<string>([
@@ -161,11 +199,54 @@ export async function listDocuments(
     expiringWithinDays?: number;
     search?: string;
     isSensitive?: boolean;
+    sensitivityScope?: {
+      allowEmployeeSensitive: boolean;
+      allowClientSensitive: boolean;
+    };
     limit?: number;
     offset?: number;
   }
 ) {
   const resolvedCategory = resolveDocumentCategory(query.category);
+  const andClauses: Prisma.ManagedDocumentWhereInput[] = [];
+  if (
+    query.sensitivityScope &&
+    !(
+      query.sensitivityScope.allowEmployeeSensitive &&
+      query.sensitivityScope.allowClientSensitive
+    )
+  ) {
+    const nonSensitiveWhere: Prisma.ManagedDocumentWhereInput = {
+      AND: [
+        { isSensitive: false },
+        {
+          OR: [
+            { documentCategory: null },
+            { documentCategory: { notIn: SENSITIVE_DOCUMENT_CATEGORIES } },
+          ],
+        },
+        ...(SENSITIVE_DOCUMENT_TYPES.length > 0
+          ? [{ documentType: { notIn: SENSITIVE_DOCUMENT_TYPES } }]
+          : []),
+      ],
+    };
+    const clientDocWhere: Prisma.ManagedDocumentWhereInput = {
+      OR: [
+        { clientId: { not: null } },
+        { clientContractId: { not: null } },
+        { category: "CLIENT" },
+        { documentCategory: { startsWith: "CLIENT_" } },
+      ],
+    };
+    if (query.sensitivityScope.allowClientSensitive) {
+      andClauses.push({ OR: [nonSensitiveWhere, clientDocWhere] });
+    } else if (query.sensitivityScope.allowEmployeeSensitive) {
+      andClauses.push({ OR: [nonSensitiveWhere, { NOT: clientDocWhere }] });
+    } else {
+      andClauses.push(nonSensitiveWhere);
+    }
+  }
+
   const where: Prisma.ManagedDocumentWhereInput = {
     companyId,
     ...(resolvedCategory ? { category: resolvedCategory } : {}),
@@ -203,6 +284,7 @@ export async function listDocuments(
           ],
         }
       : {}),
+    ...(andClauses.length > 0 ? { AND: andClauses } : {}),
   };
 
   const [items, total] = await Promise.all([
@@ -451,7 +533,17 @@ export async function updateDocumentMetadata(
   if (data.issuingAuthority !== undefined) updateData.issuingAuthority = data.issuingAuthority;
   if (data.issueDate !== undefined) updateData.issueDate = data.issueDate;
   if (data.clientContractId !== undefined) {
-    updateData.clientContract = data.clientContractId ? { connect: { id: data.clientContractId } } : { disconnect: true };
+    if (data.clientContractId) {
+      const refErr = await validateDocumentReferences(companyId, {
+        clientContractId: data.clientContractId,
+      });
+      if (refErr) {
+        throw Object.assign(new Error(refErr), { statusCode: 400 });
+      }
+      updateData.clientContract = { connect: { id: data.clientContractId } };
+    } else {
+      updateData.clientContract = { disconnect: true };
+    }
   }
   if (data.doesNotExpire !== undefined) {
     updateData.doesNotExpire = data.doesNotExpire;

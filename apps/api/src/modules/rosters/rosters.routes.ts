@@ -52,6 +52,7 @@ import {
   getSiteRosterConfig,
   publishRoster,
   RosterGuardValidationError,
+  RosterPatternValidationError,
   updatePattern,
 } from "./rosters.service.js";
 import {
@@ -145,6 +146,9 @@ export async function rostersRoutes(app: FastifyInstance) {
     const parsed = activateContinuitySchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
+    }
+    if (!hasCapability(request.user!, "/rostering", "approve")) {
+      return reply.code(403).send({ error: "Rostering approve access is required to activate continuity and publish shifts" });
     }
     try {
       const result = await activateRosterContinuity(
@@ -503,6 +507,9 @@ export async function rostersRoutes(app: FastifyInstance) {
       if (error instanceof RosterGuardValidationError) {
         return reply.code(400).send({ error: "Every roster guard must belong to this company" });
       }
+      if (error instanceof RosterPatternValidationError) {
+        return reply.code(400).send({ error: error.message });
+      }
       throw error;
     }
   });
@@ -520,6 +527,9 @@ export async function rostersRoutes(app: FastifyInstance) {
     } catch (error) {
       if (error instanceof RosterGuardValidationError) {
         return reply.code(400).send({ error: "Every roster guard must belong to this company" });
+      }
+      if (error instanceof RosterPatternValidationError) {
+        return reply.code(400).send({ error: error.message });
       }
       throw error;
     }
@@ -575,6 +585,9 @@ export async function rostersRoutes(app: FastifyInstance) {
       if (error instanceof RosterGuardValidationError) {
         return reply.code(400).send({ error: "Roster guard not found" });
       }
+      if (error instanceof Error && error.message === "ACTIVE_PATTERN_REQUIRED") {
+        return reply.code(409).send({ error: "An active roster pattern is required before changing the ongoing schedule" });
+      }
       throw error;
     }
   });
@@ -591,6 +604,9 @@ export async function rostersRoutes(app: FastifyInstance) {
     } catch (error) {
       if (error instanceof RosterGuardValidationError) {
         return reply.code(400).send({ error: "Every roster guard must belong to this company" });
+      }
+      if (error instanceof Error && error.message === "ACTIVE_PATTERN_REQUIRED") {
+        return reply.code(409).send({ error: "An active roster pattern is required before changing the ongoing schedule" });
       }
       throw error;
     }
@@ -643,6 +659,12 @@ export async function rostersRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
     }
+    if (
+      parsed.data.publishImmediately !== false &&
+      !hasCapability(request.user!, "/rostering", "approve")
+    ) {
+      return reply.code(403).send({ error: "Rostering approve access is required to publish shifts" });
+    }
     try {
       const result = await applySmartRoster(
         request.user!.companyId,
@@ -653,10 +675,17 @@ export async function rostersRoutes(app: FastifyInstance) {
       if (!result) return reply.code(404).send({ error: "Site not found" });
       return reply.send(result);
     } catch (error) {
-      return reply.code(400).send({
-        error: "Unable to apply smart roster",
-        message: error instanceof Error ? error.message : "Invalid roster assignment payload",
-      });
+      if (
+        error instanceof Error &&
+        (error.message.startsWith("All assigned guards") ||
+          error.message.startsWith("All assigned posts"))
+      ) {
+        return reply.code(400).send({
+          error: "Unable to apply smart roster",
+          message: error.message,
+        });
+      }
+      throw error;
     }
   });
 
@@ -665,6 +694,12 @@ export async function rostersRoutes(app: FastifyInstance) {
     const parsed = quickEditRosterCellSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
+    }
+    if (
+      parsed.data.syncPublishedShift !== false &&
+      !hasCapability(request.user!, "/rostering", "approve")
+    ) {
+      return reply.code(403).send({ error: "Rostering approve access is required to modify published shifts" });
     }
     try {
       const result = await quickEditRosterCell(
@@ -677,10 +712,17 @@ export async function rostersRoutes(app: FastifyInstance) {
       if ("error" in result) return reply.code(400).send(result);
       return reply.send(result);
     } catch (error) {
-      return reply.code(400).send({
-        error: "Unable to update shift cell",
-        message: error instanceof Error ? error.message : "Invalid quick-edit request",
-      });
+      if (
+        error instanceof Error &&
+        (error.message === "Guard does not belong to this company" ||
+          error.message === "Post does not belong to this site")
+      ) {
+        return reply.code(400).send({
+          error: "Unable to update shift cell",
+          message: error.message,
+        });
+      }
+      throw error;
     }
   });
 
@@ -712,6 +754,9 @@ export async function rostersRoutes(app: FastifyInstance) {
     const parsed = autoBuildUnrosteredSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
+    }
+    if (!parsed.data.dryRun && !hasCapability(request.user!, "/rostering", "approve")) {
+      return reply.code(403).send({ error: "Rostering approve access is required to publish shifts" });
     }
     const result = await autoBuildUnrosteredSites(
       request.user!.companyId,

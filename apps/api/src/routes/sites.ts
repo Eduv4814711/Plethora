@@ -306,6 +306,26 @@ export async function sitesRoutes(app: FastifyInstance) {
     const companyId = request.user!.companyId;
     const d = parsed.data;
 
+    if (d.clientId) {
+      const client = await prisma.client.findFirst({
+        where: { id: d.clientId, companyId },
+        select: { id: true },
+      });
+      if (!client) {
+        return reply.code(400).send({ error: "Validation error", message: "Referenced client not found" });
+      }
+    }
+
+    if (d.supervisorId) {
+      const supervisor = await prisma.user.findFirst({
+        where: { id: d.supervisorId, companyId, isActive: true, accountType: "staff" },
+        select: { id: true },
+      });
+      if (!supervisor) {
+        return reply.code(400).send({ error: "Validation error", message: "Referenced supervisor not found" });
+      }
+    }
+
     const site = await prisma.site.create({
       data: {
         companyId,
@@ -554,11 +574,37 @@ export async function sitesRoutes(app: FastifyInstance) {
       ...geoPatch,
       ...rosterPatch,
     };
+    if (typeof restFields.clientId === "string" && restFields.clientId) {
+      const client = await prisma.client.findFirst({
+        where: { id: restFields.clientId, companyId },
+        select: { id: true },
+      });
+      if (!client) {
+        return reply.code(400).send({ error: "Validation error", message: "Referenced client not found" });
+      }
+    }
+    if (typeof restFields.supervisorId === "string" && restFields.supervisorId) {
+      const supervisor = await prisma.user.findFirst({
+        where: { id: restFields.supervisorId, companyId, isActive: true, accountType: "staff" },
+        select: { id: true },
+      });
+      if (!supervisor) {
+        return reply.code(400).send({ error: "Validation error", message: "Referenced supervisor not found" });
+      }
+    }
     if (contractStartDate !== undefined) {
-      updateData.contractStartDate = parseOptionalDate(contractStartDate);
+      const parsedStart = parseOptionalDate(contractStartDate);
+      if (contractStartDate && parsedStart === undefined) {
+        return reply.code(400).send({ error: "Validation error", message: "Invalid contractStartDate" });
+      }
+      updateData.contractStartDate = parsedStart;
     }
     if (contractEndDate !== undefined) {
-      updateData.contractEndDate = parseOptionalDate(contractEndDate);
+      const parsedEnd = parseOptionalDate(contractEndDate);
+      if (contractEndDate && parsedEnd === undefined) {
+        return reply.code(400).send({ error: "Validation error", message: "Invalid contractEndDate" });
+      }
+      updateData.contractEndDate = parsedEnd;
     }
     if (siteInstructions !== undefined) {
       updateData.siteInstructions =

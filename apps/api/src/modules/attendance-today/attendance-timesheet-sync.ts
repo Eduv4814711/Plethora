@@ -9,6 +9,7 @@ interface SyncShift {
   companyId: string;
   siteId: string;
   employeeId: string;
+  shiftType?: string | null;
   startTime: Date;
   endTime: Date;
 }
@@ -42,11 +43,20 @@ export async function syncAttendanceToTimesheetRow(
   const timeZone = await getCompanyTimezone(shift.companyId);
   const workDate = new Date(`${dateKeyInTimeZone(shift.startTime, timeZone)}T00:00:00.000Z`);
 
+  const shiftTypeNormalized = shift.shiftType?.toLowerCase();
   const row = await prisma.siteTimesheetRow.findFirst({
     where: {
+      companyId: shift.companyId,
       OR: [
         { sourceShiftId: shift.id },
-        { siteId: shift.siteId, workDate, plannedGuardId: shift.employeeId },
+        {
+          siteId: shift.siteId,
+          workDate,
+          plannedGuardId: shift.employeeId,
+          ...(shiftTypeNormalized === "day" || shiftTypeNormalized === "night"
+            ? { plannedShiftType: shiftTypeNormalized }
+            : {}),
+        },
       ],
     },
     include: { siteTimesheet: { select: { status: true } } },
@@ -56,18 +66,30 @@ export async function syncAttendanceToTimesheetRow(
   const sheetStatus = String(row.siteTimesheet?.status ?? "");
   if (row.approvalStatus === "approved" || LOCKED_TIMESHEET_STATUSES.has(sheetStatus)) return "locked";
 
-  const clockIn = attendance.clockIn ?? row.clockIn;
-  const clockOut = attendance.clockOut ?? row.clockOut;
+  const clockIn = attendance.clockIn !== undefined ? attendance.clockIn : row.clockIn;
+  const clockOut = attendance.clockOut !== undefined ? attendance.clockOut : row.clockOut;
   const canRefineStatus = !row.attendanceStatus || WORKED_ROW_STATUSES.has(row.attendanceStatus);
+  const actualShiftType =
+    shiftTypeNormalized === "day" || shiftTypeNormalized === "night"
+      ? shiftTypeNormalized
+      : row.actualShiftType ?? row.plannedShiftType ?? null;
+  const actualShiftCode =
+    actualShiftType === "night"
+      ? "N"
+      : actualShiftType === "day"
+        ? "D"
+        : row.actualShiftCode ?? row.plannedShiftCode ?? null;
 
   await prisma.siteTimesheetRow.update({
     where: { id: row.id },
     data: {
       actualGuardId: shift.employeeId,
+      actualShiftType,
+      actualShiftCode,
       clockIn,
       clockOut,
-      hoursWorked: (attendance.hoursWorked as never) ?? row.hoursWorked,
-      overtimeHours: (attendance.overtimeHours as never) ?? row.overtimeHours,
+      hoursWorked: attendance.hoursWorked !== undefined ? (attendance.hoursWorked as never) : row.hoursWorked,
+      overtimeHours: attendance.overtimeHours !== undefined ? (attendance.overtimeHours as never) : row.overtimeHours,
       sourceAttendanceId: attendance.id,
       sourceShiftId: shift.id,
       ...(canRefineStatus

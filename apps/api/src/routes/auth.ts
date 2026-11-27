@@ -22,6 +22,7 @@ import {
   toPublicAuthResponse,
 } from "../lib/auth-cookies.js";
 import { env } from "../lib/env.js";
+import { config } from "../lib/config.js";
 import { auditFromRequest, type AuditOutcome } from "../lib/audit.js";
 
 const AUTH_RATE = { max: 30, timeWindow: "15 minutes" as const };
@@ -54,6 +55,7 @@ async function auditAuthEvent(
     action: params.action,
     entityType: "user",
     entityId: params.userId,
+    userId: params.userId ?? null,
     companyId: params.companyId,
     actorLabel: params.actorLabel,
     outcome: params.outcome,
@@ -62,21 +64,24 @@ async function auditAuthEvent(
 }
 
 /**
- * A failed login has no session, so resolve the company from the email to keep
- * the attempt visible on that company's audit trail. Returns null for an email
- * that matches nobody — there is no company to attribute it to, and recording
- * it against an arbitrary one would be misleading.
+ * Verifies the signature of an expired refresh token (ignoring expiration) and
+ * confirms the account belongs to the claimed company before recording a
+ * rejected-refresh audit row, preventing unauthenticated cross-tenant spoofing.
  */
-/**
- * Reads the claims of a rejected refresh token without trusting them. The token
- * failed verification, so this is only used to attribute the attempt to a
- * company — never to grant anything.
- */
-function decodeRefreshClaims(token: string): { sub: string; email: string; companyId: string } | null {
+async function verifyRejectedRefreshClaims(
+  token: string
+): Promise<{ sub: string; email: string; companyId: string } | null> {
   try {
-    const decoded = jwt.decode(token) as { sub?: string; email?: string; companyId?: string } | null;
-    if (!decoded?.sub || !decoded.companyId) return null;
-    return { sub: decoded.sub, email: decoded.email ?? decoded.sub, companyId: decoded.companyId };
+    const decoded = jwt.verify(token, config.jwt.refreshSecret, {
+      ignoreExpiration: true,
+    }) as { sub?: string; email?: string; companyId?: string; type?: string } | null;
+    if (!decoded?.sub || !decoded.companyId || decoded.type !== "refresh") return null;
+    const user = await prisma.user.findFirst({
+      where: { id: decoded.sub, companyId: decoded.companyId },
+      select: { id: true, email: true, companyId: true },
+    });
+    if (!user) return null;
+    return { sub: user.id, email: user.email, companyId: user.companyId };
   } catch {
     return null;
   }
@@ -294,7 +299,7 @@ export async function authRoutes(app: FastifyInstance) {
       const tokenHash = hashPasswordSetupToken(parsed.data.token);
       const found = await prisma.user.findFirst({
         where: {
-          passwordSetupRequired: true,
+          isActive: true,
           passwordSetupTokenHash: tokenHash,
           passwordSetupTokenConsumedAt: null,
           passwordSetupTokenExpiresAt: { gt: now },
@@ -323,44 +328,53 @@ export async function authRoutes(app: FastifyInstance) {
         });
       }
 
-      const policyMsg = passwordPolicyError(parsed.data.password);
-      if (policyMsg) {
-        return badRequest(reply, policyMsg);
-      }
-
       const now = new Date();
       const tokenHash = hashPasswordSetupToken(parsed.data.token);
       const found = await prisma.user.findFirst({
         where: {
-          passwordSetupRequired: true,
+          isActive: true,
           passwordSetupTokenHash: tokenHash,
           passwordSetupTokenConsumedAt: null,
           passwordSetupTokenExpiresAt: { gt: now },
         },
-        select: { id: true, email: true, companyId: true },
+        select: { id: true, email: true, companyId: true, company: { select: { name: true } } },
       });
       if (!found) {
         return reply.code(400).send({ error: "Invalid or expired setup link" });
       }
 
+      const policyMsg = passwordPolicyError(parsed.data.password, found.company?.name);
+      if (policyMsg) {
+        return badRequest(reply, policyMsg);
+      }
+
       const passwordHash = await hashPassword(parsed.data.password);
-      const consumed = await prisma.user.updateMany({
-        where: {
-          id: found.id,
-          passwordSetupRequired: true,
-          passwordSetupTokenHash: tokenHash,
-          passwordSetupTokenConsumedAt: null,
-          passwordSetupTokenExpiresAt: { gt: now },
-        },
-        data: {
-          passwordHash,
-          passwordSetupRequired: false,
-          passwordSetupTokenHash: null,
-          passwordSetupTokenExpiresAt: null,
-          passwordSetupTokenConsumedAt: now,
-        },
+      const consumedCount = await prisma.$transaction(async (tx) => {
+        const consumed = await tx.user.updateMany({
+          where: {
+            id: found.id,
+            isActive: true,
+            passwordSetupTokenHash: tokenHash,
+            passwordSetupTokenConsumedAt: null,
+            passwordSetupTokenExpiresAt: { gt: now },
+          },
+          data: {
+            passwordHash,
+            passwordSetupRequired: false,
+            passwordSetupTokenHash: null,
+            passwordSetupTokenExpiresAt: null,
+            passwordSetupTokenConsumedAt: now,
+          },
+        });
+        if (consumed.count === 1) {
+          await tx.refreshToken.updateMany({
+            where: { userId: found.id, revokedAt: null },
+            data: { revokedAt: now },
+          });
+        }
+        return consumed.count;
       });
-      if (consumed.count !== 1) {
+      if (consumedCount !== 1) {
         return reply.code(400).send({ error: "Invalid or expired setup link" });
       }
 
@@ -400,9 +414,8 @@ export async function authRoutes(app: FastifyInstance) {
     const result = await refreshAccessToken(refreshTokenValue, refreshMeta(request));
     if (!result) {
       // A rejected refresh is how a revoked or reused token shows up. Attribute
-      // it if the token still decodes to a real account; otherwise there is
-      // nothing to attribute it to and the rate limiter is the control.
-      const claimed = decodeRefreshClaims(refreshTokenValue);
+      // it only if the token's signature is genuine and the user exists in that company.
+      const claimed = await verifyRejectedRefreshClaims(refreshTokenValue);
       if (claimed) {
         await auditAuthEvent(request, {
           action: "auth.token.refresh.rejected",
@@ -437,23 +450,52 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send(user);
   });
 
-  app.post("/logout", { preHandler: [authMiddleware] }, async (request, reply) => {
+  app.post("/logout", async (request, reply) => {
     if (!assertCsrfForCookieAuth(request)) {
       return csrfForbidden(reply);
     }
 
     const refreshTokenValue = readRefreshTokenFromRequest(request);
+    let actor: { sub: string; companyId: string; email?: string } | null = null;
 
-    if (request.user?.sub || refreshTokenValue) {
-      await logoutUser(request.user?.sub, refreshTokenValue);
+    const authHeader = request.headers.authorization;
+    const accessToken = authHeader?.replace(/^Bearer\s+/i, "");
+    if (accessToken) {
+      try {
+        const decoded = jwt.verify(accessToken, config.jwt.accessSecret, {
+          ignoreExpiration: true,
+        }) as { sub?: string; companyId?: string; email?: string; type?: string };
+        if (decoded?.sub && decoded.companyId && decoded.type !== "refresh") {
+          actor = { sub: decoded.sub, companyId: decoded.companyId, email: decoded.email };
+        }
+      } catch {
+        // Ignore invalid/malformed access token; fallback to refresh token below.
+      }
     }
 
-    if (request.user) {
+    if (!actor && refreshTokenValue) {
+      try {
+        const decoded = jwt.verify(refreshTokenValue, config.jwt.refreshSecret, {
+          ignoreExpiration: true,
+        }) as { sub?: string; companyId?: string; email?: string; type?: string };
+        if (decoded?.sub && decoded.companyId && decoded.type === "refresh") {
+          actor = { sub: decoded.sub, companyId: decoded.companyId, email: decoded.email };
+        }
+      } catch {
+        // Ignore invalid/malformed refresh token; still clear cookies below.
+      }
+    }
+
+    if (actor?.sub || refreshTokenValue) {
+      await logoutUser(actor?.sub, refreshTokenValue);
+    }
+
+    if (actor) {
       await auditAuthEvent(request, {
         action: "auth.logout",
-        companyId: request.user.companyId,
-        userId: request.user.sub,
-        actorLabel: request.user.email,
+        companyId: actor.companyId,
+        userId: actor.sub,
+        actorLabel: actor.email,
       });
     }
 

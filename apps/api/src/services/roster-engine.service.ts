@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { fromZonedTime } from "date-fns-tz";
 import { prisma } from "../lib/prisma.js";
 import { inferPostShiftType } from "../lib/site-post-api.js";
 import { getCompanyTimezone, getShiftTimes, dateKeyInTimeZone } from "../lib/timezone.js";
@@ -353,8 +354,9 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
   }
 
   const guardIds = rosterableGuards.map((g) => g.id);
+  const priorWindowStart = new Date(startDate.getTime() - 7 * 86_400_000);
 
-  const [blockingExistingShifts, sameSiteShiftsInPeriod, leaveDateKeysByEmployee] = await Promise.all([
+  const [blockingExistingShifts, priorShifts, sameSiteShiftsInPeriod, leaveDateKeysByEmployee] = await Promise.all([
     prisma.shift.findMany({
       where: {
         companyId,
@@ -365,6 +367,15 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
       },
       select: { employeeId: true, startTime: true, endTime: true },
     }),
+    prisma.shift.findMany({
+      where: {
+        companyId,
+        employeeId: { in: guardIds },
+        status: { in: ["created", "assigned", "active", "completed", "verified"] },
+        startTime: { gte: priorWindowStart, lt: startDate },
+      },
+      select: { employeeId: true, startTime: true, shiftType: true },
+    }),
     prisma.shift.count({
       where: {
         companyId,
@@ -374,7 +385,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
         endTime: { gt: startDate },
       },
     }),
-    getLeaveDateKeysByEmployee(guardIds, startDate, endDate),
+    getLeaveDateKeysByEmployee(guardIds, startDate, endDate, companyId),
   ]);
   const existingShifts = blockingExistingShifts;
   const guardNameById = new Map(
@@ -478,6 +489,16 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
       workedDateKeys: new Set(),
       shiftTypeByDateKey: new Map(),
     });
+  }
+  for (const prior of priorShifts) {
+    const rt = runtimeByGuard.get(prior.employeeId);
+    if (!rt) continue;
+    const dk = dateKeyInTimeZone(prior.startTime, timeZone);
+    rt.workedDateKeys.add(dk);
+    rt.shiftTypeByDateKey.set(
+      dk,
+      (prior.shiftType ?? "day").toLowerCase() === "night" ? "night" : "day"
+    );
   }
 
   const entries: RosterPlanEntry[] = [];
@@ -757,7 +778,10 @@ export type ApplyRosterPlanResult = {
 };
 
 type ApplyValidationContext = {
-  employeeById: Map<string, { id: string; status: string; gender: string | null }>;
+  employeeById: Map<
+    string,
+    { id: string; status: string; employeeType: string | null; gender: string | null }
+  >;
   postById: Map<
     string,
     {
@@ -793,7 +817,7 @@ async function loadApplyValidationContext(
   const [employees, posts, siteAssignments, existingShifts] = await Promise.all([
     prisma.employee.findMany({
       where: { companyId, id: { in: employeeIds } },
-      select: { id: true, status: true, gender: true },
+      select: { id: true, status: true, employeeType: true, gender: true },
     }),
     prisma.sitePost.findMany({
       where: { id: { in: postIds } },
@@ -809,20 +833,21 @@ async function loadApplyValidationContext(
       },
     }),
     prisma.siteAssignment.findMany({
-      where: { siteId, employeeId: { in: employeeIds } },
+      where: { siteId, isActive: true, employeeId: { in: employeeIds } },
       select: { employeeId: true },
     }),
     prisma.shift.findMany({
       where: {
         companyId,
         employeeId: { in: employeeIds },
-        startTime: { lt: rangeEnd },
-        endTime: { gt: rangeStart },
+        startTime: { lt: new Date(rangeEnd.getTime() + 2 * 86_400_000) },
+        endTime: { gt: new Date(rangeStart.getTime() - 2 * 86_400_000) },
         ...(replaceExisting
           ? {
               NOT: {
                 siteId,
                 status: { in: ["created", "assigned"] },
+                startTime: { gte: rangeStart, lt: rangeEnd },
               },
             }
           : {}),
@@ -881,6 +906,9 @@ function validateApplyEntryInMemory(
 ): string | null {
   const employee = ctx.employeeById.get(employeeId);
   if (!employee) return "Employee not found";
+  if ((employee.employeeType ?? "security_officer") !== "security_officer") {
+    return "Only security officers can be assigned to shifts";
+  }
   if (!ROSTERABLE_STATUSES.includes(employee.status as (typeof ROSTERABLE_STATUSES)[number])) {
     return `Employee must be active, training, hired, or reliever to be assigned. Current status: ${employee.status}`;
   }
@@ -1011,13 +1039,18 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
   const plannedByEmployee = new Map<string, { start: Date; end: Date }[]>();
   const plannedRestByEmployee = new Map<string, Map<string, "day" | "night">>();
   const timeZone = await getCompanyTimezone(companyId);
+  const periodStartUtc = fromZonedTime(`${plan.startDate.slice(0, 10)}T00:00:00`, timeZone);
+  const nextDayKey = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate() + 1))
+    .toISOString()
+    .slice(0, 10);
+  const periodEndExclusiveUtc = fromZonedTime(`${nextDayKey}T00:00:00`, timeZone);
 
   const validationCtx = await loadApplyValidationContext(
     companyId,
     plan.siteId,
     plan,
-    start,
-    end,
+    periodStartUtc,
+    periodEndExclusiveUtc,
     [...sitePostIds],
     replaceExisting,
     timeZone
@@ -1048,7 +1081,7 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
       errors.push(`${entry.startTime.slice(0, 10)}: A shift cannot exceed 24 hours`);
       continue;
     }
-    if (startTime < start || startTime > end) {
+    if (startTime < periodStartUtc || startTime >= periodEndExclusiveUtc) {
       errors.push(`${entry.startTime.slice(0, 10)}: Shift is outside the roster plan period`);
       continue;
     }
@@ -1132,8 +1165,7 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
             companyId,
             siteId: plan.siteId,
             status: { in: ["created", "assigned"] },
-            startTime: { lt: end },
-            endTime: { gt: start },
+            startTime: { gte: periodStartUtc, lt: periodEndExclusiveUtc },
           },
         });
         deleted = del.count;

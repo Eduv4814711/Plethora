@@ -17,9 +17,11 @@ export type ConversationState =
   | "INCIDENT_AWAITING_PHOTO"
   // Leave Application Multi-Step Micro-Prompts
   | "LEAVE_SELECT_TYPE"
+  | "LEAVE_SELECT_FAMILY_REASON"
   | "LEAVE_ENTER_START_DATE"
   | "LEAVE_ENTER_END_DATE"
   | "LEAVE_ENTER_REASON"
+  | "LEAVE_AWAITING_DOCUMENT"
   | "LEAVE_CONFIRM"
   | "LEAVE_AWAITING_CERTIFICATE"
   // Supervisor Assistance / Human Handoff

@@ -28,15 +28,21 @@ export async function generateTenderCompliancePack(companyId: string) {
     { type: "PUBLIC_LIABILITY", title: "Public Liability & Broad-Form Insurance" },
   ];
 
+  const now = new Date();
   const tenderItems = keyTenderChecklist.map((item) => {
     const ob = obligations.find((o) => o.type === item.type);
+    const isExpired = Boolean(ob?.expiryDate && ob.expiryDate < now);
+    const isCompliant = ob?.status === "COMPLIANT" && !isExpired;
     return {
       type: item.type,
       requiredTitle: item.title,
-      currentStatus: ob?.status ?? "NOT_CAPTURED",
+      currentStatus:
+        ob?.status === "COMPLIANT" && isExpired
+          ? "NON_COMPLIANT"
+          : (ob?.status ?? "NOT_CAPTURED"),
       referenceNumber: ob?.referenceNumber ?? null,
       expiryDate: ob?.expiryDate ?? null,
-      isCompliant: ob?.status === "COMPLIANT",
+      isCompliant,
       lastVerifiedAt: ob?.lastVerifiedAt ?? null,
     };
   });
@@ -56,13 +62,17 @@ export async function generateTenderCompliancePack(companyId: string) {
 
 export async function generateExecutiveRiskReport(companyId: string) {
   const summary = await getComplianceSummary(companyId);
+  const now = new Date();
 
   const [highRiskObligations, criticalLegalCases] = await Promise.all([
     prisma.complianceObligation.findMany({
       where: {
         companyId,
         riskLevel: { in: ["HIGH", "CRITICAL"] },
-        status: { not: "COMPLIANT" },
+        OR: [
+          { status: { notIn: ["COMPLIANT", "NOT_APPLICABLE"] } },
+          { status: "COMPLIANT", expiryDate: { lt: now } },
+        ],
       },
     }),
     prisma.complianceLegalCase.findMany({

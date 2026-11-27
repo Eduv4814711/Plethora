@@ -65,6 +65,8 @@ export interface RequestAuditParams {
   entityId?: string;
   metadata?: Record<string, unknown>;
   outcome?: AuditOutcome;
+  /** Overrides the authenticated user's id, for pre-auth events. */
+  userId?: string | null;
   /** Overrides the authenticated user's company, for pre-auth events. */
   companyId?: string;
   /** Overrides the actor, for events with no authenticated user. */
@@ -92,7 +94,7 @@ export async function auditFromRequest(
   const payload: AuditParams = {
     ...params,
     companyId,
-    userId: request.user?.sub ?? null,
+    userId: params.userId !== undefined ? params.userId : (request.user?.sub ?? null),
     actorLabel: params.actorLabel ?? (request.user ? null : "anonymous"),
     ...forensics(request),
   };

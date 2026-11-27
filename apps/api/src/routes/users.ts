@@ -244,7 +244,11 @@ export async function usersRoutes(app: FastifyInstance) {
       return badRequest(reply, "Password is required when setup link is disabled");
     }
     if (parsed.data.password) {
-      const check = validatePassword(parsed.data.password);
+      const company = await prisma.company.findUnique({
+        where: { id: request.user!.companyId },
+        select: { name: true },
+      });
+      const check = validatePassword(parsed.data.password, { companyName: company?.name });
       if (!check.valid) return badRequest(reply, check.message ?? "Password does not meet policy");
     }
     const email = parsed.data.email.toLowerCase();
@@ -506,10 +510,17 @@ export async function usersRoutes(app: FastifyInstance) {
       }
     }
 
-    const updated = await prisma.$transaction(async (tx) =>
-      applyUserUpdate(request, tx, { id, existing, payload })
-    );
-    return reply.send({ ...updated, isOwner: existing.isOwner });
+    try {
+      const updated = await prisma.$transaction(async (tx) =>
+        applyUserUpdate(request, tx, { id, existing, payload })
+      );
+      return reply.send({ ...updated, isOwner: existing.isOwner });
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2002") {
+        return reply.code(409).send({ error: "Email already registered", message: "This email is already in use." });
+      }
+      throw error;
+    }
   });
 
   /**
@@ -538,7 +549,10 @@ export async function usersRoutes(app: FastifyInstance) {
 
   app.post(
     "/transfer-ownership",
-    { preHandler: [authMiddleware, requireOwner()] },
+    {
+      preHandler: [authMiddleware, requireOwner()],
+      config: { rateLimit: { max: 30, timeWindow: "15 minutes" as const } },
+    },
     async (request, reply) => {
       const parsed = transferOwnershipSchema.safeParse(request.body);
       if (!parsed.success) return badRequest(reply, "New owner and current password are required");
@@ -554,10 +568,17 @@ export async function usersRoutes(app: FastifyInstance) {
           id: parsed.data.newOwnerUserId,
           companyId: request.user!.companyId,
           isActive: true,
+          passwordSetupRequired: false,
+          accountType: "staff",
         },
         select: { id: true, email: true },
       });
-      if (!target) return badRequest(reply, "The new owner must be an active user in this company");
+      if (!target) {
+        return badRequest(
+          reply,
+          "The new owner must be an active staff user in this company who has completed password setup"
+        );
+      }
       if (target.id === request.user!.sub) return badRequest(reply, "This user is already the company owner");
       await prisma.$transaction(async (tx) => {
         await tx.company.update({

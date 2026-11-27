@@ -1,4 +1,8 @@
-import { addDaysToDateKey, SA_NBCPSS_RULES } from "../../../lib/sa-labour-rules.config.js";
+import {
+  addDaysToDateKey,
+  getIsoWeekStartKey,
+  SA_NBCPSS_RULES,
+} from "../../../lib/sa-labour-rules.config.js";
 import {
   buildShiftUtcBounds,
   computeMaxWorkDaysIn7Window,
@@ -34,26 +38,42 @@ export class HeuristicLnsSolver implements RosterSolverAdapter {
     const startedAt = Date.now();
     const slots = expandSlotRequirements(request);
     const maxWorkDaysIn7 = computeMaxWorkDaysIn7Window(request);
-    const weeklyOrdinaryCap =
-      request.averagingEnabled
-        ? SA_NBCPSS_RULES.securityOfficerMaxWeeklyOrdinaryHours * Math.max(1, request.averagingWeeks)
+    const weekKeys = [...new Set(request.days.map((d) => d.isoWeekStartKey))];
+    const avgWeeks = Math.max(1, Math.min(request.averagingWeeks, Math.max(1, weekKeys.length)));
+    const inPeriodDateSet = new Set(request.days.map((d) => d.dateKey));
+
+    const weeklyCapForGuard = (guard: SmartRosterGuardInput) =>
+      guard.bceaCategory === "general"
+        ? SA_NBCPSS_RULES.generalStaffMaxWeeklyOrdinaryHours
         : SA_NBCPSS_RULES.securityOfficerMaxWeeklyOrdinaryHours;
 
     // Precompute per-guard mutable state during construction
     const guardDayShift = new Map<string, Map<string, "day" | "night">>();
     const guardWeekHours = new Map<string, Map<string, number>>();
     const guardTotalHours = new Map<string, number>();
+    const guardOtherPeriodHours = new Map<string, number>();
     const guardSundayCount = new Map<string, number>();
     const guardTotalShifts = new Map<string, number>();
     const guardDominantShift = new Map<string, "day" | "night">();
 
     for (const g of request.guards) {
       guardDayShift.set(g.id, new Map());
-      guardWeekHours.set(
-        g.id,
-        new Map(Object.entries(g.priorWeekWorkedHoursByWeekKey)),
-      );
+      const wkMap = new Map(Object.entries(g.priorWeekWorkedHoursByWeekKey));
+      let otherPeriodHrs = 0;
+      for (const [dk, list] of Object.entries(g.otherSiteShiftsByDate)) {
+        if (!inPeriodDateSet.has(dk)) continue;
+        const wk = getIsoWeekStartKey(dk);
+        const hrs = list.reduce(
+          (sum, o) =>
+            sum + Math.max(0, (new Date(o.endTimeIso).getTime() - new Date(o.startTimeIso).getTime()) / 3_600_000),
+          0,
+        );
+        wkMap.set(wk, (wkMap.get(wk) ?? 0) + hrs);
+        otherPeriodHrs += hrs;
+      }
+      guardWeekHours.set(g.id, wkMap);
       guardTotalHours.set(g.id, 0);
+      guardOtherPeriodHours.set(g.id, otherPeriodHrs);
       guardSundayCount.set(g.id, 0);
       guardTotalShifts.set(g.id, 0);
     }
@@ -91,7 +111,10 @@ export class HeuristicLnsSolver implements RosterSolverAdapter {
       // Rolling 7-day work count <= maxWorkDaysIn7 (preserves >=36h weekly rest)
       const isDateWorked = (dk: string) =>
         dk === dateKey ||
-        (dk !== ignoreDateKey && (workedMap.has(dk) || guard.priorWorkDateKeys.includes(dk)));
+        (dk !== ignoreDateKey &&
+          (workedMap.has(dk) ||
+            guard.priorWorkDateKeys.includes(dk) ||
+            (guard.otherSiteShiftsByDate[dk]?.length ?? 0) > 0));
 
       for (let winEndOffset = 0; winEndOffset <= 6; winEndOffset++) {
         let countInWin = 0;
@@ -108,28 +131,48 @@ export class HeuristicLnsSolver implements RosterSolverAdapter {
       return { ok: true };
     };
 
+    const marginalOvertimeHours = (
+      guard: SmartRosterGuardInput,
+      isoWeekStartKey: string,
+      shiftHours: number,
+    ): { marginalOt: number; otHoursAfter: number } => {
+      const baseWeekly = weeklyCapForGuard(guard);
+      if (request.averagingEnabled) {
+        const cap = baseWeekly * avgWeeks;
+        const curTotal =
+          (guardTotalHours.get(guard.id) ?? 0) + (guardOtherPeriodHours.get(guard.id) ?? 0);
+        const nextTotal = curTotal + shiftHours;
+        const otAfter = Math.max(0, nextTotal - cap);
+        const otBefore = Math.max(0, curTotal - cap);
+        return { marginalOt: otAfter - otBefore, otHoursAfter: otAfter };
+      }
+      const curWeekHours = guardWeekHours.get(guard.id)!.get(isoWeekStartKey) ?? 0;
+      const nextWeekHours = curWeekHours + shiftHours;
+      const otAfter = Math.max(0, nextWeekHours - baseWeekly);
+      const otBefore = Math.max(0, curWeekHours - baseWeekly);
+      return { marginalOt: otAfter - otBefore, otHoursAfter: otAfter };
+    };
+
     const scoreCandidate = (
       guard: SmartRosterGuardInput,
       slot: SlotRequirement,
       evalSoftPenalty: number,
       shiftHours: number,
-    ): number => {
+    ): { score: number; marginalOt: number } => {
       let cost = evalSoftPenalty;
-      const weekMap = guardWeekHours.get(guard.id)!;
-      const curWeekHours = weekMap.get(slot.isoWeekStartKey) ?? 0;
-      const ordCap =
-        guard.bceaCategory === "general"
-          ? SA_NBCPSS_RULES.generalStaffMaxWeeklyOrdinaryHours
-          : weeklyOrdinaryCap;
-      const nextWeekHours = curWeekHours + shiftHours;
-      const otHoursAfter = Math.max(0, nextWeekHours - (request.averagingEnabled ? 999 : ordCap));
-      const otHoursBefore = Math.max(0, curWeekHours - (request.averagingEnabled ? 999 : ordCap));
-      const marginalOt = otHoursAfter - otHoursBefore;
+      const { marginalOt, otHoursAfter } = marginalOvertimeHours(
+        guard,
+        slot.isoWeekStartKey,
+        shiftHours,
+      );
 
       if (marginalOt > 0) {
         if (!request.allowOvertime) cost += 20000;
         else cost += marginalOt * 120;
-        if (otHoursAfter > request.maxWeeklyOvertimeHours) {
+        const otCeiling = request.averagingEnabled
+          ? request.maxWeeklyOvertimeHours * avgWeeks
+          : request.maxWeeklyOvertimeHours;
+        if (otHoursAfter > otCeiling) {
           cost += 8000;
         }
       }
@@ -161,7 +204,7 @@ export class HeuristicLnsSolver implements RosterSolverAdapter {
       if (slot.day.isSunday) {
         cost += (guardSundayCount.get(guard.id) ?? 0) * 14;
       }
-      return cost;
+      return { score: cost, marginalOt };
     };
 
     const chosen: CandidateAssignmentState[] = [];
@@ -196,7 +239,13 @@ export class HeuristicLnsSolver implements RosterSolverAdapter {
           const dayCheck = canAssignGuardToDay(guard, slot.dayIndex, slot.dateKey, slot.shiftType);
           if (!dayCheck.ok) continue;
 
-          const score = scoreCandidate(guard, slot, eligibility.softPenalty, durationHours);
+          const { score, marginalOt } = scoreCandidate(
+            guard,
+            slot,
+            eligibility.softPenalty,
+            durationHours,
+          );
+          if (!request.allowOvertime && marginalOt > 0) continue;
           if (score < bestScore) {
             bestScore = score;
             bestGuard = guard;
@@ -227,20 +276,39 @@ export class HeuristicLnsSolver implements RosterSolverAdapter {
       }
     }
 
-    // LNS Repair Pass: try relocating shifts from any guard > 48h/week onto eligible < 48h/week guards
+    // LNS Repair Pass: try relocating shifts from any guard exceeding their weekly ordinary cap
+    const guardMapById = new Map(request.guards.map((g) => [g.id, g]));
     for (let iter = 0; iter < 40; iter++) {
       let improved = false;
       for (const assign of chosen) {
+        const currentGuard = guardMapById.get(assign.guardId);
+        if (!currentGuard) continue;
+        const currentCap = request.averagingEnabled
+          ? weeklyCapForGuard(currentGuard) * avgWeeks
+          : weeklyCapForGuard(currentGuard);
         const gWeekMap = guardWeekHours.get(assign.guardId)!;
         const gWeekHrs = gWeekMap.get(assign.slot.isoWeekStartKey) ?? 0;
-        if (gWeekHrs <= SA_NBCPSS_RULES.securityOfficerMaxWeeklyOrdinaryHours) continue;
+        const gRelevantHrs = request.averagingEnabled
+          ? (guardTotalHours.get(assign.guardId) ?? 0) + (guardOtherPeriodHours.get(assign.guardId) ?? 0)
+          : gWeekHrs;
+        if (gRelevantHrs <= currentCap) continue;
 
         const { durationHours } = buildShiftUtcBounds(assign.slot.dateKey, assign.slot.shiftType, request);
         for (const candidate of request.guards) {
           if (candidate.id === assign.guardId) continue;
+          const candCap = request.averagingEnabled
+            ? weeklyCapForGuard(candidate) * avgWeeks
+            : weeklyCapForGuard(candidate);
           const cWeekMap = guardWeekHours.get(candidate.id)!;
           const cWeekHrs = cWeekMap.get(assign.slot.isoWeekStartKey) ?? 0;
-          if (cWeekHrs + durationHours > SA_NBCPSS_RULES.securityOfficerMaxWeeklyOrdinaryHours) continue;
+          const cRelevantHrs = request.averagingEnabled
+            ? (guardTotalHours.get(candidate.id) ?? 0) + (guardOtherPeriodHours.get(candidate.id) ?? 0)
+            : cWeekHrs;
+          if (cRelevantHrs + durationHours > candCap) continue;
+          if (request.preferDedicatedDayNight) {
+            const cDom = guardDominantShift.get(candidate.id);
+            if (cDom && cDom !== assign.slot.shiftType) continue;
+          }
 
           const el = evaluateGuardSlotEligibility(
             candidate,
@@ -257,8 +325,13 @@ export class HeuristicLnsSolver implements RosterSolverAdapter {
           // Relocate shift cleanly
           guardDayShift.get(assign.guardId)!.delete(assign.slot.dateKey);
           gWeekMap.set(assign.slot.isoWeekStartKey, gWeekHrs - durationHours);
+          guardTotalHours.set(assign.guardId, (guardTotalHours.get(assign.guardId) ?? 0) - durationHours);
           guardDayShift.get(candidate.id)!.set(assign.slot.dateKey, assign.slot.shiftType);
           cWeekMap.set(assign.slot.isoWeekStartKey, cWeekHrs + durationHours);
+          guardTotalHours.set(candidate.id, (guardTotalHours.get(candidate.id) ?? 0) + durationHours);
+          if (!guardDominantShift.has(candidate.id)) {
+            guardDominantShift.set(candidate.id, assign.slot.shiftType);
+          }
           assign.guardId = candidate.id;
           assign.warnings = el.warnings;
           improved = true;

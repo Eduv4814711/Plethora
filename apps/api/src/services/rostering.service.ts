@@ -1,4 +1,4 @@
-import { addDays, differenceInCalendarDays, getDay } from "date-fns";
+import { addDays, differenceInCalendarDays } from "date-fns";
 import { prisma } from "../lib/prisma.js";
 import { inferPostShiftType } from "../lib/site-post-api.js";
 import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
@@ -42,24 +42,28 @@ export function computeDatesFromPattern(
   customDays?: number[]
 ): Date[] {
   const dates: Date[] = [];
-  let d = new Date(startDate);
-  d.setHours(0, 0, 0, 0);
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999);
+  let d = new Date(
+    Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate(), 0, 0, 0, 0)
+  );
+  const end = new Date(
+    Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate(), 23, 59, 59, 999)
+  );
+  const nextUtcDay = (cur: Date) =>
+    new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth(), cur.getUTCDate() + 1, 0, 0, 0, 0));
 
   if (pattern === "all_days") {
     while (d <= end) {
       dates.push(new Date(d));
-      d = addDays(d, 1);
+      d = nextUtcDay(d);
     }
     return dates;
   }
 
   if (pattern === "weekdays") {
     while (d <= end) {
-      const day = getDay(d);
+      const day = d.getUTCDay();
       if (day >= 1 && day <= 5) dates.push(new Date(d));
-      d = addDays(d, 1);
+      d = nextUtcDay(d);
     }
     return dates;
   }
@@ -67,8 +71,8 @@ export function computeDatesFromPattern(
   if (pattern === "custom" && customDays && customDays.length > 0) {
     const set = new Set(customDays);
     while (d <= end) {
-      if (set.has(getDay(d))) dates.push(new Date(d));
-      d = addDays(d, 1);
+      if (set.has(d.getUTCDay())) dates.push(new Date(d));
+      d = nextUtcDay(d);
     }
     return dates;
   }
@@ -88,7 +92,6 @@ export function computeDatesFromPattern(
             ? [5, 2]
             : [6, 3];
 
-    let dayIndex = 0;
     let onCount = 0;
     let offCount = 0;
     let inOnBlock = true;
@@ -108,7 +111,7 @@ export function computeDatesFromPattern(
           inOnBlock = true;
         }
       }
-      d = addDays(d, 1);
+      d = nextUtcDay(d);
     }
     return dates;
   }

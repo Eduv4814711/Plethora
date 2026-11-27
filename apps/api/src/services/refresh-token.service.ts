@@ -33,12 +33,17 @@ export async function persistRefreshToken(
   });
 }
 
-export async function revokeRefreshToken(refreshToken: string): Promise<void> {
+export async function revokeRefreshToken(refreshToken: string, userId?: string): Promise<number> {
   const tokenHash = hashRefreshToken(refreshToken);
-  await prisma.refreshToken.updateMany({
-    where: { tokenHash, revokedAt: null },
+  const res = await prisma.refreshToken.updateMany({
+    where: {
+      tokenHash,
+      revokedAt: null,
+      ...(userId ? { userId } : {}),
+    },
     data: { revokedAt: new Date() },
   });
+  return res.count;
 }
 
 export async function revokeAllUserRefreshTokens(userId: string): Promise<void> {
@@ -117,7 +122,7 @@ export function signRefreshJwt(payload: {
   companyId: string;
 }): string {
   return jwt.sign(
-    { ...payload, type: "refresh" },
+    { ...payload, type: "refresh", jti: generateRefreshJwtId() },
     config.jwt.refreshSecret,
     { expiresIn: config.jwt.refreshExpiry }
   );

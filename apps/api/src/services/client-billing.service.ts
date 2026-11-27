@@ -178,7 +178,7 @@ export async function allocateNextDocumentNumber(
   options?: DocumentNumberOptions
 ): Promise<{ documentNumber: string; configId: string | null }> {
   const run = async (client: Prisma.TransactionClient): Promise<{ documentNumber: string; configId: string | null }> => {
-    const lockKey = `billing-sequence:${companyId}:${kind}:${options?.siteId ?? options?.clientId ?? "company"}`;
+    const lockKey = `billing-sequence:${companyId}:${kind}`;
     try {
       await client.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
     } catch {
@@ -446,6 +446,12 @@ export async function generateNextReceiptNumber(
   companyId: string,
   tx: Prisma.TransactionClient = prisma
 ): Promise<string> {
+  const lockKey = `billing-receipt:${companyId}`;
+  try {
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+  } catch {
+    // In mock/test environments without pg_advisory_xact_lock, continue
+  }
   const prefix = await resolvePrefix(companyId, "receipt");
   const rows = await tx.clientReceipt.findMany({ where: { companyId }, select: { receiptNumber: true } });
   return formatDocumentNumber(prefix, highestNumberForPrefix(rows.map((r) => r.receiptNumber), prefix) + 1);
@@ -809,21 +815,21 @@ export async function configureSiteBillingRate(
   }
 
   return prisma.$transaction(async (tx) => {
-    // Check if there are overlapping active rates starting before or on effectiveFrom
+    // Check all active rates that overlap [effectiveFrom, effectiveTo]
     const overlappingRates = await tx.siteBillingRate.findMany({
       where: {
         siteId,
         companyId,
         isActive: true,
-        effectiveFrom: { lte: effectiveFrom },
+        ...(effectiveTo ? { effectiveFrom: { lte: effectiveTo } } : {}),
         OR: [{ effectiveTo: null }, { effectiveTo: { gte: effectiveFrom } }],
       },
       orderBy: { effectiveFrom: "desc" },
     });
 
     for (const oldRate of overlappingRates) {
-      if (oldRate.effectiveFrom.getTime() === effectiveFrom.getTime()) {
-        // Same effective date: supersede old rate
+      if (oldRate.effectiveFrom.getTime() >= effectiveFrom.getTime()) {
+        // Same-day or future overlapping rate: supersede cleanly
         await tx.siteBillingRate.update({
           where: { id: oldRate.id },
           data: { isActive: false },
@@ -943,14 +949,19 @@ export async function syncInvoicePaymentStatus(
   let paid = new Prisma.Decimal(0);
   for (const payment of invoice.payments) paid = paid.add(payment.amount);
 
+  const due = startOfUtcDay(new Date(invoice.dueDate));
+  const isOverdue = due < startOfUtcDay(new Date());
   let next: ClientInvoiceStatus;
-  if (paid.gte(invoice.totalAmount)) {
+  if (invoice.totalAmount.eq(0) && paid.eq(0)) {
+    next = isOverdue ? "overdue" : "issued";
+  } else if (paid.gte(invoice.totalAmount)) {
     next = "paid";
+  } else if (isOverdue) {
+    next = "overdue";
   } else if (paid.gt(0)) {
     next = "partially_paid";
   } else {
-    const due = startOfUtcDay(new Date(invoice.dueDate));
-    next = due < startOfUtcDay(new Date()) ? "overdue" : "issued";
+    next = "issued";
   }
 
   if (next !== invoice.status) {
@@ -1007,13 +1018,22 @@ export async function getAgingTotals(
   clientId?: string,
   asOf: Date = new Date()
 ): Promise<AgingTotals> {
+  const asOfDay = startOfUtcDay(asOf);
   const invoices = await prisma.clientInvoice.findMany({
     where: {
       companyId,
       ...(clientId ? { clientId } : {}),
       status: { notIn: ["draft", "cancelled"] },
+      invoiceDate: { lte: asOfDay },
     },
-    select: { dueDate: true, totalAmount: true, payments: { select: { amount: true } } },
+    select: {
+      dueDate: true,
+      totalAmount: true,
+      payments: {
+        where: { paymentDate: { lte: asOfDay } },
+        select: { amount: true },
+      },
+    },
   });
 
   const totals = emptyAging();
@@ -1210,10 +1230,10 @@ export async function getClientStatement(
     ${transactionsSql}
     SELECT
       d, kind, document_id, reference, debit, credit,
-      SUM(debit - credit) OVER (ORDER BY d, kind DESC, document_id ROWS UNBOUNDED PRECEDING) AS running
+      SUM(debit - credit) OVER (ORDER BY d, kind ASC, document_id ROWS UNBOUNDED PRECEDING) AS running
     FROM tx
     WHERE d >= ${from}::date AND d <= ${to}::date
-    ORDER BY d, kind DESC, document_id
+    ORDER BY d, kind ASC, document_id
   `);
 
   const transactions: StatementTransaction[] = rows.map((row) => ({

@@ -18,4 +18,10 @@ describe("validatePassword", () => {
   it("accepts strong passwords", () => {
     expect(validatePassword("River!Stone-2026").valid).toBe(true);
   });
+
+  it("rejects 6 or more repeated characters anywhere in the password", () => {
+    expect(validatePassword("Abc111111!def").valid).toBe(false);
+    expect(validatePassword("River!aaaaaa-26").valid).toBe(false);
+    expect(validatePassword("Abc11111!def").valid).toBe(true);
+  });
 });

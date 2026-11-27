@@ -74,7 +74,14 @@ export async function payPeriodsRoutes(app: FastifyInstance) {
       return reply.send({ data: [serializePayPeriod(resolved, resolved.periodKey === current.periodKey)] });
     }
 
-    const aroundDate = q.around ? startOfUtcDay(new Date(q.around)) : undefined;
+    let aroundDate: Date | undefined;
+    if (q.around) {
+      const parsedAround = new Date(q.around);
+      if (Number.isNaN(parsedAround.getTime())) {
+        return reply.code(400).send({ error: "Validation error", message: "Invalid around date" });
+      }
+      aroundDate = startOfUtcDay(parsedAround);
+    }
     const before = q.before ? parseInt(q.before, 10) : undefined;
     const after = q.after ? parseInt(q.after, 10) : undefined;
     const current = q.calendarId

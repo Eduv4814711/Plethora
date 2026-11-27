@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
-import { storage } from "../../lib/storage.js";
+import { readStreamToBuffer, storage } from "../../lib/storage.js";
 import { uploadsRoot } from "../../lib/uploads-root.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { sanitizeUploadFilename } from "../../lib/upload-validation.js";
@@ -83,6 +83,17 @@ export async function readDocumentFileBuffer(
 
   const key = resolvePrivateStorageKey(storedReference, [`documents/${companyId}`]);
   if (!key) return null;
+
+  if (storage.driver === "s3" && storage.getObjectStream) {
+    try {
+      const obj = await storage.getObjectStream(key);
+      if (!obj) return null;
+      const buffer = await readStreamToBuffer(obj.stream, 25 * 1024 * 1024);
+      return { buffer, fileName, mimeType, versionNumber };
+    } catch {
+      return null;
+    }
+  }
 
   const root = resolve(uploadsRoot);
   const candidatePath = resolve(join(root, ...key.split("/")));

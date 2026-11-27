@@ -21,6 +21,7 @@ export type ShiftWithRelations = Shift & {
 
 export interface OperationalAttendancePayload {
   employeeId: string;
+  shiftId?: string;
   latitude: number;
   longitude: number;
   intent?: "clock_in" | "clock_out";
@@ -182,7 +183,10 @@ export async function validateAndRecordOperationalAttendance(
     where: { id: payload.employeeId },
   });
 
-  if (!employee || employee.status.toLowerCase() !== "active") {
+  if (
+    !employee ||
+    !["active", "reliever", "training", "hired"].includes(employee.status.toLowerCase())
+  ) {
     return {
       success: false,
       status: "REJECTED",
@@ -208,8 +212,21 @@ export async function validateAndRecordOperationalAttendance(
     }
   }
 
-  // 3. Find Active Roster Shift (±2 hours)
-  const shift = await findActiveRosterShift(payload.employeeId, now);
+  // 3. Resolve Target Shift (explicit shiftId from pending session first, else ±2 hours)
+  let shift: ShiftWithRelations | null = null;
+  if (payload.shiftId && typeof prisma.shift?.findFirst === "function") {
+    shift = (await prisma.shift.findFirst({
+      where: { id: payload.shiftId, employeeId: payload.employeeId },
+      include: {
+        site: true,
+        employee: true,
+        attendances: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+    })) as ShiftWithRelations | null;
+  }
+  if (!shift) {
+    shift = await findActiveRosterShift(payload.employeeId, now);
+  }
   if (!shift) {
     await recordUnrosteredAttempt(employee, payload, now);
     return {
@@ -225,6 +242,30 @@ export async function validateAndRecordOperationalAttendance(
 
   // 4. Resolve Intent
   const intent: Intent = payload.intent ?? (isOpenAttendance(existingAttendance) ? "clock_out" : "clock_in");
+
+  // 4b. Block clock-in while employee is on approved leave for today
+  if (intent === "clock_in" && typeof prisma.leaveRequest?.findFirst === "function") {
+    const timeZone = await getCompanyTimezone(employee.companyId);
+    const todayDateStr = dateKeyInTimeZone(now, timeZone);
+    const workDate = new Date(`${todayDateStr}T00:00:00.000Z`);
+    const approvedLeave = await prisma.leaveRequest.findFirst({
+      where: {
+        companyId: employee.companyId,
+        employeeId: employee.id,
+        status: "APPROVED",
+        startDate: { lte: workDate },
+        endDate: { gte: workDate },
+      },
+    });
+    if (approvedLeave) {
+      const leaveLabel = approvedLeave.leaveType.toLowerCase().replace(/_/g, " ");
+      return {
+        success: false,
+        status: "ON_LEAVE",
+        message: `❌ You are on approved *${leaveLabel}* leave today (${todayDateStr}). You cannot clock in while on approved leave.`,
+      };
+    }
+  }
 
   // 5. Geofence (computed before any write)
   const geo = evaluateGeofence(shift, payload.latitude, payload.longitude);

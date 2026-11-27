@@ -48,7 +48,7 @@ export function renderSageVip(
     line.costCenterCode ?? "",
     formatHours(line.basicHours),
     formatHours(line.overtimeHours),
-    formatHours(line.sundayHours),
+    formatHours(line.sundayHours + (line.sundayDoubleHours ?? 0)),
     formatHours(line.publicHolidayHours),
     formatHours(line.nightShiftHours),
     formatHours(line.annualLeaveHours),

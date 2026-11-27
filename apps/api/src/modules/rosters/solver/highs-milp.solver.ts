@@ -1,4 +1,8 @@
-import { addDaysToDateKey, SA_NBCPSS_RULES } from "../../../lib/sa-labour-rules.config.js";
+import {
+  addDaysToDateKey,
+  getIsoWeekStartKey,
+  SA_NBCPSS_RULES,
+} from "../../../lib/sa-labour-rules.config.js";
 import { HeuristicLnsSolver } from "./heuristic-lns.solver.js";
 import {
   buildShiftUtcBounds,
@@ -236,11 +240,16 @@ export class HighsMilpSolver implements RosterSolverAdapter {
           let priorWorkedInWin = 0;
           for (let offset = 0; offset < 7; offset++) {
             const dk = addDaysToDateKey(endDateKey, -offset);
+            const hasOtherSite = (guard.otherSiteShiftsByDate[dk]?.length ?? 0) > 0;
             const idx = dateIndexMap.get(dk);
             if (idx !== undefined) {
-              const dVars = varsByGuardDay.get(`${gIdx}:${idx}`) ?? [];
-              for (const v of dVars) windowTerms.push(`+ 1 ${v.varName}`);
-            } else if (priorSet.has(dk)) {
+              if (hasOtherSite) {
+                priorWorkedInWin += 1;
+              } else {
+                const dVars = varsByGuardDay.get(`${gIdx}:${idx}`) ?? [];
+                for (const v of dVars) windowTerms.push(`+ 1 ${v.varName}`);
+              }
+            } else if (priorSet.has(dk) || hasOtherSite) {
               priorWorkedInWin += 1;
             }
           }
@@ -254,6 +263,26 @@ export class HighsMilpSolver implements RosterSolverAdapter {
       const otHourCost = request.allowOvertime ? 80 : 1800;
       const excessOtHourCost = request.allowOvertime ? 850 : 4000;
 
+      // Sum in-period cross-site hours per guard per ISO week
+      const otherHoursByGuardWeek = new Map<string, number>();
+      const inPeriodDateSet = new Set(request.days.map((d) => d.dateKey));
+      for (let gIdx = 0; gIdx < request.guards.length; gIdx++) {
+        const guard = request.guards[gIdx]!;
+        for (const [dk, list] of Object.entries(guard.otherSiteShiftsByDate)) {
+          if (!inPeriodDateSet.has(dk)) continue;
+          const wk = getIsoWeekStartKey(dk);
+          const hrs = list.reduce(
+            (sum, o) =>
+              sum + Math.max(0, (new Date(o.endTimeIso).getTime() - new Date(o.startTimeIso).getTime()) / 3_600_000),
+            0,
+          );
+          otherHoursByGuardWeek.set(
+            `${gIdx}:${wk}`,
+            (otherHoursByGuardWeek.get(`${gIdx}:${wk}`) ?? 0) + hrs,
+          );
+        }
+      }
+
       if (request.averagingEnabled) {
         const avgWeeks = Math.max(1, Math.min(request.averagingWeeks, Math.max(1, weekKeys.length)));
         for (let gIdx = 0; gIdx < request.guards.length; gIdx++) {
@@ -264,13 +293,20 @@ export class HighsMilpSolver implements RosterSolverAdapter {
             guard.bceaCategory === "general"
               ? SA_NBCPSS_RULES.generalStaffMaxWeeklyOrdinaryHours
               : SA_NBCPSS_RULES.securityOfficerMaxWeeklyOrdinaryHours;
-          const priorTotal = Object.values(guard.priorWeekWorkedHoursByWeekKey).reduce((a, b) => a + b, 0);
-          const rhs = Math.max(0, baseWeekly * avgWeeks - priorTotal);
+          let otherPeriodTotal = 0;
+          for (const wk of weekKeys) {
+            otherPeriodTotal += otherHoursByGuardWeek.get(`${gIdx}:${wk}`) ?? 0;
+          }
+          const rhs = Math.max(0, baseWeekly * avgWeeks - otherPeriodTotal);
           const otVar = `ota_${gIdx}`;
-          objTerms.push(`+ ${otHourCost} ${otVar}`);
-          bounds.push(`0 <= ${otVar} <= 120`);
+          const otxVar = `otax_${gIdx}`;
+          objTerms.push(`+ ${otHourCost} ${otVar}`, `+ ${excessOtHourCost} ${otxVar}`);
+          bounds.push(`0 <= ${otVar} <= 240`, `0 <= ${otxVar} <= 240`);
           const terms = [...gVars.map((v) => `+ ${v.durationHours} ${v.varName}`), `- 1 ${otVar}`];
           constraints.push(`avg_${gIdx}: ${formatLinearSum(terms)} <= ${rhs}`);
+          constraints.push(
+            `avcot_${gIdx}: + 1 ${otVar} - 1 ${otxVar} <= ${request.maxWeeklyOvertimeHours * avgWeeks}`,
+          );
         }
       } else {
         for (let gIdx = 0; gIdx < request.guards.length; gIdx++) {
@@ -285,8 +321,12 @@ export class HighsMilpSolver implements RosterSolverAdapter {
             const wVars = varsByGuardWeek.get(`${gIdx}:${wk}`) ?? [];
             if (wVars.length === 0) continue;
 
-            const priorHrs = guard.priorWeekWorkedHoursByWeekKey[wk] ?? 0;
+            const priorHrs =
+              (guard.priorWeekWorkedHoursByWeekKey[wk] ?? 0) +
+              (otherHoursByGuardWeek.get(`${gIdx}:${wk}`) ?? 0);
             const rhs = Math.max(0, baseWeekly - priorHrs);
+            const priorOt = Math.max(0, priorHrs - baseWeekly);
+            const remainingOtAllowance = Math.max(0, request.maxWeeklyOvertimeHours - priorOt);
             const otVar = `ot_${gIdx}_${wIdx}`;
             const otxVar = `otx_${gIdx}_${wIdx}`;
             objTerms.push(`+ ${otHourCost} ${otVar}`, `+ ${excessOtHourCost} ${otxVar}`);
@@ -294,7 +334,7 @@ export class HighsMilpSolver implements RosterSolverAdapter {
 
             const hrTerms = [...wVars.map((v) => `+ ${v.durationHours} ${v.varName}`), `- 1 ${otVar}`];
             constraints.push(`wk_${gIdx}_${wIdx}: ${formatLinearSum(hrTerms)} <= ${rhs}`);
-            constraints.push(`otc_${gIdx}_${wIdx}: + 1 ${otVar} - 1 ${otxVar} <= ${request.maxWeeklyOvertimeHours}`);
+            constraints.push(`otc_${gIdx}_${wIdx}: + 1 ${otVar} - 1 ${otxVar} <= ${remainingOtAllowance}`);
           }
         }
       }

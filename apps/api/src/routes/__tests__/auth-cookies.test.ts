@@ -1,6 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
+import jwt from "jsonwebtoken";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { config } from "../../lib/config.js";
 import {
   CSRF_COOKIE_NAME,
   CSRF_HEADER_NAME,
@@ -198,12 +200,45 @@ describe("auth refresh cookie flow", () => {
       payload: { email: "test@example.com", password: "secret" },
     });
     const loginCookies = parseSetCookies(loginRes.headers["set-cookie"]);
+    const signedAccess = jwt.sign(
+      { sub: "user-1", email: "test@example.com", companyId: "co-1" },
+      config.jwt.accessSecret,
+      { expiresIn: "15m" }
+    );
 
     const res = await app.inject({
       method: "POST",
       url: "/auth/logout",
       headers: {
-        authorization: "Bearer access.jwt.token",
+        authorization: `Bearer ${signedAccess}`,
+        cookie: `${REFRESH_COOKIE_NAME}=${loginCookies[REFRESH_COOKIE_NAME]}; ${CSRF_COOKIE_NAME}=${loginCookies[CSRF_COOKIE_NAME]}`,
+        [CSRF_HEADER_NAME]: loginCookies[CSRF_COOKIE_NAME],
+      },
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(logoutUserMock).toHaveBeenCalledWith("user-1", "refresh.jwt.token");
+    expect(String(res.headers["set-cookie"] ?? "")).toMatch(/Max-Age=0|Expires=/i);
+  });
+
+  it("logout still revokes refresh token and clears cookies when access token is expired", async () => {
+    const loginRes = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email: "test@example.com", password: "secret" },
+    });
+    const loginCookies = parseSetCookies(loginRes.headers["set-cookie"]);
+    const expiredAccess = jwt.sign(
+      { sub: "user-1", email: "test@example.com", companyId: "co-1", exp: Math.floor(Date.now() / 1000) - 60 },
+      config.jwt.accessSecret
+    );
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/auth/logout",
+      headers: {
+        authorization: `Bearer ${expiredAccess}`,
         cookie: `${REFRESH_COOKIE_NAME}=${loginCookies[REFRESH_COOKIE_NAME]}; ${CSRF_COOKIE_NAME}=${loginCookies[CSRF_COOKIE_NAME]}`,
         [CSRF_HEADER_NAME]: loginCookies[CSRF_COOKIE_NAME],
       },

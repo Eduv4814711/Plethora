@@ -79,11 +79,11 @@ function proportionalDualBlocks(
   guardCount: number
 ): CustomBlock[] {
   const workersPerDay = staffing.day + staffing.night;
-  const offPerCycle = Math.max(0, guardCount - workersPerDay);
+  const offPerCycle = Math.max(1, guardCount - workersPerDay);
   const blocks: CustomBlock[] = [];
   if (staffing.day > 0) blocks.push({ type: "day", count: staffing.day });
   if (staffing.night > 0) blocks.push({ type: "night", count: staffing.night });
-  if (offPerCycle > 0) blocks.push({ type: "off", count: offPerCycle });
+  blocks.push({ type: "off", count: offPerCycle });
   return blocks;
 }
 
@@ -220,20 +220,22 @@ export function recommendSiteRotationPattern(
   if (!isEqualOneToOneStaffing(staffing)) {
     const blocks = proportionalDualBlocks(staffing, rosterableGuardCount);
     const label = formatRotationPatternLabel(blocks);
-    if (rosterableGuardCount < workersPerDay + 1) {
+    const hasSufficientRest = rosterableGuardCount >= workersPerDay + 1;
+    if (!hasSufficientRest) {
       warnings.push(
         `With ${staffing.day} day and ${staffing.night} night guard(s) required daily, ${workersPerDay + 1}+ rosterable guards are recommended for sustainable rest.`
       );
     }
+    const coreGuardCount = Math.min(rosterableGuardCount, workersPerDay + 2);
     return {
       recommendedPatternLabel: label,
       blocks,
       strategy: rosterableGuardCount > workersPerDay + 2 ? "core_with_relievers" : "equal_rotation",
       reason: `This site requires ${staffing.day} day and ${staffing.night} night guard(s) per day. Pattern ${label} matches daily demand with ${rosterableGuardCount} guard(s) on a ${blocks.reduce((s, b) => s + b.count, 0)}-day cycle.`,
       warnings,
-      coreGuardCount: Math.min(rosterableGuardCount, workersPerDay + 2),
+      coreGuardCount,
       relieverGuardCount: Math.max(0, rosterableGuardCount - (workersPerDay + 2)),
-      canFullyCover: rosterableGuardCount >= workersPerDay,
+      canFullyCover: hasSufficientRest && rosterableGuardCount >= workersPerDay,
     };
   }
 

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { env } from "../lib/env.js";
 import { runGlobalAutoRoster } from "../services/auto-roster.service.js";
 import { reconcileContinuousRosters } from "../modules/rosters/roster-continuity.service.js";
@@ -17,7 +18,10 @@ function authorizeCron(request: { headers: { authorization?: string } }): boolea
   if (!secret) return false;
   const auth = request.headers.authorization ?? "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  return token.length > 0 && token === secret;
+  if (!token) return false;
+  const tokBuf = Buffer.from(token, "utf8");
+  const secBuf = Buffer.from(secret, "utf8");
+  return tokBuf.length === secBuf.length && timingSafeEqual(tokBuf, secBuf);
 }
 
 export async function internalCronRoutes(app: FastifyInstance) {

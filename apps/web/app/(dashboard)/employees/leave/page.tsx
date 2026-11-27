@@ -9,6 +9,7 @@ import { fetchEmployeePickerOptions, type GuardPickerOption } from "@/lib/roster
 import { DateInput } from "@/components/date-input";
 import { GuardSearchPicker } from "@/components/guard-search-picker";
 import { hasCapability } from "@/lib/permissions";
+import { useOperationalEvents } from "@/lib/use-operational-events";
 import { AlertBanner, Button, Modal, PageHeader, PageShell, StatusBadge } from "@/components/ui";
 
 type Tab = "queue" | "approved" | "records" | "balances" | "calendar" | "adjustments" | "audit" | "add";
@@ -39,6 +40,15 @@ type MedicalCertificate = {
   createdAt: string;
 };
 
+type LeaveSupportingDocument = {
+  id: string;
+  kind: "SICK_NOTE" | "STUDY_PROOF" | "FAMILY_RESPONSIBILITY_PROOF" | "PARENTAL_PROOF" | "OTHER";
+  fileName: string;
+  mimeType: string;
+  fileReference: string;
+  createdAt: string;
+};
+
 type LeaveEmployee = { id: string; firstName: string; lastName: string; employeeType: string };
 
 type LeaveRequest = {
@@ -50,6 +60,7 @@ type LeaveRequest = {
   unitsRequested: string | number;
   status: LeaveStatus;
   reason?: string | null;
+  decisionReason?: string | null;
   familyResponsibilityReason?: FamilyResponsibilityReason | null;
   parentalLeaveScenario?: ParentalScenario | null;
   workedPublicHoliday: boolean;
@@ -58,6 +69,7 @@ type LeaveRequest = {
   createdAt: string;
   employee: LeaveEmployee;
   medicalCertificate?: MedicalCertificate | null;
+  supportingDocuments?: LeaveSupportingDocument[];
 };
 
 type LeaveBalance = {
@@ -310,6 +322,16 @@ export default function LeaveManagementPage() {
 
   useEffect(() => { loadTab(); }, [loadTab]);
 
+  useOperationalEvents({
+    token,
+    onLeaveRequestCreated: () => {
+      void Promise.all([loadTab(), loadPendingCount()]);
+    },
+    onLeaveRequestDecided: () => {
+      void Promise.all([loadTab(), loadPendingCount()]);
+    },
+  });
+
   const selectedEmployee = useMemo(() => employees.find((e) => e.id === form.employeeId), [employees, form.employeeId]);
   const availableLeaveTypes = useMemo(
     () => LEAVE_TYPE_OPTIONS.filter((option) => option.code !== "STUDY" || selectedEmployee?.employeeType === "security_officer"),
@@ -486,6 +508,30 @@ export default function LeaveManagementPage() {
     }
   }
 
+  async function downloadSupportingDocument(leaveRequest: LeaveRequest, doc: LeaveSupportingDocument) {
+    if (!token) return;
+    setBusy(`doc-download:${doc.id}`);
+    setError(null);
+    try {
+      const response = await authFetch(`/leave/${leaveRequest.id}/documents/${doc.id}`, token);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(errorMessage(body, "Download failed"));
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = window.document.createElement("a");
+      link.href = url;
+      link.download = doc.fileName || "supporting-document";
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Download failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <PageShell width="wide" className="animate-fade-in pb-12">
       <div className="space-y-3">
@@ -549,6 +595,7 @@ export default function LeaveManagementPage() {
                   onReject={(req) => { setActionReason(""); setActionDialog({ kind: "reject", request: req }); }}
                   onAttachCertificate={canCreate || canEdit ? (req) => { setCertForm({ practitionerName: "", practitionerRegistrationNumber: "", consultationDate: today, bookedOffStartDate: req.startDate.slice(0, 10), bookedOffEndDate: req.endDate.slice(0, 10) }); setCertFile(null); setCertDialog(req); } : undefined}
                   onDownloadCertificate={canExport ? downloadCertificate : undefined}
+                  onDownloadSupportingDoc={downloadSupportingDocument}
                 />
               ))}
             </div>
@@ -825,7 +872,7 @@ function CardFact({ label, value, danger }: { label: string; value: string; dang
   return <div><p className="text-[10px] font-semibold uppercase tracking-wide text-security-navy-500">{label}</p><p className={`mt-0.5 text-sm font-semibold ${danger ? "text-red-700" : "text-security-navy-900"}`}>{value}</p></div>;
 }
 
-function RequestCard({ leaveRequest, busy, canApprove, canExport, onApprove, onReject, onAttachCertificate, onDownloadCertificate }: {
+function RequestCard({ leaveRequest, busy, canApprove, canExport, onApprove, onReject, onAttachCertificate, onDownloadCertificate, onDownloadSupportingDoc }: {
   leaveRequest: LeaveRequest;
   busy: string | null;
   canApprove: boolean;
@@ -834,8 +881,14 @@ function RequestCard({ leaveRequest, busy, canApprove, canExport, onApprove, onR
   onReject: (req: LeaveRequest) => void;
   onAttachCertificate?: (req: LeaveRequest) => void;
   onDownloadCertificate?: (req: LeaveRequest) => void;
+  onDownloadSupportingDoc?: (req: LeaveRequest, doc: LeaveSupportingDocument) => void;
 }) {
   const isBusy = busy === leaveRequest.id;
+  const docs = leaveRequest.supportingDocuments ?? [];
+  const sickNoteRequiredByBcea = leaveRequest.leaveType === "SICK" && units(leaveRequest.unitsRequested) > 2;
+  const hasSickProof = Boolean(leaveRequest.medicalCertificate) || docs.some((d) => d.kind === "SICK_NOTE");
+  const hasStudyProof = docs.some((d) => d.kind === "STUDY_PROOF");
+
   return (
     <article className="overflow-hidden rounded-security-lg border border-security-navy-100 bg-white shadow-security-card transition hover:border-security-navy-200 hover:shadow-md">
       <div className="p-5">
@@ -854,12 +907,42 @@ function RequestCard({ leaveRequest, busy, canApprove, canExport, onApprove, onR
           <CardFact label="Units" value={unitsText(leaveRequest.unitsRequested, leaveRequest.employee.employeeType)} />
           <CardFact label="Reason" value={leaveRequest.familyResponsibilityReason ? friendly(leaveRequest.familyResponsibilityReason) : leaveRequest.parentalLeaveScenario ? friendly(leaveRequest.parentalLeaveScenario) : leaveRequest.reason || "—"} />
         </div>
+        {leaveRequest.decisionReason && (
+          <p className="mt-2.5 text-xs text-security-navy-600">
+            <span className="font-semibold">HR note:</span> {leaveRequest.decisionReason}
+          </p>
+        )}
         {leaveRequest.leaveType === "SICK" && (
           <p className="mt-3 text-xs text-security-navy-500">
-            {leaveRequest.medicalCertificate ? "Medical certificate attached." : "No medical certificate attached."}
+            {hasSickProof
+              ? "Medical certificate / sick note attached."
+              : sickNoteRequiredByBcea
+                ? "BCEA §23: Medical certificate required (>2 units)."
+                : "No medical certificate attached."}
             {onAttachCertificate && !leaveRequest.medicalCertificate && <button type="button" onClick={() => onAttachCertificate(leaveRequest)} className="ml-2 font-semibold text-blue-700 underline decoration-blue-300 underline-offset-2">Attach</button>}
-            {onDownloadCertificate && leaveRequest.medicalCertificate && <button type="button" onClick={() => onDownloadCertificate(leaveRequest)} className="ml-2 font-semibold text-blue-700 underline decoration-blue-300 underline-offset-2">Download</button>}
+            {onDownloadCertificate && leaveRequest.medicalCertificate && <button type="button" onClick={() => onDownloadCertificate(leaveRequest)} className="ml-2 font-semibold text-blue-700 underline decoration-blue-300 underline-offset-2">Download cert</button>}
           </p>
+        )}
+        {leaveRequest.leaveType === "STUDY" && !hasStudyProof && (
+          <p className="mt-3 text-xs font-medium text-security-amber-700">
+            Study proof / exam timetable not yet attached.
+          </p>
+        )}
+        {docs.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {docs.map((doc) => (
+              <button
+                key={doc.id}
+                type="button"
+                disabled={busy === `doc-download:${doc.id}`}
+                onClick={() => onDownloadSupportingDoc?.(leaveRequest, doc)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-security-navy-200 bg-security-navy-50 px-2.5 py-1 text-xs font-medium text-security-navy-700 hover:bg-security-navy-100"
+              >
+                <Icon name="file" className="h-3.5 w-3.5" />
+                <span>{doc.fileName}</span>
+              </button>
+            ))}
+          </div>
         )}
       </div>
       {canApprove && (

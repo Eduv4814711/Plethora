@@ -115,7 +115,10 @@ export async function reviewApproval(params: {
     return { error: "self_approve" as const };
   }
 
-  if (approval.status !== "PENDING") {
+  const allowedPrevStatuses: ApprovalStatus[] =
+    params.action === "query" ? ["PENDING"] : ["PENDING", "QUERY_RAISED"];
+
+  if (!allowedPrevStatuses.includes(approval.status)) {
     return { error: "already_reviewed" as const, approval };
   }
 
@@ -126,15 +129,34 @@ export async function reviewApproval(params: {
         ? "REJECTED"
         : "QUERY_RAISED";
 
-  const updated = await prisma.approvalRequest.update({
-    where: { id: approval.id },
-    data: {
-      status,
-      approverId: params.reviewerId,
-      reviewedAt: new Date(),
-      comment: params.comment ?? approval.comment,
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.approvalRequest.updateMany({
+      where: {
+        id: approval.id,
+        companyId: params.companyId,
+        status: { in: allowedPrevStatuses },
+      },
+      data: {
+        status,
+        approverId: params.reviewerId,
+        reviewedAt: new Date(),
+        comment: params.comment ?? approval.comment,
+      },
+    });
+    if (claimed.count === 0) {
+      return null;
+    }
+    return tx.approvalRequest.findFirst({
+      where: { id: approval.id, companyId: params.companyId },
+    });
   });
+
+  if (!updated) {
+    const latest = await prisma.approvalRequest.findFirst({
+      where: { id: approval.id, companyId: params.companyId },
+    });
+    return { error: "already_reviewed" as const, approval: latest ?? approval };
+  }
 
   await createAuditLog({
     userId: params.reviewerId,

@@ -12,7 +12,9 @@ export interface OperationalEvent<T = any> {
     | "SUPERVISOR_ESCALATION"
     | "ATTENDANCE_VERIFIED"
     | "ROLL_CALL_DISPATCHED"
-    | "ALERT_CREATED";
+    | "ALERT_CREATED"
+    | "LEAVE_REQUEST_CREATED"
+    | "LEAVE_REQUEST_DECIDED";
   companyId: string;
   timestamp: string;
   payload: T;
@@ -27,6 +29,8 @@ export interface UseOperationalEventsOptions {
   onSupervisorEscalation?: (event: OperationalEvent) => void;
   onAttendanceVerified?: (event: OperationalEvent) => void;
   onRollCallDispatched?: (event: OperationalEvent) => void;
+  onLeaveRequestCreated?: (event: OperationalEvent) => void;
+  onLeaveRequestDecided?: (event: OperationalEvent) => void;
   onAnyEvent?: (event: OperationalEvent) => void;
 }
 
@@ -39,6 +43,8 @@ export function useOperationalEvents({
   onSupervisorEscalation,
   onAttendanceVerified,
   onRollCallDispatched,
+  onLeaveRequestCreated,
+  onLeaveRequestDecided,
   onAnyEvent,
 }: UseOperationalEventsOptions) {
   const [isConnected, setIsConnected] = useState(false);
@@ -55,6 +61,8 @@ export function useOperationalEvents({
     onSupervisorEscalation,
     onAttendanceVerified,
     onRollCallDispatched,
+    onLeaveRequestCreated,
+    onLeaveRequestDecided,
     onAnyEvent,
   });
 
@@ -66,6 +74,8 @@ export function useOperationalEvents({
       onSupervisorEscalation,
       onAttendanceVerified,
       onRollCallDispatched,
+      onLeaveRequestCreated,
+      onLeaveRequestDecided,
       onAnyEvent,
     };
   });
@@ -114,6 +124,12 @@ export function useOperationalEvents({
           case "ROLL_CALL_DISPATCHED":
             cb.onRollCallDispatched?.(parsed);
             break;
+          case "LEAVE_REQUEST_CREATED":
+            cb.onLeaveRequestCreated?.(parsed);
+            break;
+          case "LEAVE_REQUEST_DECIDED":
+            cb.onLeaveRequestDecided?.(parsed);
+            break;
         }
       } catch (err) {
         console.warn("[Operational Events] Failed to parse event", err);
@@ -126,6 +142,8 @@ export function useOperationalEvents({
     es.addEventListener("SUPERVISOR_ESCALATION", (e) => handleEvent("SUPERVISOR_ESCALATION", e));
     es.addEventListener("ATTENDANCE_VERIFIED", (e) => handleEvent("ATTENDANCE_VERIFIED", e));
     es.addEventListener("ROLL_CALL_DISPATCHED", (e) => handleEvent("ROLL_CALL_DISPATCHED", e));
+    es.addEventListener("LEAVE_REQUEST_CREATED", (e) => handleEvent("LEAVE_REQUEST_CREATED", e));
+    es.addEventListener("LEAVE_REQUEST_DECIDED", (e) => handleEvent("LEAVE_REQUEST_DECIDED", e));
 
     es.onerror = () => {
       setIsConnected(false);
