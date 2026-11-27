@@ -1006,6 +1006,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
       const attendance = await prisma.$transaction(async (tx) => {
         const existingAtt = await tx.attendance.findFirst({ where: { shiftId: parsed.data.shiftId } });
+        if (existingAtt?.clockIn) {
+          throw new AttendanceValidationError("Attendance has already been recorded for this shift");
+        }
         const attInclude = { shift: { include: { employee: { select: { id: true, firstName: true, lastName: true } }, site: true } } };
         const attData = {
           clockIn: now,

@@ -248,7 +248,7 @@ describe.runIf(dbReady)("simple leave management API (/leave, integration)", () 
         employeeId: generalEmployeeId,
         leaveType: "PARENTAL",
         startDate: "2026-02-01",
-        endDate: "2026-06-01",
+        endDate: "2026-09-01",
         unitsRequested: 200,
         parentalLeaveScenario: "SHARED_POOL",
       },

@@ -1214,7 +1214,8 @@ export async function downloadBatch(
   };
 
   const rendered = renderPayrollExport(context, normalizedLines);
-  const checksumSha256 = createHash("sha256").update(rendered.content, "utf8").digest("hex");
+  const fileChecksumSha256 = createHash("sha256").update(rendered.content, "utf8").digest("hex");
+  const checksumSha256 = batch.checksumSha256;
 
   const isFirstExport = batch.status === "LOCKED";
   if (isFirstExport) {
@@ -1238,6 +1239,7 @@ export async function downloadBatch(
             provider: batch.profile.provider,
             filename: rendered.filename,
             checksumSha256,
+            fileChecksumSha256,
           },
         },
         tx
@@ -1253,6 +1255,7 @@ export async function downloadBatch(
         provider: batch.profile.provider,
         filename: rendered.filename,
         checksumSha256,
+        fileChecksumSha256,
       },
     });
   }
