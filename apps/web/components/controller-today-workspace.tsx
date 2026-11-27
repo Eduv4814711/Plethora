@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { format } from "date-fns";
 import { Spinner, Button, Card } from "@/components/ui";
 import { ControllerGuardRow } from "./controller-guard-row";
+import { AttendanceClockInMap } from "./maps/AttendanceClockInMap";
 import {
   fetchTodayAttendance,
   type TodayAttendanceResponse,
@@ -26,6 +27,8 @@ export function ControllerTodayWorkspace({
   const [statusChip, setStatusChip] = useState<"all" | "not_in" | "late_alert" | "on_duty" | "done">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [collapsedSites, setCollapsedSites] = useState<Record<string, boolean>>({});
+  const [displayMode, setDisplayMode] = useState<"list" | "map">("list");
+  const [focusPoint, setFocusPoint] = useState<{ lat: number; lng: number; zoom?: number; seq?: number } | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -101,6 +104,23 @@ export function ControllerTodayWorkspace({
                   }`}
                 >
                   {st === "all" ? "All Shifts" : st === "day" ? "Day" : "Night"}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex rounded-md border border-security-navy-200 bg-security-navy-50 p-0.5">
+              {(["list", "map"] as const).map((dm) => (
+                <button
+                  key={dm}
+                  type="button"
+                  onClick={() => setDisplayMode(dm)}
+                  className={`px-3 py-1 text-xs font-semibold rounded ${
+                    displayMode === dm
+                      ? "bg-security-navy-900 text-white shadow-sm"
+                      : "text-security-navy-700 hover:text-security-navy-900"
+                  }`}
+                >
+                  {dm === "list" ? "Roster" : "📍 Map"}
                 </button>
               ))}
             </div>
@@ -223,7 +243,15 @@ export function ControllerTodayWorkspace({
         </Card>
       )}
 
+      {data && displayMode === "map" && (
+        <AttendanceClockInMap
+          sites={data.shifts.flatMap((s) => s.sites)}
+          focusPoint={focusPoint}
+        />
+      )}
+
       {data &&
+        displayMode === "list" &&
         data.shifts.map((shiftWindow) => (
           <div key={shiftWindow.shiftType} className="space-y-4">
             {/* Shift Window Heading */}
@@ -316,6 +344,10 @@ export function ControllerTodayWorkspace({
                             guard={guard}
                             token={token}
                             onRefresh={loadData}
+                            onViewMap={(lat, lng) => {
+                              setFocusPoint({ lat, lng, zoom: 17, seq: Date.now() });
+                              setDisplayMode("map");
+                            }}
                           />
                         ))}
                       </div>

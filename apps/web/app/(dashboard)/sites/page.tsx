@@ -8,6 +8,8 @@ import { authFetch } from "@/lib/api";
 import { hasCapability } from "@/lib/permissions";
 import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
 import { SiteOperationalActions } from "@/components/site-operational-actions";
+import { SitesOverviewMap } from "@/components/maps/SitesOverviewMap";
+import { SiteLocationPickerMap } from "@/components/maps/SiteLocationPickerMap";
 import { AlertBanner, Button, EmptyState, Modal, PageHeader, PageShell, SkeletonBlock } from "@/components/ui";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
@@ -128,6 +130,7 @@ export default function SitesPage() {
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [editingSite, setEditingSite] = useState<Site | null>(null);
   const [deletingSite, setDeletingSite] = useState<Site | null>(null);
   const canCreateSites = Boolean(user && hasCapability(user, "/sites", "create"));
@@ -173,15 +176,37 @@ export default function SitesPage() {
         title="Sites"
         description="Add the locations you protect, keep contacts up to date, and assign guards to each site."
         actions={
-          canCreateSites ? (
-            <Button
-              type="button"
-              variant={showCreateForm ? "secondary" : "primary"}
-              onClick={() => setShowCreateForm(!showCreateForm)}
-            >
-              {showCreateForm ? "Cancel" : "+ Add site"}
-            </Button>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-lg border border-security-navy-200 bg-white p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`rounded-md px-3 py-1.5 font-semibold transition-colors ${
+                  viewMode === "list" ? "bg-security-navy-900 text-white" : "text-security-navy-600 hover:text-security-navy-900"
+                }`}
+              >
+                List
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("map")}
+                className={`rounded-md px-3 py-1.5 font-semibold transition-colors ${
+                  viewMode === "map" ? "bg-security-navy-900 text-white" : "text-security-navy-600 hover:text-security-navy-900"
+                }`}
+              >
+                Map
+              </button>
+            </div>
+            {canCreateSites && (
+              <Button
+                type="button"
+                variant={showCreateForm ? "secondary" : "primary"}
+                onClick={() => setShowCreateForm(!showCreateForm)}
+              >
+                {showCreateForm ? "Cancel" : "+ Add site"}
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -196,20 +221,24 @@ export default function SitesPage() {
         />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {sites.map((site) => (
-          <SiteCard
-            key={site.id}
-            site={site}
-            token={token!}
-            canEditSites={canEditSites}
-            canDeleteSites={canDeleteSites}
-            onEdit={() => setEditingSite(site)}
-            onDelete={() => setDeletingSite(site)}
-            onRefresh={refresh}
-          />
-        ))}
-      </div>
+      {viewMode === "map" && sites.length > 0 ? (
+        <SitesOverviewMap sites={sites} />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {sites.map((site) => (
+            <SiteCard
+              key={site.id}
+              site={site}
+              token={token!}
+              canEditSites={canEditSites}
+              canDeleteSites={canDeleteSites}
+              onEdit={() => setEditingSite(site)}
+              onDelete={() => setDeletingSite(site)}
+              onRefresh={refresh}
+            />
+          ))}
+        </div>
+      )}
 
       {sites.length === 0 && (
         <EmptyState
@@ -910,6 +939,20 @@ function SiteForm({
               />
             </div>
           </div>
+          <div className="mt-3">
+            <SiteLocationPickerMap
+              latitude={latitude}
+              longitude={longitude}
+              radiusMeters={geofenceRadiusMeters || "100"}
+              siteName={name || "New Site"}
+              onChangeLocation={(lat, lng) => {
+                setLatitude(lat);
+                setLongitude(lng);
+                if (!geofenceRadiusMeters) setGeofenceRadiusMeters("100");
+              }}
+              heightClassName="h-[260px]"
+            />
+          </div>
         </div>
 
         <div className="md:col-span-2">
@@ -1238,6 +1281,21 @@ function EditSiteModal({
                       className="input-modern"
                       inputMode="numeric"
                       disabled={clearGeofence}
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <SiteLocationPickerMap
+                      latitude={latitude}
+                      longitude={longitude}
+                      radiusMeters={geofenceRadiusMeters || "100"}
+                      siteName={site.name}
+                      disabled={clearGeofence}
+                      onChangeLocation={(lat, lng) => {
+                        setLatitude(lat);
+                        setLongitude(lng);
+                        if (!geofenceRadiusMeters) setGeofenceRadiusMeters("100");
+                      }}
+                      heightClassName="h-[240px]"
                     />
                   </div>
                 </div>

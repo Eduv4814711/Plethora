@@ -32,6 +32,13 @@ export interface GuardAttendanceItem {
   exceptionDescription?: string | null;
   postName?: string | null;
   siteId: string;
+  clockInLat: number | null;
+  clockInLng: number | null;
+  clockOutLat: number | null;
+  clockOutLng: number | null;
+  distanceMeters: number | null;
+  withinGeofence: boolean;
+  validationStatus: string | null;
   isReplacement?: boolean;
   originalGuardName?: string | null;
 }
@@ -40,6 +47,9 @@ export interface SiteAttendanceGroup {
   siteId: string;
   siteName: string;
   supervisorName: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  geofenceRadiusMeters: number | null;
   guards: GuardAttendanceItem[];
   totalScheduled: number;
   totalClockedIn: number;
@@ -113,6 +123,9 @@ export async function getTodayAttendance(
         select: {
           id: true,
           name: true,
+          latitude: true,
+          longitude: true,
+          geofenceRadiusMeters: true,
           supervisor: { select: { id: true, name: true } },
         },
       },
@@ -180,7 +193,14 @@ export async function getTodayAttendance(
   let totalMissing = 0;
   let totalExceptions = 0;
 
-  type GuardWithSite = GuardAttendanceItem & { siteId: string; siteName: string; supervisorName: string | null };
+  type GuardWithSite = GuardAttendanceItem & {
+    siteId: string;
+    siteName: string;
+    supervisorName: string | null;
+    siteLatitude: number | null;
+    siteLongitude: number | null;
+    siteGeofenceRadiusMeters: number | null;
+  };
   const allItems: GuardWithSite[] = [];
 
   for (const shift of shifts) {
@@ -237,6 +257,16 @@ export async function getTodayAttendance(
       siteId: shift.siteId,
       siteName: shift.site?.name ?? "Unassigned Site",
       supervisorName: shift.site?.supervisor?.name ?? null,
+      siteLatitude: shift.site?.latitude != null ? Number(shift.site.latitude) : null,
+      siteLongitude: shift.site?.longitude != null ? Number(shift.site.longitude) : null,
+      siteGeofenceRadiusMeters: shift.site?.geofenceRadiusMeters ?? null,
+      clockInLat: att?.clockInLat != null ? Number(att.clockInLat) : (att?.submissionLat ?? null),
+      clockInLng: att?.clockInLng != null ? Number(att.clockInLng) : (att?.submissionLon ?? null),
+      clockOutLat: att?.clockOutLat != null ? Number(att.clockOutLat) : null,
+      clockOutLng: att?.clockOutLng != null ? Number(att.clockOutLng) : null,
+      distanceMeters: att?.distanceMeters ?? null,
+      withinGeofence: att?.withinGeofence ?? false,
+      validationStatus: att?.validationStatus ?? null,
       isReplacement: Boolean(replacementsByShift.has(shift.id)),
       originalGuardName: (replacementsByShift.get(shift.id)?.originalGuardName as string) ?? null,
     };
@@ -259,6 +289,9 @@ export async function getTodayAttendance(
           siteId: item.siteId,
           siteName: item.siteName,
           supervisorName: item.supervisorName,
+          latitude: item.siteLatitude,
+          longitude: item.siteLongitude,
+          geofenceRadiusMeters: item.siteGeofenceRadiusMeters,
           guards: [],
           totalScheduled: 0,
           totalClockedIn: 0,

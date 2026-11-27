@@ -22,6 +22,7 @@ interface GuardRowProps {
   guard: GuardAttendanceItem;
   token: string;
   onRefresh: () => void;
+  onViewMap?: (lat: number, lng: number) => void;
 }
 
 function statusBadge(status: ControllerAttendanceStatus) {
@@ -69,7 +70,7 @@ function methodBadge(method: string) {
   return null;
 }
 
-export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
+export function ControllerGuardRow({ guard, token, onRefresh, onViewMap }: GuardRowProps) {
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [absentModalOpen, setAbsentModalOpen] = useState(false);
@@ -290,6 +291,22 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
             )}
             {guard.hoursWorked != null && (
               <span>{guard.hoursWorked.toFixed(1)} hrs</span>
+            )}
+            {guard.clockInLat != null && guard.clockInLng != null && (
+              <button
+                type="button"
+                onClick={() => onViewMap?.(guard.clockInLat!, guard.clockInLng!)}
+                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                  guard.withinGeofence
+                    ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                    : guard.validationStatus === "REJECTED_GEOFENCE"
+                      ? "bg-red-50 text-red-700 hover:bg-red-100"
+                      : "bg-security-navy-100 text-security-navy-700 hover:bg-security-navy-200"
+                }`}
+                title="View exact clock-in pin on map"
+              >
+                📍 Map{guard.distanceMeters != null ? ` (${guard.distanceMeters}m)` : ""}
+              </button>
             )}
           </div>
           {guard.exceptionDescription && (

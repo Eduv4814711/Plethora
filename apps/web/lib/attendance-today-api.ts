@@ -40,6 +40,13 @@ export interface GuardAttendanceItem {
   exceptionDescription?: string | null;
   postName?: string | null;
   siteId?: string;
+  clockInLat?: number | null;
+  clockInLng?: number | null;
+  clockOutLat?: number | null;
+  clockOutLng?: number | null;
+  distanceMeters?: number | null;
+  withinGeofence?: boolean;
+  validationStatus?: string | null;
   isReplacement?: boolean;
   originalGuardName?: string | null;
 }
@@ -48,6 +55,9 @@ export interface SiteAttendanceGroup {
   siteId: string;
   siteName: string;
   supervisorName: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  geofenceRadiusMeters?: number | null;
   guards: GuardAttendanceItem[];
   totalScheduled: number;
   totalClockedIn: number;

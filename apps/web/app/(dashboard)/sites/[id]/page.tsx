@@ -19,6 +19,7 @@ import {
 } from "@/lib/site-coverage-days";
 import { AlertBanner, Button, Modal, PageShell, SkeletonBlock, useConfirmDialog } from "@/components/ui";
 import { SiteOperationalActions } from "@/components/site-operational-actions";
+import { SiteLocationPickerMap } from "@/components/maps/SiteLocationPickerMap";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   guarding: "Guarding",
@@ -1290,6 +1291,19 @@ function SiteGeofenceSettings({
           ✅ Geofence coordinates saved successfully.
         </div>
       )}
+
+      <SiteLocationPickerMap
+        latitude={latitude}
+        longitude={longitude}
+        radiusMeters={radius || "100"}
+        siteName={site.name}
+        disabled={!canManage || saving}
+        onChangeLocation={(lat, lng) => {
+          setLatitude(lat);
+          setLongitude(lng);
+          if (!radius) setRadius("100");
+        }}
+      />
 
       <form onSubmit={handleSave} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>

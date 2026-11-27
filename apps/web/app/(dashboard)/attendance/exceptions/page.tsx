@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { hasCapability } from "@/lib/permissions";
+import { AttendanceClockInMap } from "@/components/maps/AttendanceClockInMap";
 import {
   detectAttendanceExceptions,
   getExceptionAnalytics,
@@ -23,6 +24,7 @@ import {
   Field,
   Input,
   KpiStrip,
+  Modal,
   PageHeader,
   PageShell,
   Select,
@@ -83,6 +85,7 @@ export default function AttendanceExceptionsPage() {
   const [obNumbers, setObNumbers] = useState<Record<string, string>>({});
   const [openActionsId, setOpenActionsId] = useState<string | null>(null);
   const [detecting, setDetecting] = useState(false);
+  const [pinPreview, setPinPreview] = useState<AttendanceException | null>(null);
   const periodStart = searchParams.get("start") ?? undefined;
   const periodEnd = searchParams.get("end") ?? undefined;
 
@@ -369,10 +372,19 @@ export default function AttendanceExceptionsPage() {
                           </p>
                         )}
                         {exception.attendance.submissionLat != null && exception.attendance.submissionLon != null && (
-                          <p className="mt-0.5 text-security-navy-500">
-                            Submitted GPS: {exception.attendance.submissionLat.toFixed(5)}, {exception.attendance.submissionLon.toFixed(5)}
-                            {exception.attendance.whatsappNumber ? ` · Phone: ${exception.attendance.whatsappNumber}` : ""}
-                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-security-navy-500">
+                            <span>
+                              Submitted GPS: {exception.attendance.submissionLat.toFixed(5)}, {exception.attendance.submissionLon.toFixed(5)}
+                              {exception.attendance.whatsappNumber ? ` · Phone: ${exception.attendance.whatsappNumber}` : ""}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setPinPreview(exception)}
+                              className="inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-50"
+                            >
+                              📍 View Pin on Map
+                            </button>
+                          </div>
                         )}
                       </div>
                     )}
@@ -493,6 +505,72 @@ export default function AttendanceExceptionsPage() {
           description="Try another filter, or scan for new issues if attendance has recently changed."
           action={canCreate ? <Button variant="secondary" loading={detecting} onClick={() => void handleDetect()}>Scan for issues</Button> : undefined}
         />
+      )}
+
+      {pinPreview?.attendance?.submissionLat != null && pinPreview.attendance.submissionLon != null && (
+        <Modal
+          open={true}
+          onClose={() => setPinPreview(null)}
+          title="Clock-In GPS Location"
+          description={`${
+            pinPreview.employee ? `${pinPreview.employee.firstName} ${pinPreview.employee.lastName}` : "Guard"
+          }${pinPreview.site ? ` · ${pinPreview.site.name}` : ""}${
+            pinPreview.attendance.distanceMeters != null ? ` · ${pinPreview.attendance.distanceMeters}m from site` : ""
+          }`}
+          size="lg"
+        >
+          <AttendanceClockInMap
+            heightClassName="h-[360px]"
+            sites={[
+              {
+                siteId: pinPreview.site?.id ?? "exc-site",
+                siteName: pinPreview.site?.name ?? "Site",
+                supervisorName: null,
+                latitude: null,
+                longitude: null,
+                geofenceRadiusMeters: pinPreview.attendance.geofenceRadiusMeters ?? null,
+                totalScheduled: 1,
+                totalClockedIn: 1,
+                totalClockedOut: 0,
+                totalMissing: 0,
+                totalExceptions: 1,
+                guards: [
+                  {
+                    shiftId: pinPreview.shift?.id ?? pinPreview.id,
+                    attendanceId: pinPreview.attendance.id,
+                    employeeId: pinPreview.employee?.id ?? "",
+                    guardName: pinPreview.employee
+                      ? `${pinPreview.employee.firstName} ${pinPreview.employee.lastName}`
+                      : "Guard",
+                    guardPhone: pinPreview.attendance.whatsappNumber ?? null,
+                    shiftType: "day",
+                    scheduledStartTime: "",
+                    scheduledEndTime: "",
+                    clockInTime: pinPreview.shift?.startTime
+                      ? new Date(pinPreview.shift.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                      : "Submission",
+                    clockOutTime: null,
+                    hoursWorked: null,
+                    overtimeHours: null,
+                    status: "requires_review",
+                    late: false,
+                    earlyDeparture: false,
+                    minutesLate: null,
+                    minutesEarly: null,
+                    manuallyAdjusted: false,
+                    captureMethod: "whatsapp",
+                    needsAction: true,
+                    clockInLat: pinPreview.attendance.submissionLat,
+                    clockInLng: pinPreview.attendance.submissionLon,
+                    distanceMeters: pinPreview.attendance.distanceMeters ?? null,
+                    withinGeofence: false,
+                    validationStatus: pinPreview.attendance.validationStatus ?? "REJECTED_GEOFENCE",
+                  },
+                ],
+              },
+            ]}
+          />
+        </Modal>
       )}
     </PageShell>
   );

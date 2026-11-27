@@ -15,10 +15,12 @@
   },
   "dependencies": {
     "@daypicker/react": "^10.0.1",
+    "@types/leaflet": "^1.9.23",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "leaflet": "^1.9.4",
     "next": "^16.2.10",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
